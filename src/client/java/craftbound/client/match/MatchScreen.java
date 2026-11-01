@@ -60,6 +60,7 @@ public class MatchScreen extends Screen {
     private static final int THEIR_BANNER = 900;
     private static final int GAME_OVER_DELAY = 1100;
     private static final int NAMEPLATE_HEIGHT = 15;
+    private static final int HAND_COUNT_HEIGHT = 10;
 
     // Colours of the table, from the prototype.
     private static final int MORTAR = 0xFF121315;
@@ -970,7 +971,7 @@ public class MatchScreen extends Screen {
         this.centerX = w / 2;
         this.orbSize = Math.max(6, Math.round(h / 42.0F));
         // The opponent's nameplate and XP sit in the top-right corner; the table's frame starts below them.
-        int topBand = 4 + NAMEPLATE_HEIGHT + 3 + this.orbSize + 5;
+        int topBand = theirXpY() + this.orbSize + 5;
         this.oppHeroY = Math.max(Math.round(h * 0.075F), topBand + 9 - this.heroSize / 2);
         this.myHeroY = this.handTop - this.heroSize - 3;
         this.boardTop = this.oppHeroY + this.heroSize + 5;
@@ -1125,6 +1126,7 @@ public class MatchScreen extends Screen {
         for (int s = 0; s < 2; s++) {
             drawDeck(g, s);
             drawXp(g, s);
+            drawHandCount(g, s);
             drawNameplate(g, s);
             drawHero(g, s, mouseX, mouseY);
         }
@@ -1273,7 +1275,7 @@ public class MatchScreen extends Screen {
         boolean mine = s == this.shown.you;
         // Yours in the bottom-right corner; theirs under their nameplate in the top-right.
         int right = this.width - 8;
-        int y = mine ? this.height - orb - 8 : 4 + NAMEPLATE_HEIGHT + 4;
+        int y = mine ? myXpY() : theirXpY();
         int rowLeft = right - Match.MAX_XP * step;
         int cells = Math.max(side.maxXp, side.xp);
         int full = Math.min(side.xp, side.maxXp);
@@ -1301,6 +1303,32 @@ public class MatchScreen extends Screen {
         float scale = Math.max(1.0F, orb / 7.0F);
         int textWidth = Math.round(this.font.width(number) * scale);
         MatchArt.outlined(g, this.font, number, rowLeft - 6 - textWidth, y + orb / 2.0F - 4 * scale, color, scale, false);
+    }
+
+    // Your XP sits in the bottom-right corner with your hand count above it; theirs sits under their nameplate
+    // and hand count in the top-right.
+    private int myXpY() {
+        return this.height - this.orbSize - 8;
+    }
+
+    private int theirXpY() {
+        return 4 + NAMEPLATE_HEIGHT + 3 + HAND_COUNT_HEIGHT + 3;
+    }
+
+    // How many cards each player holds: a little card and a number just above their XP. Red when the hand is
+    // full, because the next card drawn would be burned.
+    private void drawHandCount(GuiGraphicsExtractor g, int s) {
+        Side side = this.shown.sides[s];
+        boolean mine = s == this.shown.you;
+        int count = mine ? side.hand.size() : side.backs.size();
+        int y = (mine ? myXpY() : theirXpY()) - 3 - HAND_COUNT_HEIGHT;
+        String text = String.valueOf(count);
+        int textX = this.width - 8 - this.font.width(text);
+        int iconX = textX - 10;
+        g.fill(iconX, y, iconX + 7, y + 10, 0xFF000000);
+        g.fill(iconX + 1, y + 1, iconX + 6, y + 9, MatchArt.GOLD_DARK);
+        g.fill(iconX + 2, y + 2, iconX + 5, y + 8, 0xFF3B4048);
+        MatchArt.outlined(g, this.font, text, textX, y + 1, count >= Match.MAX_HAND ? 0xFFFF5A4A : MatchArt.TEXT, 1.0F, false);
     }
 
     // How far an XP-holding orb is from the end of the filled orbs (0 = the last one), for the cost preview.

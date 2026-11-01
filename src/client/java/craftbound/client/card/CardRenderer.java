@@ -1,6 +1,7 @@
 package craftbound.client.card;
 
 import craftbound.card.CardDefinition;
+import craftbound.card.CardText;
 import craftbound.card.Cards;
 import craftbound.card.Keyword;
 import craftbound.component.ModComponents;
@@ -110,20 +111,34 @@ public class CardRenderer {
         }
         regions.add(region(x, y, scale, 4, ribbonTop, WIDTH - 8, 14, nameLines));
 
-        // Text box: what the card does, centred, without a drop shadow so it stays sharp on the parchment.
+        // Text box: what the card does. Each keyword starts its own line on the left, and the text shrinks
+        // until it fits. No drop shadow, so it stays sharp on the parchment.
         int boxTop = 108;
-        int boxBottom = 146;
+        int boxBottom = 147;
         g.fill(8, boxTop, WIDTH - 8, boxBottom, PARCHMENT);
         g.fill(WIDTH - 10, boxTop, WIDTH - 8, boxBottom, PARCHMENT_DARK);
         g.fill(8, boxBottom - 2, WIDTH - 8, boxBottom, PARCHMENT_DARK);
-        List<FormattedCharSequence> lines = font.split(Cards.text(id), WIDTH - 24);
-        int textY = boxTop + (boxBottom - boxTop - 2 - lines.size() * font.lineHeight) / 2 + 1;
-        for (FormattedCharSequence line : lines) {
-            int lineX = WIDTH / 2 - font.width(line) / 2;
-            g.text(font, line, lineX, textY, TEXT_DARK, false);
-            addKeywordRegions(regions, font, card, line, lineX, textY, x, y, scale);
-            textY += font.lineHeight;
+        int padding = 4;
+        float textLeft = 8 + padding;
+        int textWidth = WIDTH - 16 - 2 - padding * 2;
+        int textHeight = boxBottom - boxTop - 2 - padding;
+        float textScale = 1.0F;
+        List<FormattedCharSequence> lines = wrapText(font, id, textWidth);
+        while (lines.size() * font.lineHeight * textScale > textHeight && textScale > 0.5F) {
+            textScale -= 0.05F;
+            lines = wrapText(font, id, Math.round(textWidth / textScale));
         }
+        float textTop = boxTop + padding / 2.0F + (textHeight - lines.size() * font.lineHeight * textScale) / 2.0F + 1;
+        g.pose().pushMatrix();
+        g.pose().translate(textLeft, textTop);
+        g.pose().scale(textScale, textScale);
+        int lineY = 0;
+        for (FormattedCharSequence line : lines) {
+            g.text(font, line, 0, lineY, TEXT_DARK, false);
+            addKeywordRegions(regions, font, card, line, textLeft, textTop + lineY * textScale, textScale, x, y, scale);
+            lineY += font.lineHeight;
+        }
+        g.pose().popMatrix();
 
         // Cost (top-left), attack (bottom-left) and health (bottom-right). Items have no attack or health.
         drawStat(g, font, 2, 2, card.cost(), EMERALD);
@@ -169,17 +184,28 @@ public class CardRenderer {
                 Math.round(width * scale), Math.round(height * scale), lines, null);
     }
 
+    // The card's text as lines: one clause per keyword, each wrapped to the given width.
+    private static List<FormattedCharSequence> wrapText(Font font, Identifier id, int width) {
+        List<FormattedCharSequence> lines = new ArrayList<>();
+        for (Component clause : CardText.clauses(Cards.text(id))) {
+            lines.addAll(font.split(clause, width));
+        }
+        return lines;
+    }
+
     // Walks a line of card text letter by letter and adds a hover area over each keyword in it.
+    // The line was drawn at (lineLeft, lineTop) on the card, shrunk by textScale.
     private static void addKeywordRegions(List<HoverRegion> regions, Font font, CardDefinition card, FormattedCharSequence line,
-                                          int lineX, int lineY, int cardX, int cardY, float scale) {
-        int[] cursor = {lineX};
-        int[] start = {lineX};
+                                          float lineLeft, float lineTop, float textScale, int cardX, int cardY, float scale) {
+        int[] cursor = {0};
+        int[] start = {0};
         Keyword[] current = {null};
         line.accept((index, style, codepoint) -> {
             Keyword keyword = Keyword.fromInsertion(style.getInsertion());
             if (keyword != current[0]) {
                 if (current[0] != null) {
-                    regions.add(keywordRegion(card, current[0], start[0], cursor[0], lineY, font, cardX, cardY, scale));
+                    regions.add(keywordRegion(card, current[0], lineLeft + start[0] * textScale, lineTop,
+                            (cursor[0] - start[0]) * textScale, font.lineHeight * textScale, cardX, cardY, scale));
                 }
                 current[0] = keyword;
                 start[0] = cursor[0];
@@ -188,20 +214,22 @@ public class CardRenderer {
             return true;
         });
         if (current[0] != null) {
-            regions.add(keywordRegion(card, current[0], start[0], cursor[0], lineY, font, cardX, cardY, scale));
+            regions.add(keywordRegion(card, current[0], lineLeft + start[0] * textScale, lineTop,
+                    (cursor[0] - start[0]) * textScale, font.lineHeight * textScale, cardX, cardY, scale));
         }
     }
 
-    private static HoverRegion keywordRegion(CardDefinition card, Keyword keyword, int left, int right, int lineY,
-                                             Font font, int cardX, int cardY, float scale) {
+    // A hover area over a keyword, measured on the card (before the card's own scale).
+    private static HoverRegion keywordRegion(CardDefinition card, Keyword keyword, float left, float top, float width, float height,
+                                             int cardX, int cardY, float scale) {
         List<Component> lines = new ArrayList<>();
         lines.add(keyword.displayName().copy().withStyle(ChatFormatting.GOLD));
         lines.add(keyword.description().copy().withStyle(ChatFormatting.GRAY));
         if (!card.createdBy(keyword).isEmpty()) {
             lines.add(Component.translatable("card_ui.craftbound.pin_hint").withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
         }
-        return new HoverRegion(cardX + Math.round(left * scale), cardY + Math.round((lineY - 1) * scale),
-                Math.round((right - left) * scale), Math.round(font.lineHeight * scale), lines, keyword);
+        return new HoverRegion(cardX + Math.round(left * scale), cardY + Math.round((top - 1) * scale),
+                Math.round(width * scale), Math.round(height * scale), lines, keyword);
     }
 
     // Shows the matching Minecraft item (or the mob's spawn egg) three times bigger until real card art exists.

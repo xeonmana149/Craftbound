@@ -49,7 +49,9 @@ public record CardDefinition(CardKind kind, CardClass cardClass, CardRarity rari
         if (mobType != null) {
             tooltip.accept(mobType.displayName().copy().withStyle(ChatFormatting.GRAY));
         }
-        tooltip.accept(Cards.text(id).copy().withStyle(ChatFormatting.DARK_GRAY));
+        for (Component clause : CardText.clauses(Cards.text(id))) {
+            tooltip.accept(clause.copy().withStyle(ChatFormatting.DARK_GRAY));
+        }
     }
 
     public static class Builder {

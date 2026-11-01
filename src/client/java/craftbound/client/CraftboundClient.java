@@ -8,6 +8,8 @@ import craftbound.client.card.CardInspectScreen;
 import craftbound.client.card.PackOpeningScreen;
 import craftbound.client.card.SleevePreviewScreen;
 import craftbound.client.deck.DeckCaseScreen;
+import craftbound.client.match.MatchScreen;
+import craftbound.network.MatchStatePayload;
 import craftbound.component.ModComponents;
 import craftbound.item.ModItems;
 import craftbound.network.PackOpenedPayload;
@@ -29,6 +31,15 @@ public class CraftboundClient implements ClientModInitializer {
 		EntityRendererRegistry.register(ModBlocks.SEAT, NoopRenderer::new);
 		BlockEntityRendererRegistry.register(ModBlocks.CARD_DISPLAY_ENTITY, CardDisplayRenderer::new);
 		CardDisplayBlock.openInspect = card -> Minecraft.getInstance().gui.setScreen(new CardInspectScreen(card));
+
+		// Match updates: open the match screen, or refresh it if it's already open.
+		ClientPlayNetworking.registerGlobalReceiver(MatchStatePayload.TYPE, (payload, context) -> {
+			if (context.client().gui.screen() instanceof MatchScreen screen) {
+				screen.update(payload.json());
+			} else {
+				context.client().gui.setScreen(new MatchScreen(payload.json()));
+			}
+		});
 
 		// The server tells us when we've opened a booster pack, so we can play the reveal.
 		ClientPlayNetworking.registerGlobalReceiver(PackOpenedPayload.TYPE, (payload, context) ->

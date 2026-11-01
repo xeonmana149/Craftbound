@@ -39,6 +39,17 @@
   "card_class.craftbound.farmer": "Farmer",
   "card_class.craftbound.farmer.desc": "Only Farmer decks can use this card.",
 
+  "mob_type.craftbound.animal": "Animal",
+  "mob_type.craftbound.undead": "Undead",
+  "mob_type.craftbound.arthropod": "Arthropod",
+  "mob_type.craftbound.villager": "Villager",
+  "mob_type.craftbound.illager": "Illager",
+  "mob_type.craftbound.ender": "Ender",
+  "mob_type.craftbound.nether": "Nether",
+  "mob_type.craftbound.golem": "Golem",
+  "mob_type.craftbound.slime": "Slime",
+  "card_ui.craftbound.mob_type.desc": "Mob type. Some cards work better with mobs of the same type.",
+
   "rarity.craftbound.common": "Common",
   "rarity.craftbound.rare": "Rare",
   "rarity.craftbound.epic": "Epic",

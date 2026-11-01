@@ -18,13 +18,13 @@ public class Cards {
     public static final Identifier ARROW = register("arrow", CardDefinition.item(CardRarity.COMMON, 1).token());
 
     public static final Identifier ZOMBIE = register("zombie", CardDefinition.mob(CardRarity.COMMON, 2, 2, 3)
-            .keywords(Keyword.DROP).creates(Keyword.DROP, ROTTEN_FLESH));
+            .type(MobType.UNDEAD).keywords(Keyword.DROP).creates(Keyword.DROP, ROTTEN_FLESH));
     public static final Identifier SKELETON = register("skeleton", CardDefinition.mob(CardRarity.COMMON, 3, 2, 2)
-            .keywords(Keyword.RANGED, Keyword.DROP).creates(Keyword.DROP, ARROW));
+            .type(MobType.UNDEAD).keywords(Keyword.RANGED, Keyword.DROP).creates(Keyword.DROP, ARROW));
     public static final Identifier CREEPER = register("creeper", CardDefinition.mob(CardRarity.RARE, 3, 2, 2)
             .keywords(Keyword.DROP));
     public static final Identifier ENDERMAN = register("enderman", CardDefinition.mob(CardRarity.EPIC, 5, 4, 4)
-            .keywords(Keyword.SPAWN));
+            .type(MobType.ENDER).keywords(Keyword.SPAWN));
 
     private static Identifier register(String name, CardDefinition.Builder card) {
         Identifier id = Craftbound.id(name);

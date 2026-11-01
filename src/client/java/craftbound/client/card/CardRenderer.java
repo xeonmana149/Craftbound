@@ -140,6 +140,20 @@ public class CardRenderer {
                     Component.translatable("card_ui.craftbound.health.desc").withStyle(ChatFormatting.GRAY))));
         }
 
+        // Mob type plate along the bottom edge, between attack and health.
+        if (card.mobType() != null) {
+            Component typeName = card.mobType().displayName();
+            int plateWidth = font.width(typeName) + 8;
+            int plateLeft = WIDTH / 2 - plateWidth / 2;
+            int plateTop = HEIGHT - 17;
+            g.fill(plateLeft, plateTop, plateLeft + plateWidth, plateTop + 12, FRAME_DARK);
+            g.fill(plateLeft + 1, plateTop + 1, plateLeft + plateWidth - 1, plateTop + 11, PARCHMENT_DARK);
+            g.text(font, typeName, plateLeft + 4, plateTop + 2, TEXT_DARK, false);
+            regions.add(region(x, y, scale, plateLeft, plateTop, plateWidth, 12, List.of(
+                    typeName.copy().withStyle(ChatFormatting.GOLD),
+                    Component.translatable("card_ui.craftbound.mob_type.desc").withStyle(ChatFormatting.GRAY))));
+        }
+
         if (enchanted) {
             drawEnchantedShimmer(g);
         }

@@ -9,8 +9,9 @@ import net.minecraft.resources.Identifier;
 
 // What a card is. Its name and ability text live in the lang file under card.craftbound.<id> and card.craftbound.<id>.text.
 // Keywords fill the %s slots in the ability text, in order, e.g. "%s. %s: add an Arrow to your hand." -> "Ranged. Drop: ..."
+// mobType is null for cards without one, like items or the Creeper.
 public record CardDefinition(CardKind kind, CardClass cardClass, CardRarity rarity, int cost, int attack, int health,
-                             List<Keyword> keywords, List<Related> related, boolean token) {
+                             MobType mobType, List<Keyword> keywords, List<Related> related, boolean token) {
 
     // A card this one creates, and the keyword that creates it, e.g. Drop -> Arrow.
     public record Related(Keyword keyword, Identifier card) {
@@ -44,6 +45,9 @@ public record CardDefinition(CardKind kind, CardClass cardClass, CardRarity rari
         if (isMob()) {
             tooltip.accept(Component.translatable("card_ui.craftbound.stats_short", attack, health).withStyle(ChatFormatting.GRAY));
         }
+        if (mobType != null) {
+            tooltip.accept(mobType.displayName().copy().withStyle(ChatFormatting.GRAY));
+        }
         tooltip.accept(Cards.text(id).copy().withStyle(ChatFormatting.DARK_GRAY));
     }
 
@@ -54,6 +58,7 @@ public record CardDefinition(CardKind kind, CardClass cardClass, CardRarity rari
         private final int attack;
         private final int health;
         private CardClass cardClass = CardClass.NEUTRAL;
+        private MobType mobType = null;
         private final List<Keyword> keywords = new ArrayList<>();
         private final List<Related> related = new ArrayList<>();
         private boolean token = false;
@@ -68,6 +73,11 @@ public record CardDefinition(CardKind kind, CardClass cardClass, CardRarity rari
 
         public Builder cardClass(CardClass cardClass) {
             this.cardClass = cardClass;
+            return this;
+        }
+
+        public Builder type(MobType mobType) {
+            this.mobType = mobType;
             return this;
         }
 
@@ -90,7 +100,8 @@ public record CardDefinition(CardKind kind, CardClass cardClass, CardRarity rari
         }
 
         public CardDefinition build() {
-            return new CardDefinition(kind, cardClass, rarity, cost, attack, health, List.copyOf(keywords), List.copyOf(related), token);
+            return new CardDefinition(kind, cardClass, rarity, cost, attack, health, mobType,
+                    List.copyOf(keywords), List.copyOf(related), token);
         }
     }
 }

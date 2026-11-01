@@ -18,6 +18,8 @@ public class Cards {
     public static final Identifier ARROW = register("arrow", CardDefinition.item(CardRarity.COMMON, 1).token());
     public static final Identifier NETHER_STAR = register("nether_star", CardDefinition.item(CardRarity.COMMON, 0).token());
     public static final Identifier DRAGON_EGG = register("dragon_egg", CardDefinition.item(CardRarity.COMMON, 0).token());
+    public static final Identifier VEX = register("vex", CardDefinition.mob(CardRarity.COMMON, 1, 1, 1).token()
+            .keywords(Keyword.SPRINT));
 
     public static final Identifier ZOMBIE = register("zombie", CardDefinition.mob(CardRarity.COMMON, 2, 2, 3)
             .type(MobType.UNDEAD).keywords(Keyword.DROP).creates(Keyword.DROP, ROTTEN_FLESH));
@@ -27,6 +29,23 @@ public class Cards {
             .keywords(Keyword.DROP));
     public static final Identifier ENDERMAN = register("enderman", CardDefinition.mob(CardRarity.EPIC, 5, 4, 4)
             .type(MobType.ENDER).keywords(Keyword.SPAWN));
+
+    // Epics.
+    public static final Identifier CHARGED_CREEPER = register("charged_creeper", CardDefinition.mob(CardRarity.EPIC, 5, 3, 3)
+            .keywords(Keyword.DROP).art("creeper_spawn_egg"));
+    // A collectible item, and also what the Evoker drops, so it's registered before the Evoker.
+    public static final Identifier TOTEM_OF_UNDYING = register("totem_of_undying", CardDefinition.item(CardRarity.EPIC, 3));
+    public static final Identifier EVOKER = register("evoker", CardDefinition.mob(CardRarity.EPIC, 5, 3, 4)
+            .type(MobType.ILLAGER).keywords(Keyword.SPAWN, Keyword.DROP)
+            .creates(Keyword.SPAWN, VEX).creates(Keyword.DROP, TOTEM_OF_UNDYING));
+    public static final Identifier RAVAGER = register("ravager", CardDefinition.mob(CardRarity.EPIC, 7, 7, 7)
+            .type(MobType.ILLAGER));
+    public static final Identifier PIGLIN_BRUTE = register("piglin_brute", CardDefinition.mob(CardRarity.EPIC, 4, 5, 3)
+            .type(MobType.NETHER).keywords(Keyword.SPRINT));
+    public static final Identifier SHULKER = register("shulker", CardDefinition.mob(CardRarity.EPIC, 4, 2, 5)
+            .type(MobType.ENDER).keywords(Keyword.SHIELD, Keyword.RANGED));
+    public static final Identifier WITHER_SKELETON = register("wither_skeleton", CardDefinition.mob(CardRarity.EPIC, 5, 4, 4)
+            .type(MobType.UNDEAD));
 
     // Legendaries: the three boss mobs.
     public static final Identifier WARDEN = register("warden", CardDefinition.mob(CardRarity.LEGENDARY, 8, 7, 9)

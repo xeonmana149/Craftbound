@@ -217,9 +217,11 @@ public class CardRenderer {
         g.pose().popMatrix();
     }
 
-    // The Minecraft item that stands in for a card's art: the mob's spawn egg, or the item of the same name.
+    // The Minecraft item that stands in for a card's art: the card's chosen art item if it has one,
+    // otherwise the mob's spawn egg, or the item of the same name.
     public static ItemStack placeholderArt(Identifier id, CardDefinition card) {
-        String itemName = card.isMob() ? id.getPath() + "_spawn_egg" : id.getPath();
+        String itemName = card.artItem() != null ? card.artItem()
+                : card.isMob() ? id.getPath() + "_spawn_egg" : id.getPath();
         return new ItemStack(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(itemName)));
     }
 

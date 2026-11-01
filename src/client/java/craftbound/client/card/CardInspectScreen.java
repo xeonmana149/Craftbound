@@ -93,15 +93,16 @@ public class CardInspectScreen extends Screen {
         List<CardRenderer.HoverRegion> createdRegions = new ArrayList<>();
         this.visibleCardRects.clear();
         this.hoveredCreatedFrom = null;
+        // Only cards that are out take up a spot, so whichever keyword you hover always pops its card out at the top.
         int slot = 0;
         for (Map.Entry<Keyword, List<ItemStack>> entry : this.created.entrySet()) {
             float progress = this.slide.get(entry.getKey());
             for (ItemStack createdCard : entry.getValue()) {
-                int targetY = mainY + slot * (CardRenderer.HEIGHT + GAP + 12) + 12;
-                slot++;
                 if (progress <= 0.0F) {
                     continue;
                 }
+                int targetY = mainY + slot * (CardRenderer.HEIGHT + GAP + 12) + 12;
+                slot++;
                 float eased = 1.0F - (1.0F - progress) * (1.0F - progress) * (1.0F - progress);
                 int cardX = Math.round(startX + (outX - startX) * eased);
                 int cardY = Math.round(startY + (targetY - startY) * eased);

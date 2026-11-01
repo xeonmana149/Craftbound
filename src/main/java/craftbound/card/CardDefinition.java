@@ -10,8 +10,9 @@ import net.minecraft.resources.Identifier;
 // What a card is. Its name and ability text live in the lang file under card.craftbound.<id> and card.craftbound.<id>.text.
 // Keywords fill the %s slots in the ability text, in order, e.g. "%s. %s: add an Arrow to your hand." -> "Ranged. Drop: ..."
 // mobType is null for cards without one, like items or the Creeper.
+// artItem is the Minecraft item shown as placeholder art; null means "the card's own spawn egg or item".
 public record CardDefinition(CardKind kind, CardClass cardClass, CardRarity rarity, int cost, int attack, int health,
-                             MobType mobType, List<Keyword> keywords, List<Related> related, boolean token) {
+                             MobType mobType, List<Keyword> keywords, List<Related> related, boolean token, String artItem) {
 
     // A card this one creates, and the keyword that creates it, e.g. Drop -> Arrow.
     public record Related(Keyword keyword, Identifier card) {
@@ -62,6 +63,7 @@ public record CardDefinition(CardKind kind, CardClass cardClass, CardRarity rari
         private final List<Keyword> keywords = new ArrayList<>();
         private final List<Related> related = new ArrayList<>();
         private boolean token = false;
+        private String artItem = null;
 
         private Builder(CardKind kind, CardRarity rarity, int cost, int attack, int health) {
             this.kind = kind;
@@ -99,9 +101,15 @@ public record CardDefinition(CardKind kind, CardClass cardClass, CardRarity rari
             return this;
         }
 
+        // Use a different Minecraft item as placeholder art, e.g. "creeper_spawn_egg" for the Charged Creeper.
+        public Builder art(String minecraftItem) {
+            this.artItem = minecraftItem;
+            return this;
+        }
+
         public CardDefinition build() {
             return new CardDefinition(kind, cardClass, rarity, cost, attack, health, mobType,
-                    List.copyOf(keywords), List.copyOf(related), token);
+                    List.copyOf(keywords), List.copyOf(related), token, artItem);
         }
     }
 }

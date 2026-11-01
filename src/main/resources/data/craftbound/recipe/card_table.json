@@ -1,6 +1,6 @@
 {
   "type": "minecraft:crafting_shaped",
-  "category": "decorations",
+  "category": "misc",
   "key": {
     "P": "#minecraft:planks",
     "W": "minecraft:green_wool"

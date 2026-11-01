@@ -1,6 +1,7 @@
 package craftbound.item;
 
 import craftbound.Craftbound;
+import craftbound.block.ModBlocks;
 import craftbound.card.Cards;
 import craftbound.sleeve.Sleeves;
 import net.fabricmc.fabric.api.creativetab.v1.FabricCreativeModeTab;
@@ -25,6 +26,8 @@ public class ModCreativeTabs {
                 output.accept(ModItems.BOOSTER_PACK);
                 output.accept(ModItems.BINDER);
                 output.accept(ModItems.DECK_CASE);
+                output.accept(ModBlocks.CARD_TABLE);
+                output.accept(ModBlocks.CARD_DISPLAY);
                 for (Identifier sleeve : Sleeves.ids()) {
                     output.accept(SleeveItem.of(sleeve));
                 }

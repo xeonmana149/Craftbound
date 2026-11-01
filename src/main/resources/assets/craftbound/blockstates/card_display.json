@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "craftbound:block/card_display" },
+    "facing=east": { "model": "craftbound:block/card_display", "y": 90 },
+    "facing=south": { "model": "craftbound:block/card_display", "y": 180 },
+    "facing=west": { "model": "craftbound:block/card_display", "y": 270 }
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "condition": { "type": "minecraft:survives_explosion" },
+      "entries": [ { "type": "minecraft:item", "name": "craftbound:card_table" } ],
+      "rolls": 1
+    }
+  ],
+  "random_sequence": "craftbound:blocks/card_table"
+}

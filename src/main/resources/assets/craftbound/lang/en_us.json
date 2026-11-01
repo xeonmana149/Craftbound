@@ -115,6 +115,9 @@
   "pack_ui.craftbound.done": "Done",
 
   "item.craftbound.deck_case": "Deck Case",
+  "block.craftbound.card_table": "Card Table",
+  "block.craftbound.card_display": "Card Display Stand",
+  "entity.craftbound.seat": "Seat",
   "deck_ui.craftbound.collection": "Your binders",
   "deck_ui.craftbound.search": "Search cards",
   "deck_ui.craftbound.all": "All",

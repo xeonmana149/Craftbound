@@ -1,6 +1,9 @@
 package craftbound.client;
 
+import craftbound.block.CardDisplayBlock;
+import craftbound.block.ModBlocks;
 import craftbound.client.binder.BinderScreen;
+import craftbound.client.block.CardDisplayRenderer;
 import craftbound.client.card.CardInspectScreen;
 import craftbound.client.card.PackOpeningScreen;
 import craftbound.client.card.SleevePreviewScreen;
@@ -10,15 +13,23 @@ import craftbound.item.ModItems;
 import craftbound.network.PackOpenedPayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.BlockEntityRendererRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.entity.NoopRenderer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 
 public class CraftboundClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
+		// The seat at a card table is invisible; the display stand draws its card.
+		EntityRendererRegistry.register(ModBlocks.SEAT, NoopRenderer::new);
+		BlockEntityRendererRegistry.register(ModBlocks.CARD_DISPLAY_ENTITY, CardDisplayRenderer::new);
+		CardDisplayBlock.openInspect = card -> Minecraft.getInstance().gui.setScreen(new CardInspectScreen(card));
+
 		// The server tells us when we've opened a booster pack, so we can play the reveal.
 		ClientPlayNetworking.registerGlobalReceiver(PackOpenedPayload.TYPE, (payload, context) ->
 				context.client().gui.setScreen(new PackOpeningScreen(payload.pulls(), payload.jackpot())));

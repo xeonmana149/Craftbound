@@ -1,5 +1,6 @@
 package craftbound;
 
+import craftbound.block.ModBlocks;
 import craftbound.component.ModComponents;
 import craftbound.item.ModCreativeTabs;
 import craftbound.item.ModItems;
@@ -30,6 +31,7 @@ public class Craftbound implements ModInitializer {
 		LOGGER.info("Hello Fabric world!");
 		ModComponents.initialize();
 		ModItems.initialize();
+		ModBlocks.initialize();
 		ModCreativeTabs.initialize();
 		ModNetworking.initialize();
 		ModLoot.initialize();

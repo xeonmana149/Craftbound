@@ -1,6 +1,7 @@
 package craftbound.client.binder;
 
 import craftbound.client.Tooltips;
+import com.mojang.blaze3d.platform.InputConstants;
 import craftbound.binder.BinderContents;
 import craftbound.binder.Disenchanting;
 import craftbound.network.DisenchantExtrasPayload;
@@ -244,7 +245,8 @@ public class BinderScreen extends Screen {
                 continue;
             }
             boolean ownsEnchanted = contents.count(pocket.card(), true) > 0;
-            if (event.button() == 1) {
+            // 26.3 numbers mouse buttons the SDL way (left 1, right 3), so use Minecraft's constants.
+            if (event.button() == InputConstants.MOUSE_BUTTON_RIGHT) {
                 // Inspect the best copy you own.
                 this.minecraft.gui.setScreen(new CardInspectScreen(CardItem.of(pocket.card(), ownsEnchanted), this));
                 return true;

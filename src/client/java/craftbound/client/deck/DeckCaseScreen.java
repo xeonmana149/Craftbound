@@ -1,5 +1,6 @@
 package craftbound.client.deck;
 
+import com.mojang.blaze3d.platform.InputConstants;
 import craftbound.binder.BinderContents;
 import craftbound.card.CardClass;
 import craftbound.card.CardDefinition;
@@ -676,9 +677,13 @@ public class DeckCaseScreen extends Screen {
                 continue;
             }
             int[] spare = spare(available.getOrDefault(card.id(), new int[2]), deck, card.id());
-            if (event.button() == 1) {
+            // 26.3 numbers mouse buttons the SDL way (left 1, right 3), so use Minecraft's constants.
+            if (event.button() == InputConstants.MOUSE_BUTTON_RIGHT) {
                 // Right-click only zooms in.
                 zoom(card.id(), spare[0] == 0 && spare[1] > 0);
+                return true;
+            }
+            if (event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
                 return true;
             }
             // Left: click to add it, or drag it onto the deck list.
@@ -692,9 +697,12 @@ public class DeckCaseScreen extends Screen {
             if (!row.contains(mouseX, mouseY)) {
                 continue;
             }
-            if (event.button() == 1) {
+            if (event.button() == InputConstants.MOUSE_BUTTON_RIGHT) {
                 // Right-click only zooms in.
                 zoom(row.id(), deck.cards().count(row.id(), true) > 0);
+                return true;
+            }
+            if (event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
                 return true;
             }
             // Left: click to put it back in a binder, or drag it out of the list.

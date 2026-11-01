@@ -14,9 +14,10 @@ public class Disenchanting {
         return DeckRules.maxCopies(rarity);
     }
 
-    // Experience points for disenchanting one copy. Commons give barely anything, Legendaries quite a bit,
-    // and Enchanted copies give even more.
-    public static int xpFor(CardRarity rarity, boolean enchanted) {
+    // Experience for disenchanting, counted in half-points so a single Common can be worth half a point.
+    // Per copy that's: normal Common 0.5, Rare 2, Epic 7.5, Legendary 25; Enchanted Common 2.5, Rare 7.5,
+    // Epic 25, Legendary 100. The total is rounded down when it's handed out.
+    private static int halfPoints(CardRarity rarity, boolean enchanted) {
         if (enchanted) {
             return switch (rarity) {
                 case COMMON -> 5;
@@ -44,7 +45,7 @@ public class Disenchanting {
         int room = Math.max(0, binderLimit(card.rarity()) - contents.count(id, enchanted));
         int kept = Math.min(room, amount);
         int extra = amount - kept;
-        return new Result(contents.add(id, enchanted, kept), extra, extra * xpFor(card.rarity(), enchanted));
+        return new Result(contents.add(id, enchanted, kept), extra, extra * halfPoints(card.rarity(), enchanted) / 2);
     }
 
     // Disenchants anything already over the limit, e.g. in binders filled before limits existed.
@@ -59,10 +60,10 @@ public class Disenchanting {
                 if (extra > 0) {
                     result = result.add(id, enchanted, -extra);
                     disenchanted += extra;
-                    xp += extra * xpFor(card.rarity(), enchanted);
+                    xp += extra * halfPoints(card.rarity(), enchanted);
                 }
             }
         }
-        return new Result(result, disenchanted, xp);
+        return new Result(result, disenchanted, xp / 2);
     }
 }

@@ -1,0 +1,13 @@
+{
+  "criteria": { "has": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": "craftbound:card" } ] } } },
+  "display": {
+    "background": "minecraft:gui/advancements/backgrounds/stone",
+    "announce_to_chat": false,
+    "description": { "translate": "advancements.craftbound.root.description" },
+    "frame": "task",
+    "hidden": false,
+    "icon": { "id": "craftbound:card", "components": { "craftbound:card_id": "craftbound:zombie" } },
+    "show_toast": false,
+    "title": { "translate": "advancements.craftbound.root.title" }
+  }
+}

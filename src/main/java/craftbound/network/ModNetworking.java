@@ -92,6 +92,7 @@ public class ModNetworking {
                 }
             }
             if (filedAny) {
+                BinderItem.checkAdvancements(player, binder);
                 player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
                         SoundEvents.BUNDLE_INSERT, SoundSource.PLAYERS, 0.8F, 1.0F);
             }

@@ -1,0 +1,13 @@
+{
+  "parent": "craftbound:binder",
+  "criteria": { "done": { "trigger": "minecraft:impossible" } },
+  "display": {
+    "announce_to_chat": true,
+    "description": { "translate": "advancements.craftbound.full_deck.description" },
+    "frame": "goal",
+    "hidden": false,
+    "icon": { "id": "craftbound:deck_case" },
+    "show_toast": true,
+    "title": { "translate": "advancements.craftbound.full_deck.title" }
+  }
+}

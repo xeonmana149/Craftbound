@@ -1,0 +1,13 @@
+{
+  "parent": "craftbound:root",
+  "criteria": { "done": { "trigger": "minecraft:impossible" } },
+  "display": {
+    "announce_to_chat": true,
+    "description": { "translate": "advancements.craftbound.open_pack.description" },
+    "frame": "task",
+    "hidden": false,
+    "icon": { "id": "craftbound:booster_pack" },
+    "show_toast": true,
+    "title": { "translate": "advancements.craftbound.open_pack.title" }
+  }
+}

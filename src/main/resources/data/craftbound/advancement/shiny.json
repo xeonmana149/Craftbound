@@ -1,0 +1,13 @@
+{
+  "parent": "craftbound:open_pack",
+  "criteria": { "has": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": "craftbound:card", "components": { "craftbound:enchanted": {} } } ] } } },
+  "display": {
+    "announce_to_chat": true,
+    "description": { "translate": "advancements.craftbound.shiny.description" },
+    "frame": "task",
+    "hidden": false,
+    "icon": { "id": "craftbound:card", "components": { "craftbound:card_id": "craftbound:creeper", "craftbound:enchanted": {} } },
+    "show_toast": true,
+    "title": { "translate": "advancements.craftbound.shiny.title" }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "parent": "craftbound:root",
+  "criteria": { "has": { "trigger": "minecraft:inventory_changed", "conditions": { "items": [ { "items": "craftbound:binder" } ] } } },
+  "display": {
+    "announce_to_chat": true,
+    "description": { "translate": "advancements.craftbound.binder.description" },
+    "frame": "task",
+    "hidden": false,
+    "icon": { "id": "craftbound:binder" },
+    "show_toast": true,
+    "title": { "translate": "advancements.craftbound.binder.title" }
+  }
+}

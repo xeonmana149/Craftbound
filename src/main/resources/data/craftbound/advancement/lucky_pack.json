@@ -1,0 +1,13 @@
+{
+  "parent": "craftbound:open_pack",
+  "criteria": { "done": { "trigger": "minecraft:impossible" } },
+  "display": {
+    "announce_to_chat": true,
+    "description": { "translate": "advancements.craftbound.lucky_pack.description" },
+    "frame": "task",
+    "hidden": false,
+    "icon": { "id": "minecraft:potion", "components": { "minecraft:potion_contents": { "potion": "minecraft:luck" } } },
+    "show_toast": true,
+    "title": { "translate": "advancements.craftbound.lucky_pack.title" }
+  }
+}

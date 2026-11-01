@@ -13,7 +13,10 @@ import net.minecraft.world.item.Item;
 
 public class ModItems {
     public static final Item CARD = register("card", CardItem::new, new Item.Properties());
-    public static final Item BOOSTER_PACK = register("booster_pack", BoosterPackItem::new, new Item.Properties());
+    // Packs stack to 16 and can take Fortune at an enchanting table or anvil, which rolls rarer cards.
+    public static final Item BOOSTER_PACK = register("booster_pack", BoosterPackItem::new, new Item.Properties()
+            .stacksTo(16)
+            .enchantable(10));
     public static final Item BINDER = register("binder", BinderItem::new, new Item.Properties()
             .stacksTo(1)
             .component(ModComponents.BINDER_CONTENTS, BinderContents.EMPTY));

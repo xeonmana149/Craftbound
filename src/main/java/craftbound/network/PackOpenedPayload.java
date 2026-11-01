@@ -10,8 +10,8 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 
 // Sent from the server after it opens a pack, so the client can play the reveal. The cards are already in
-// your inventory by then; the screen only shows what you got.
-public record PackOpenedPayload(List<BoosterPacks.Pull> pulls) implements CustomPacketPayload {
+// your inventory by then; the screen only shows what you got. `jackpot` marks an all-Legendary pack.
+public record PackOpenedPayload(List<BoosterPacks.Pull> pulls, boolean jackpot) implements CustomPacketPayload {
     public static final Type<PackOpenedPayload> TYPE = new Type<>(Craftbound.id("pack_opened"));
 
     private static final StreamCodec<RegistryFriendlyByteBuf, BoosterPacks.Pull> PULL_CODEC = StreamCodec.composite(
@@ -21,6 +21,7 @@ public record PackOpenedPayload(List<BoosterPacks.Pull> pulls) implements Custom
 
     public static final StreamCodec<RegistryFriendlyByteBuf, PackOpenedPayload> CODEC = StreamCodec.composite(
             PULL_CODEC.apply(ByteBufCodecs.list(16)), PackOpenedPayload::pulls,
+            ByteBufCodecs.BOOL, PackOpenedPayload::jackpot,
             PackOpenedPayload::new);
 
     @Override

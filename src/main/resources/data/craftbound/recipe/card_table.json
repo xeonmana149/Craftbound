@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "decorations",
+  "key": {
+    "P": "#minecraft:planks",
+    "W": "minecraft:green_wool"
+  },
+  "pattern": [
+    "WWW",
+    "P P",
+    "P P"
+  ],
+  "result": {
+    "id": "craftbound:card_table"
+  }
+}

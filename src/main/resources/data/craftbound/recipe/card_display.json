@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "decorations",
+  "key": {
+    "F": "minecraft:item_frame",
+    "S": "#minecraft:wooden_slabs"
+  },
+  "pattern": [
+    "F",
+    "S"
+  ],
+  "result": {
+    "id": "craftbound:card_display"
+  }
+}

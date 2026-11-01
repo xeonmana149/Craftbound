@@ -1,5 +1,6 @@
 package craftbound.deck;
 
+import craftbound.ModAdvancements;
 import craftbound.binder.BinderContents;
 import craftbound.card.CardClass;
 import craftbound.card.CardDefinition;
@@ -52,7 +53,11 @@ public class DeckBuilding {
         }
         BinderContents contents = binder.getOrDefault(ModComponents.BINDER_CONTENTS, BinderContents.EMPTY);
         binder.set(ModComponents.BINDER_CONTENTS, contents.add(id, enchanted, -1));
-        deckCase.set(ModComponents.DECK_CONTENTS, deck.add(id, enchanted, 1));
+        DeckContents updated = deck.add(id, enchanted, 1);
+        deckCase.set(ModComponents.DECK_CONTENTS, updated);
+        if (updated.size() == DeckRules.DECK_SIZE) {
+            ModAdvancements.deckCompleted(player);
+        }
     }
 
     public static void remove(ServerPlayer player, ItemStack deckCase, Identifier id, boolean enchanted) {

@@ -1,0 +1,13 @@
+{
+  "parent": "craftbound:open_pack",
+  "criteria": { "done": { "trigger": "minecraft:impossible" } },
+  "display": {
+    "announce_to_chat": true,
+    "description": { "translate": "advancements.craftbound.legendary_pull.description" },
+    "frame": "goal",
+    "hidden": false,
+    "icon": { "id": "craftbound:card", "components": { "craftbound:card_id": "craftbound:ender_dragon" } },
+    "show_toast": true,
+    "title": { "translate": "advancements.craftbound.legendary_pull.title" }
+  }
+}

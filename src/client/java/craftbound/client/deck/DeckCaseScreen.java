@@ -75,9 +75,8 @@ public class DeckCaseScreen extends Screen {
     private Identifier pressedCard;
     private boolean pressedEnchanted;
     private boolean pressedFromDeck;
-    // Whether the pressed card has a copy that can actually move, and which version to show if it's zoomed.
+    // Whether the pressed card has a copy that can actually move.
     private boolean pressedCanMove;
-    private boolean pressedZoomEnchanted;
     private double pressX;
     private double pressY;
     private boolean dragging;
@@ -619,45 +618,39 @@ public class DeckCaseScreen extends Screen {
                 continue;
             }
             int[] counts = available.getOrDefault(card.id(), new int[2]);
-            // Ctrl takes an Enchanted copy. Otherwise a normal one, or Enchanted if that's all you have.
-            boolean enchanted = event.hasControlDown() || counts[0] == 0;
             if (event.button() == 1) {
-                // Right-click adds it straight away.
-                if (counts[enchanted ? 1 : 0] > 0) {
-                    ClientPlayNetworking.send(new DeckEditPayload(mainHand, card.id(), enchanted, true));
-                }
+                // Right-click only zooms in.
+                zoom(card.id(), counts[0] == 0 && counts[1] > 0);
                 return true;
             }
-            // Left: let go without moving to zoom in, or drag it onto the deck list to add it.
+            // Left: click to add it, or drag it onto the deck list.
+            // Ctrl takes an Enchanted copy. Otherwise a normal one, or Enchanted if that's all you have.
+            boolean enchanted = event.hasControlDown() || counts[0] == 0;
             startPress(card.id(), enchanted, false, mouseX, mouseY);
             this.pressedCanMove = counts[enchanted ? 1 : 0] > 0;
-            this.pressedZoomEnchanted = counts[0] == 0 && counts[1] > 0;
             return true;
         }
         for (Spot row : this.rowSpots) {
             if (!row.contains(mouseX, mouseY)) {
                 continue;
             }
-            boolean enchanted = event.hasControlDown() || deck.cards().count(row.id(), false) == 0;
             if (event.button() == 1) {
-                // Right-click puts it back in a binder straight away.
-                if (deck.cards().count(row.id(), enchanted) > 0) {
-                    ClientPlayNetworking.send(new DeckEditPayload(mainHand, row.id(), enchanted, false));
-                }
+                // Right-click only zooms in.
+                zoom(row.id(), deck.cards().count(row.id(), true) > 0);
                 return true;
             }
-            // Left: let go without moving to zoom in, or drag it out of the list to put it back.
+            // Left: click to put it back in a binder, or drag it out of the list.
+            boolean enchanted = event.hasControlDown() || deck.cards().count(row.id(), false) == 0;
             startPress(row.id(), enchanted, true, mouseX, mouseY);
             this.pressedCanMove = deck.cards().count(row.id(), enchanted) > 0;
-            this.pressedZoomEnchanted = deck.cards().count(row.id(), true) > 0;
             return true;
         }
         return true;
     }
 
     // --- Dragging ---------------------------------------------------------------------------------------
-    // Left-press a card, then either let go without moving (zoom in) or drag it. Cards dropped on the deck
-    // list are added; deck rows dragged out of the list are put back in a binder.
+    // Left-press a card, then either let go (a click) or drag it. A click moves it straight away; cards dropped
+    // on the deck list are added, and deck rows dragged out of the list are put back in a binder.
 
     private void startPress(Identifier card, boolean enchanted, boolean fromDeck, double mouseX, double mouseY) {
         this.pressedCard = card;
@@ -687,11 +680,10 @@ public class DeckCaseScreen extends Screen {
         }
         boolean overList = inside(this.listArea, event.x(), event.y());
         boolean mainHand = this.hand == InteractionHand.MAIN_HAND;
-        if (!this.dragging) {
-            zoom(this.pressedCard, this.pressedZoomEnchanted);
-        } else if (this.pressedCanMove && this.pressedFromDeck && !overList) {
+        // A click (no movement) always moves the card; a drag only counts if it ends in the right place.
+        if (this.pressedCanMove && this.pressedFromDeck && (!this.dragging || !overList)) {
             ClientPlayNetworking.send(new DeckEditPayload(mainHand, this.pressedCard, this.pressedEnchanted, false));
-        } else if (this.pressedCanMove && !this.pressedFromDeck && overList) {
+        } else if (this.pressedCanMove && !this.pressedFromDeck && (!this.dragging || overList)) {
             ClientPlayNetworking.send(new DeckEditPayload(mainHand, this.pressedCard, this.pressedEnchanted, true));
         }
         this.pressedCard = null;
@@ -717,7 +709,7 @@ public class DeckCaseScreen extends Screen {
     }
 
     // --- Zoom -------------------------------------------------------------------------------------------
-    // Clicking a card shows it big in the middle of the screen, with its keywords explained on the left and
+    // Right-clicking a card shows it big in the middle of the screen, with its keywords explained on the left and
     // any cards it creates on the right (the same sides as the inspect screen). Click anywhere or Esc to close.
 
     private void zoom(Identifier card, boolean enchanted) {

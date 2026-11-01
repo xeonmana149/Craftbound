@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "key": {
+    "B": "minecraft:book",
+    "L": "minecraft:leather",
+    "P": "minecraft:paper"
+  },
+  "pattern": [
+    "PLP",
+    "PBP",
+    "PLP"
+  ],
+  "result": {
+    "id": "craftbound:binder"
+  }
+}

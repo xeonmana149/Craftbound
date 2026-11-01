@@ -32,6 +32,7 @@ public class PackOpeningScreen extends Screen {
     private final List<ItemStack> cards = new ArrayList<>();
     private final List<CardRarity> rarities = new ArrayList<>();
     private final List<Boolean> enchanted = new ArrayList<>();
+    private final boolean jackpot;
     // When each card starts flipping, in seconds since the screen opened. NOT_FLIPPED until you flip it.
     private final float[] flipStart;
     private final boolean[] flipSoundPlayed;
@@ -44,8 +45,9 @@ public class PackOpeningScreen extends Screen {
     private int[] revealAllButton;
     private int[] doneButton;
 
-    public PackOpeningScreen(List<BoosterPacks.Pull> pulls) {
-        super(Component.translatable("item.craftbound.booster_pack"));
+    public PackOpeningScreen(List<BoosterPacks.Pull> pulls, boolean jackpot) {
+        super(Component.translatable(jackpot ? "pack_ui.craftbound.jackpot" : "item.craftbound.booster_pack"));
+        this.jackpot = jackpot;
         List<BoosterPacks.Pull> sorted = new ArrayList<>(pulls);
         // Least rare first; within a rarity, normal before Enchanted.
         sorted.sort(Comparator.<BoosterPacks.Pull>comparingInt(pull -> Cards.get(pull.card()).rarity().ordinal())
@@ -100,7 +102,8 @@ public class PackOpeningScreen extends Screen {
         int startX = (this.width - rowWidth) / 2;
         int y = (this.height - cardHeight) / 2 - 6;
 
-        g.centeredText(this.font, this.title, this.width / 2, y - 18, 0xFFFFFFFF);
+        // A jackpot pack gets a gold title.
+        g.centeredText(this.font, this.title, this.width / 2, y - 18, this.jackpot ? 0xFFFFAA00 : 0xFFFFFFFF);
 
         this.cardRects.clear();
         List<CardRenderer.HoverRegion> regions = new ArrayList<>();

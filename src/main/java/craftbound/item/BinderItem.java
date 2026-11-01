@@ -1,10 +1,12 @@
 package craftbound.item;
 
+import craftbound.ModAdvancements;
 import craftbound.binder.BinderContents;
 import craftbound.card.CardDefinition;
 import craftbound.card.Cards;
 import craftbound.component.ModComponents;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.SlotAccess;
 import net.minecraft.world.entity.player.Player;
@@ -29,6 +31,7 @@ public class BinderItem extends Item {
         }
         file(binder, other);
         player.playSound(SoundEvents.BUNDLE_INSERT, 0.8F, 1.0F);
+        checkAdvancements(player, binder);
         return true;
     }
 
@@ -41,7 +44,15 @@ public class BinderItem extends Item {
         int count = slot.getItem().getCount();
         file(binder, slot.safeTake(count, count, player));
         player.playSound(SoundEvents.BUNDLE_INSERT, 0.8F, 1.0F);
+        checkAdvancements(player, binder);
         return true;
+    }
+
+    // Completing the collection is an advancement. This runs on both sides; only the server awards it.
+    public static void checkAdvancements(Player player, ItemStack binder) {
+        if (player instanceof ServerPlayer serverPlayer) {
+            ModAdvancements.binderChanged(serverPlayer, binder.getOrDefault(ModComponents.BINDER_CONTENTS, BinderContents.EMPTY));
+        }
     }
 
     // Only real collectible cards go in a binder: not blank cards, and not tokens.

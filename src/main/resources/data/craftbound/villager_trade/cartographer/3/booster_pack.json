@@ -1,0 +1,12 @@
+{
+  "gives": {
+    "id": "craftbound:booster_pack"
+  },
+  "max_uses": 8,
+  "reputation_discount": 0.05,
+  "wants": {
+    "count": 4,
+    "id": "minecraft:emerald"
+  },
+  "xp": 10
+}

@@ -1,0 +1,13 @@
+{
+  "parent": "craftbound:legendary_pull",
+  "criteria": { "done": { "trigger": "minecraft:impossible" } },
+  "display": {
+    "announce_to_chat": true,
+    "description": { "translate": "advancements.craftbound.jackpot.description" },
+    "frame": "challenge",
+    "hidden": true,
+    "icon": { "id": "craftbound:card", "components": { "craftbound:card_id": "craftbound:wither", "craftbound:enchanted": {} } },
+    "show_toast": true,
+    "title": { "translate": "advancements.craftbound.jackpot.title" }
+  }
+}

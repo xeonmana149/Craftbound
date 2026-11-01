@@ -3,6 +3,7 @@ package craftbound;
 import craftbound.component.ModComponents;
 import craftbound.item.ModCreativeTabs;
 import craftbound.item.ModItems;
+import craftbound.item.ModLoot;
 import craftbound.network.ModNetworking;
 import net.fabricmc.api.ModInitializer;
 
@@ -31,6 +32,7 @@ public class Craftbound implements ModInitializer {
 		ModItems.initialize();
 		ModCreativeTabs.initialize();
 		ModNetworking.initialize();
+		ModLoot.initialize();
 	}
 
 	public static Identifier id(String path) {

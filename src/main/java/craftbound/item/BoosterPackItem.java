@@ -1,9 +1,10 @@
 package craftbound.item;
 
 import craftbound.card.BoosterPacks;
+import craftbound.network.PackOpenedPayload;
 import java.util.List;
-import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.MutableComponent;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Prediction;
@@ -23,18 +24,15 @@ public class BoosterPackItem extends Item {
     public InteractionResult use(Level level, Player player, InteractionHand hand) {
         // Only the server rolls the cards, so every player sees the same result.
         if (!level.isClientSide()) {
-            MutableComponent message = Component.literal("You opened a pack: ");
             List<BoosterPacks.Pull> pulls = BoosterPacks.open(player.getRandom());
-            for (int i = 0; i < pulls.size(); i++) {
-                ItemStack card = CardItem.of(pulls.get(i).card(), pulls.get(i).enchanted());
-                if (i > 0) {
-                    message.append(Component.literal(", "));
-                }
-                message.append(card.getHoverName());
+            for (BoosterPacks.Pull pull : pulls) {
                 // Puts the card in the inventory, or drops it at the player's feet if it's full.
-                player.getInventory().placeItemBackInInventory(card, Prediction.SERVER_ONLY);
+                player.getInventory().placeItemBackInInventory(CardItem.of(pull.card(), pull.enchanted()), Prediction.SERVER_ONLY);
             }
-            player.sendSystemMessage(message);
+            // Tell the player's game to play the opening, where the cards are revealed one by one.
+            if (player instanceof ServerPlayer serverPlayer) {
+                ServerPlayNetworking.send(serverPlayer, new PackOpenedPayload(pulls));
+            }
             level.playSound(null, player.getX(), player.getY(), player.getZ(),
                     SoundEvents.BOOK_PAGE_TURN, SoundSource.PLAYERS, 1.0F, 1.0F);
         }

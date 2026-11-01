@@ -16,6 +16,8 @@ public class Cards {
     // Tokens come first, because the cards below point to them.
     public static final Identifier ROTTEN_FLESH = register("rotten_flesh", CardDefinition.item(CardRarity.COMMON, 0).token());
     public static final Identifier ARROW = register("arrow", CardDefinition.item(CardRarity.COMMON, 1).token());
+    public static final Identifier NETHER_STAR = register("nether_star", CardDefinition.item(CardRarity.COMMON, 0).token());
+    public static final Identifier DRAGON_EGG = register("dragon_egg", CardDefinition.item(CardRarity.COMMON, 0).token());
 
     public static final Identifier ZOMBIE = register("zombie", CardDefinition.mob(CardRarity.COMMON, 2, 2, 3)
             .type(MobType.UNDEAD).keywords(Keyword.DROP).creates(Keyword.DROP, ROTTEN_FLESH));
@@ -25,6 +27,14 @@ public class Cards {
             .keywords(Keyword.DROP));
     public static final Identifier ENDERMAN = register("enderman", CardDefinition.mob(CardRarity.EPIC, 5, 4, 4)
             .type(MobType.ENDER).keywords(Keyword.SPAWN));
+
+    // Legendaries: the three boss mobs.
+    public static final Identifier WARDEN = register("warden", CardDefinition.mob(CardRarity.LEGENDARY, 8, 7, 9)
+            .keywords(Keyword.SHIELD, Keyword.SPAWN));
+    public static final Identifier WITHER = register("wither", CardDefinition.mob(CardRarity.LEGENDARY, 8, 6, 6)
+            .type(MobType.UNDEAD).keywords(Keyword.SPAWN, Keyword.DROP).creates(Keyword.DROP, NETHER_STAR));
+    public static final Identifier ENDER_DRAGON = register("ender_dragon", CardDefinition.mob(CardRarity.LEGENDARY, 10, 8, 8)
+            .type(MobType.ENDER).keywords(Keyword.SPRINT, Keyword.DROP).creates(Keyword.DROP, DRAGON_EGG));
 
     private static Identifier register(String name, CardDefinition.Builder card) {
         Identifier id = Craftbound.id(name);

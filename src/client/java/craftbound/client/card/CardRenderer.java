@@ -47,7 +47,7 @@ public class CardRenderer {
     }
 
     // Draws the card with its top-left corner at (x, y), scaled up by `scale`, and returns its hover areas.
-    public static List<HoverRegion> draw(GuiGraphicsExtractor g, Font font, ItemStack stack, int x, int y, int scale) {
+    public static List<HoverRegion> draw(GuiGraphicsExtractor g, Font font, ItemStack stack, int x, int y, float scale) {
         List<HoverRegion> regions = new ArrayList<>();
         Identifier id = stack.get(ModComponents.CARD_ID);
         CardDefinition card = id == null ? null : Cards.get(id);
@@ -164,13 +164,14 @@ public class CardRenderer {
     }
 
     // Turns a box measured on the card into a box on screen.
-    private static HoverRegion region(int cardX, int cardY, int scale, int x, int y, int width, int height, List<Component> lines) {
-        return new HoverRegion(cardX + x * scale, cardY + y * scale, width * scale, height * scale, lines, null);
+    private static HoverRegion region(int cardX, int cardY, float scale, int x, int y, int width, int height, List<Component> lines) {
+        return new HoverRegion(cardX + Math.round(x * scale), cardY + Math.round(y * scale),
+                Math.round(width * scale), Math.round(height * scale), lines, null);
     }
 
     // Walks a line of card text letter by letter and adds a hover area over each keyword in it.
     private static void addKeywordRegions(List<HoverRegion> regions, Font font, CardDefinition card, FormattedCharSequence line,
-                                          int lineX, int lineY, int cardX, int cardY, int scale) {
+                                          int lineX, int lineY, int cardX, int cardY, float scale) {
         int[] cursor = {lineX};
         int[] start = {lineX};
         Keyword[] current = {null};
@@ -192,15 +193,15 @@ public class CardRenderer {
     }
 
     private static HoverRegion keywordRegion(CardDefinition card, Keyword keyword, int left, int right, int lineY,
-                                             Font font, int cardX, int cardY, int scale) {
+                                             Font font, int cardX, int cardY, float scale) {
         List<Component> lines = new ArrayList<>();
         lines.add(keyword.displayName().copy().withStyle(ChatFormatting.GOLD));
         lines.add(keyword.description().copy().withStyle(ChatFormatting.GRAY));
         if (!card.createdBy(keyword).isEmpty()) {
             lines.add(Component.translatable("card_ui.craftbound.pin_hint").withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC));
         }
-        return new HoverRegion(cardX + left * scale, cardY + (lineY - 1) * scale,
-                (right - left) * scale, font.lineHeight * scale, lines, keyword);
+        return new HoverRegion(cardX + Math.round(left * scale), cardY + Math.round((lineY - 1) * scale),
+                Math.round((right - left) * scale), Math.round(font.lineHeight * scale), lines, keyword);
     }
 
     // Shows the matching Minecraft item (or the mob's spawn egg) three times bigger until real card art exists.
@@ -230,7 +231,7 @@ public class CardRenderer {
     }
 
     // Draws the back of a card in a sleeve's colours: a framed panel with a diamond emblem in the middle.
-    public static void drawBack(GuiGraphicsExtractor g, Sleeves.Design design, int x, int y, int scale) {
+    public static void drawBack(GuiGraphicsExtractor g, Sleeves.Design design, int x, int y, float scale) {
         g.pose().pushMatrix();
         g.pose().translate(x, y);
         g.pose().scale(scale, scale);

@@ -21,6 +21,7 @@ public class ModNetworking {
     public static void initialize() {
         PayloadTypeRegistry.serverboundPlay().register(TakeFromBinderPayload.TYPE, TakeFromBinderPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(FileAllCardsPayload.TYPE, FileAllCardsPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(PackOpenedPayload.TYPE, PackOpenedPayload.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(TakeFromBinderPayload.TYPE, (payload, context) -> {
             ServerPlayer player = context.player();

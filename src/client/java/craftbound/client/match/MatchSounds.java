@@ -49,7 +49,8 @@ final class MatchSounds {
             Map.entry("sweeping_edge", "entity.player.attack.sweep"),
             Map.entry("piston", "block.piston.extend"),
             Map.entry("bone_meal", "item.bone_meal.use"),
-            Map.entry("bountiful_harvest", "item.crop.plant"));
+            Map.entry("bountiful_harvest", "item.crop.plant"),
+            Map.entry("lava_bucket", "item.bucket.empty_lava"));
 
     static void play(String name, float pitch, float volume) {
         SoundEvent sound = BuiltInRegistries.SOUND_EVENT.getValue(Identifier.withDefaultNamespace(name));

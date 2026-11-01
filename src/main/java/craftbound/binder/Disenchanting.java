@@ -40,12 +40,17 @@ public class Disenchanting {
     }
 
     // Files `amount` copies of a card: keeps what fits under the limit and disenchants the rest.
+    // The first copy of a card (or of its Enchanted version) is marked new.
     public static Result file(BinderContents contents, Identifier id, boolean enchanted, int amount) {
         CardDefinition card = Cards.get(id);
         int room = Math.max(0, binderLimit(card.rarity()) - contents.count(id, enchanted));
         int kept = Math.min(room, amount);
         int extra = amount - kept;
-        return new Result(contents.add(id, enchanted, kept), extra, extra * halfPoints(card.rarity(), enchanted) / 2);
+        BinderContents filed = contents.add(id, enchanted, kept);
+        if (kept > 0 && contents.count(id, enchanted) == 0) {
+            filed = filed.markNew(id, enchanted);
+        }
+        return new Result(filed, extra, extra * halfPoints(card.rarity(), enchanted) / 2);
     }
 
     // Disenchants anything already over the limit, e.g. in binders filled before limits existed.

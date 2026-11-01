@@ -1,5 +1,6 @@
 package craftbound.client.binder;
 
+import craftbound.client.NewCards;
 import craftbound.client.Tooltips;
 import com.mojang.blaze3d.platform.InputConstants;
 import craftbound.binder.BinderContents;
@@ -123,12 +124,30 @@ public class BinderScreen extends Screen {
             Pocket pocket = new Pocket(x, y, id);
             this.pockets.add(pocket);
             if (contents.owns(id)) {
+                // New cards glow blue until you hover them.
+                if (NewCards.isNew(id)) {
+                    NewCards.glow(g, x + 2, y + 2, POCKET_WIDTH - 4, POCKET_HEIGHT - 4);
+                }
                 drawFilledPocket(g, x, y, id, contents);
             } else {
                 g.centeredText(this.font, "#" + (number + 1), x + POCKET_WIDTH / 2, y + POCKET_HEIGHT / 2 - 4, 0xFFA08A64);
             }
             if (mouseX >= x && mouseX < x + POCKET_WIDTH && mouseY >= y && mouseY < y + POCKET_HEIGHT) {
                 hovered = pocket;
+                NewCards.seen(id);
+            }
+        }
+        // How many new cards are on earlier and later pages, shown on the page arrows.
+        int newBefore = 0;
+        int newAfter = 0;
+        for (int number = 0; number < collection.size(); number++) {
+            int spreadOf = number / POCKETS_PER_SPREAD;
+            if (spreadOf != this.spread && contents.owns(collection.get(number)) && NewCards.isNew(collection.get(number))) {
+                if (spreadOf < this.spread) {
+                    newBefore++;
+                } else {
+                    newAfter++;
+                }
             }
         }
 
@@ -140,6 +159,12 @@ public class BinderScreen extends Screen {
         this.previousButton = this.spread > 0 ? drawButton(g, "<", bookX - 30, bookY + PAGE_HEIGHT / 2 - 10, mouseX, mouseY) : null;
         this.nextButton = this.spread < spreadCount() - 1
                 ? drawButton(g, ">", bookX + BOOK_WIDTH + 12, bookY + PAGE_HEIGHT / 2 - 10, mouseX, mouseY) : null;
+        if (this.previousButton != null && newBefore > 0) {
+            NewCards.badge(g, this.font, this.previousButton[0] + this.previousButton[2] - 6, this.previousButton[1] - 6, newBefore);
+        }
+        if (this.nextButton != null && newAfter > 0) {
+            NewCards.badge(g, this.font, this.nextButton[0] + this.nextButton[2] - 6, this.nextButton[1] - 6, newAfter);
+        }
         // File all cards and Disenchant extras, side by side under the book.
         Component fileLabel = Component.translatable("binder_ui.craftbound.file_all");
         Disenchanting.Result extras = Disenchanting.disenchantExtras(contents);

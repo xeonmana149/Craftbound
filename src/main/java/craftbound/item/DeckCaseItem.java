@@ -2,6 +2,8 @@ package craftbound.item;
 
 import craftbound.component.ModComponents;
 import craftbound.deck.DeckBuilding;
+import craftbound.deck.DeckContents;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -20,6 +22,12 @@ import net.minecraft.world.item.ItemStack;
 public class DeckCaseItem extends Item {
     public DeckCaseItem(Properties properties) {
         super(properties);
+    }
+
+    // A Deck Case is called after its deck: the name you gave it, or its class ("Farmer Deck").
+    @Override
+    public Component getName(ItemStack stack) {
+        return DeckBuilding.defaultName(stack.getOrDefault(ModComponents.DECK_CONTENTS, DeckContents.EMPTY));
     }
 
     // Right-clicking opens the deck builder on the client. On the server it's a chance to hand back cards from

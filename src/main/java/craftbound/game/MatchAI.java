@@ -69,6 +69,10 @@ public class MatchAI {
         if (definition.isTool()) {
             return me.tool == null || me.tool.attack < definition.attack();
         }
+        if (card.id().equals(Cards.LAVA_BUCKET)) {
+            // Only worth it on a tool that would do real damage.
+            return enemy.tool != null && enemy.tool.attack * enemy.tool.uses >= 3;
+        }
         if (card.id().equals(Cards.PISTON)) {
             return enemy.board.stream().anyMatch(m -> m.definition().cost() >= 4);
         }

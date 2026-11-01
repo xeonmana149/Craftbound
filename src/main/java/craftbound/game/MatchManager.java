@@ -41,8 +41,8 @@ public class MatchManager {
     // And before its very first move, for the coin toss and mulligan to finish on screen.
     private static final int AI_FIRST_MOVE_DELAY = 90;
 
-    // A deck picked at the table: its cards, class and card backs.
-    public record DeckChoice(List<CardRef> cards, CardClass deckClass, Identifier sleeve) {
+    // A deck picked at the table: its cards, class, card backs and the name you gave it ("" for none).
+    public record DeckChoice(List<CardRef> cards, CardClass deckClass, Identifier sleeve, String name) {
     }
 
     private static final Map<UUID, Match> MATCHES = new HashMap<>();
@@ -107,7 +107,7 @@ public class MatchManager {
             }
         }
         Identifier sleeve = stack.get(ModComponents.SLEEVE_ID);
-        return new DeckChoice(cards, deck.deckClass(), sleeve == null ? Sleeves.CLASSIC : sleeve);
+        return new DeckChoice(cards, deck.deckClass(), sleeve == null ? Sleeves.CLASSIC : sleeve, DeckBuilding.customName(stack));
     }
 
     // A match against the Card Master, who has just sat down at the table (or null if it got lost on the way).
@@ -119,6 +119,7 @@ public class MatchManager {
             return;
         }
         MatchPlayer you = new MatchPlayer(player.getName().getString(), player.getUUID(), deck.deckClass(), deck.sleeve(), deck.cards());
+        you.deckName = deck.name();
         CardClass masterClass = randomClass(player);
         MatchPlayer master = new MatchPlayer("Card Master", null, masterClass, Sleeves.CLASSIC, cardMasterDeck(masterClass));
         Match match = new Match(you, master, player.getRandom());
@@ -139,6 +140,8 @@ public class MatchManager {
         }
         MatchPlayer a = new MatchPlayer(first.getName().getString(), first.getUUID(), firstDeck.deckClass(), firstDeck.sleeve(), firstDeck.cards());
         MatchPlayer b = new MatchPlayer(second.getName().getString(), second.getUUID(), secondDeck.deckClass(), secondDeck.sleeve(), secondDeck.cards());
+        a.deckName = firstDeck.name();
+        b.deckName = secondDeck.name();
         Match match = new Match(a, b, first.getRandom());
         MATCHES.put(first.getUUID(), match);
         MATCHES.put(second.getUUID(), match);

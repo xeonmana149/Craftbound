@@ -105,6 +105,9 @@ public class Cards {
     public static final Identifier SNIFFER = register("sniffer", CardDefinition.mob(CardRarity.EPIC, 6, 5, 6)
             .cardClass(CardClass.FARMER).type(MobType.ANIMAL).keywords(Keyword.SPAWN).creates(Keyword.SPAWN, WHEAT));
 
+    // Neutral answer to tools: any deck can melt the other hero's sword.
+    public static final Identifier LAVA_BUCKET = register("lava_bucket", CardDefinition.item(CardRarity.COMMON, 1));
+
     private static Identifier register(String name, CardDefinition.Builder card) {
         Identifier id = Craftbound.id(name);
         CARDS.put(id, card.build());

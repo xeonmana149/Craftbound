@@ -46,6 +46,7 @@ public class MatchView {
             p.addProperty("ai", player.isAi());
             p.addProperty("uuid", player.playerId == null ? "" : player.playerId.toString());
             p.addProperty("sleeve", player.sleeve == null ? "" : player.sleeve.toString());
+            p.addProperty("deckName", player.deckName);
             p.addProperty("health", player.health);
             p.addProperty("xp", player.xp);
             p.addProperty("maxXp", player.maxXp);

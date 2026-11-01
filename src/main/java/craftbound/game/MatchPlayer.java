@@ -15,6 +15,8 @@ public class MatchPlayer {
     public final UUID playerId;
     // The card backs this player's deck uses.
     public final Identifier sleeve;
+    // The name the player gave their deck, or "" (the screen then calls it after its class).
+    public String deckName = "";
     public int health = Match.START_HEALTH;
     public int xp = 0;
     public int maxXp = 0;

@@ -32,6 +32,8 @@ public class PackOpeningScreen extends Screen {
     private final List<ItemStack> cards = new ArrayList<>();
     private final List<CardRarity> rarities = new ArrayList<>();
     private final List<Boolean> enchanted = new ArrayList<>();
+    // Cards you didn't own before get a "New!" tag once they're face up.
+    private final List<Boolean> fresh = new ArrayList<>();
     private final boolean jackpot;
     // When each card starts flipping, in seconds since the screen opened. NOT_FLIPPED until you flip it.
     private final float[] flipStart;
@@ -45,17 +47,23 @@ public class PackOpeningScreen extends Screen {
     private int[] revealAllButton;
     private int[] doneButton;
 
-    public PackOpeningScreen(List<BoosterPacks.Pull> pulls, boolean jackpot) {
+    public PackOpeningScreen(List<BoosterPacks.Pull> pulls, boolean jackpot, List<Boolean> fresh) {
         super(Component.translatable(jackpot ? "pack_ui.craftbound.jackpot" : "item.craftbound.booster_pack"));
         this.jackpot = jackpot;
-        List<BoosterPacks.Pull> sorted = new ArrayList<>(pulls);
+        // Keep each pull's "new" flag with it while sorting.
+        List<Integer> order = new ArrayList<>();
+        for (int i = 0; i < pulls.size(); i++) {
+            order.add(i);
+        }
         // Least rare first; within a rarity, normal before Enchanted.
-        sorted.sort(Comparator.<BoosterPacks.Pull>comparingInt(pull -> Cards.get(pull.card()).rarity().ordinal())
-                .thenComparing(BoosterPacks.Pull::enchanted));
-        for (BoosterPacks.Pull pull : sorted) {
+        order.sort(Comparator.<Integer>comparingInt(i -> Cards.get(pulls.get(i).card()).rarity().ordinal())
+                .thenComparing(i -> pulls.get(i).enchanted()));
+        for (int i : order) {
+            BoosterPacks.Pull pull = pulls.get(i);
             this.cards.add(CardItem.of(pull.card(), pull.enchanted()));
             this.rarities.add(Cards.get(pull.card()).rarity());
             this.enchanted.add(pull.enchanted());
+            this.fresh.add(i < fresh.size() && fresh.get(i));
         }
         this.flipStart = new float[this.cards.size()];
         Arrays.fill(this.flipStart, NOT_FLIPPED);
@@ -102,8 +110,8 @@ public class PackOpeningScreen extends Screen {
         int startX = (this.width - rowWidth) / 2;
         int y = (this.height - cardHeight) / 2 - 6;
 
-        // A jackpot pack gets a gold title.
-        g.centeredText(this.font, this.title, this.width / 2, y - 18, this.jackpot ? 0xFFFFAA00 : 0xFFFFFFFF);
+        // A jackpot pack gets a gold title. It sits high enough to leave room for "New!" tags.
+        g.centeredText(this.font, this.title, this.width / 2, y - 30, this.jackpot ? 0xFFFFAA00 : 0xFFFFFFFF);
 
         this.cardRects.clear();
         List<CardRenderer.HoverRegion> regions = new ArrayList<>();
@@ -136,6 +144,9 @@ public class PackOpeningScreen extends Screen {
             }
             g.pose().popMatrix();
 
+            if (progress >= 0.5F && this.fresh.get(i)) {
+                drawNewTag(g, i, centerX, y - Math.round(lift) - 12);
+            }
             if (progress >= 1.0F) {
                 drawRevealFlash(g, i, x, y, cardWidth, cardHeight);
             } else if (progress == 0.0F) {
@@ -175,6 +186,22 @@ public class PackOpeningScreen extends Screen {
     // Hovering a face-down card hints at what's under it: Rare, Epic and Legendary cards glow in their colour
     // (an Enchanted Common glows Enchanted purple). Plain Commons stay dark.
     // The glow is a bright solid border with a wide halo fading out around it, pulsing gently.
+    // "New!" above a card you didn't have before. It pops in as the card turns face up, then gently bobs.
+    private void drawNewTag(GuiGraphicsExtractor g, int i, float centerX, int y) {
+        float age = this.time - this.flipStart[i] - FLIP_SECONDS * 0.5F;
+        float pop = age < 0.2F ? 0.4F + 0.8F * (age / 0.2F) : age < 0.3F ? 1.2F - 2.0F * (age - 0.2F) : 1.0F;
+        float bob = (float) Math.sin(this.time * 4.0F) * 1.5F;
+        Component text = Component.translatable("pack_ui.craftbound.new");
+        int width = this.font.width(text);
+        g.pose().pushMatrix();
+        g.pose().translate(centerX, y + bob);
+        g.pose().scale(1.4F * pop, 1.4F * pop);
+        g.fill(-width / 2 - 4, -2, width / 2 + 4, 10, 0xFF000000);
+        g.fill(-width / 2 - 3, -1, width / 2 + 3, 9, 0xFF2E8A1E);
+        g.text(this.font, text, -width / 2, 0, 0xFFFFFF55);
+        g.pose().popMatrix();
+    }
+
     private void drawHoverGlow(GuiGraphicsExtractor g, int i, int x, int y, int width, int height) {
         CardRarity rarity = this.rarities.get(i);
         int color = rarity != CardRarity.COMMON ? rarity.rgb() : this.enchanted.get(i) ? ENCHANTED_GLOW : -1;

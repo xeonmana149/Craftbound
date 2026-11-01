@@ -96,6 +96,8 @@ final class MatchState {
         boolean ai;
         UUID uuid;
         Identifier sleeve;
+        // The name the player gave their deck, or "" for its default ("Farmer Deck").
+        String deckName = "";
         int health;
         int xp;
         int maxXp;
@@ -138,6 +140,7 @@ final class MatchState {
             side.ai = this.ai;
             side.uuid = this.uuid;
             side.sleeve = this.sleeve;
+            side.deckName = this.deckName;
             side.health = this.health;
             side.xp = this.xp;
             side.maxXp = this.maxXp;
@@ -234,6 +237,7 @@ final class MatchState {
             String uuid = p.get("uuid").getAsString();
             side.uuid = uuid.isEmpty() ? null : UUID.fromString(uuid);
             side.sleeve = card(p.get("sleeve").getAsString());
+            side.deckName = p.get("deckName").getAsString();
             side.health = p.get("health").getAsInt();
             side.xp = p.get("xp").getAsInt();
             side.maxXp = p.get("maxXp").getAsInt();

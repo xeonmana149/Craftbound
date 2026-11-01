@@ -12,6 +12,9 @@ import craftbound.component.ModComponents;
 import craftbound.item.CardItem;
 import craftbound.item.ModItems;
 import craftbound.item.SleeveItem;
+import craftbound.network.DeckRenamePayload;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.network.chat.Component;
 import craftbound.sleeve.Sleeves;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
@@ -39,6 +42,34 @@ public class DeckBuilding {
     // How many copies the deck lists that the binders you're carrying don't have. A deck missing cards can't be played.
     public static int missing(Inventory inventory, DeckContents deck, Identifier id, boolean enchanted) {
         return Math.max(0, deck.cards().count(id, enchanted) - owned(inventory, id, enchanted));
+    }
+
+    // A deck without a name of its own is called after its class: "Farmer Deck" ("Deck Case" before a class is picked).
+    public static Component defaultName(DeckContents deck) {
+        return deck.deckClass() == CardClass.NEUTRAL ? Component.translatable("item.craftbound.deck_case")
+                : Component.translatable("deck_ui.craftbound.deck_title", deck.deckClass().displayName());
+    }
+
+    // The name you gave a deck, or "" if it still has its default name.
+    public static String customName(ItemStack deckCase) {
+        Component name = deckCase.get(DataComponents.CUSTOM_NAME);
+        return name == null ? "" : name.getString();
+    }
+
+    // Names a deck. The name is the Deck Case's own item name (not in italics like an anvil name), so it shows
+    // everywhere the case does: your inventory, its tooltip, the table's lobby and matches. A blank name, or the
+    // default one, goes back to the default.
+    public static void rename(ItemStack deckCase, String name) {
+        String clean = name.replace("§", "").strip();
+        if (clean.length() > DeckRenamePayload.MAX_LENGTH) {
+            clean = clean.substring(0, DeckRenamePayload.MAX_LENGTH).strip();
+        }
+        DeckContents deck = deckCase.getOrDefault(ModComponents.DECK_CONTENTS, DeckContents.EMPTY);
+        if (clean.isEmpty() || clean.equals(defaultName(deck).getString())) {
+            deckCase.remove(DataComponents.CUSTOM_NAME);
+        } else {
+            deckCase.set(DataComponents.CUSTOM_NAME, Component.literal(clean).withStyle(style -> style.withItalic(false)));
+        }
     }
 
     // Why this Deck Case can't be played at a card table, as a translation key, or null if it can. The table's

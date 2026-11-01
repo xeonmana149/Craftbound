@@ -60,7 +60,7 @@ public class CraftboundClient implements ClientModInitializer {
 
 		// The server tells us when we've opened a booster pack, so we can play the reveal.
 		ClientPlayNetworking.registerGlobalReceiver(PackOpenedPayload.TYPE, (payload, context) ->
-				context.client().gui.setScreen(new PackOpeningScreen(payload.pulls(), payload.jackpot())));
+				context.client().gui.setScreen(new PackOpeningScreen(payload.pulls(), payload.jackpot(), payload.fresh())));
 
 		// Right-clicking a card, binder or sleeve opens its screen. Screens only exist on the client,
 		// so this lives here rather than in the item classes.

@@ -2,6 +2,7 @@ package craftbound.component;
 
 import craftbound.Craftbound;
 import craftbound.binder.BinderContents;
+import craftbound.card.CardClass;
 import craftbound.card.CardDefinition;
 import craftbound.card.Cards;
 import craftbound.card.DeckRules;
@@ -87,9 +88,12 @@ public class ModComponents {
             tooltip.accept(Component.translatable("binder_ui.craftbound.how_to").withStyle(ChatFormatting.DARK_GRAY));
         });
 
+        // Short on purpose: the deck's name is the item name, then its class and size, sleeve, and what to do.
         ItemComponentTooltipProviderRegistry.addFirst(DECK_CONTENTS, deck -> (context, tooltip, flag, components) -> {
-            tooltip.accept(Component.translatable("deck_ui.craftbound.size", deck.size(), DeckRules.DECK_SIZE).withStyle(ChatFormatting.GOLD));
-            tooltip.accept(Component.translatable("deck_ui.craftbound.class", deck.deckClass().displayName()).withStyle(ChatFormatting.GRAY));
+            Component summary = deck.deckClass() == CardClass.NEUTRAL
+                    ? Component.translatable("deck_ui.craftbound.summary_no_class", deck.size(), DeckRules.DECK_SIZE)
+                    : Component.translatable("deck_ui.craftbound.summary", deck.deckClass().displayName(), deck.size(), DeckRules.DECK_SIZE);
+            tooltip.accept(summary.copy().withStyle(ChatFormatting.GOLD));
             Identifier sleeve = components.get(SLEEVE_ID);
             tooltip.accept(Sleeves.name(sleeve == null ? Sleeves.CLASSIC : sleeve).copy().withStyle(ChatFormatting.GRAY));
             tooltip.accept(Component.translatable("deck_ui.craftbound.how_to").withStyle(ChatFormatting.DARK_GRAY));

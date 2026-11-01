@@ -23,6 +23,9 @@ public class CardEffects {
             if (match.player(side).tool == null) return "you need a tool";
             if (match.opponent(side).board.isEmpty()) return "nothing to hit";
         }
+        if (card.equals(Cards.LAVA_BUCKET) && match.opponent(side).tool == null) {
+            return "they have no tool";
+        }
         return null;
     }
 
@@ -146,6 +149,14 @@ public class CardEffects {
             match.log(player.name + " sweeps every enemy mob for " + amount + "!", card);
             for (Minion enemy : new ArrayList<>(match.opponent(side).board)) {
                 match.damage(enemy, amount, null);
+            }
+        } else if (id.equals(Cards.LAVA_BUCKET)) {
+            // The other hero's tool melts.
+            MatchPlayer enemy = match.opponent(side);
+            if (enemy.tool != null) {
+                match.log(player.name + " pours lava on " + enemy.name + "'s " + Match.name(enemy.tool.card) + "!", card);
+                match.event(MatchEvent.Type.BREAK, 1 - side, Match.HERO, enemy.tool.card, 0, 0, null);
+                enemy.tool = null;
             }
         } else if (id.equals(Cards.BOUNTIFUL_HARVEST)) {
             int planted = 0;

@@ -24,7 +24,6 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
@@ -99,9 +98,8 @@ public class TableScreen extends Screen {
                 continue;
             }
             DeckContents deck = stack.getOrDefault(ModComponents.DECK_CONTENTS, DeckContents.EMPTY);
-            Component name = stack.has(DataComponents.CUSTOM_NAME) ? stack.getHoverName()
-                    : deck.deckClass() == CardClass.NEUTRAL ? Component.translatable("table_ui.craftbound.new_deck")
-                    : Component.translatable("table_ui.craftbound.class_deck", deck.deckClass().displayName());
+            // The name you gave the deck, or its class ("Farmer Deck").
+            Component name = stack.getHoverName();
             this.decks.add(new DeckEntry(slot, stack, deck, name, DeckBuilding.whyCantPlay(inventory, stack)));
         }
         // Pick the deck used last time, otherwise the first one that can be played.

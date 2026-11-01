@@ -7,6 +7,7 @@ import craftbound.card.CardDefinition;
 import craftbound.card.CardRarity;
 import craftbound.card.Cards;
 import craftbound.card.DeckRules;
+import craftbound.client.NewCards;
 import craftbound.client.Tooltips;
 import craftbound.client.card.CardRenderer;
 import craftbound.component.ModComponents;
@@ -16,6 +17,7 @@ import craftbound.item.CardItem;
 import craftbound.item.ModItems;
 import craftbound.network.DeckClassPayload;
 import craftbound.network.DeckEditPayload;
+import craftbound.network.DeckRenamePayload;
 import craftbound.network.DeckSleevePayload;
 import craftbound.sleeve.Sleeves;
 import java.util.ArrayList;
@@ -74,6 +76,12 @@ public class DeckCaseScreen extends Screen {
     private int page = 0;
     private int scroll = 0;
     private EditBox search;
+    // The deck's name above the list: click it to rename the deck.
+    private EditBox nameBox;
+    // The name last sent to the server, so it's only sent again when it changes.
+    private String savedName;
+    // The class the name box last showed a default name for.
+    private CardClass nameClass;
 
     // A card being pressed or dragged, and the card zoomed in by right-click (null when none).
     private Identifier pressedCard;
@@ -144,6 +152,47 @@ public class DeckCaseScreen extends Screen {
         this.search.setValue(previous);
         this.search.setResponder(text -> this.page = 0);
         addRenderableWidget(this.search);
+
+        String previousName = this.nameBox == null ? null : this.nameBox.getValue();
+        this.nameBox = new EditBox(this.font, this.listX, this.tabsY + 3, LIST_WIDTH, 10,
+                Component.translatable("deck_ui.craftbound.rename_hint"));
+        this.nameBox.setBordered(false);
+        this.nameBox.setTextColor(GOLD);
+        this.nameBox.setMaxLength(DeckRenamePayload.MAX_LENGTH);
+        this.nameBox.setValue(previousName != null ? previousName : deckCase().getHoverName().getString());
+        if (this.savedName == null) {
+            this.savedName = this.nameBox.getValue();
+        }
+        addRenderableWidget(this.nameBox);
+    }
+
+    // Sends the deck's new name if it changed. A blank name goes back to the default ("Farmer Deck").
+    private void saveName() {
+        if (this.nameBox == null || this.minecraft == null || this.minecraft.player == null || !deckCase().is(ModItems.DECK_CASE)) {
+            return;
+        }
+        String value = this.nameBox.getValue().strip();
+        if (value.isEmpty()) {
+            value = DeckBuilding.defaultName(deck()).getString();
+            this.nameBox.setValue(value);
+        }
+        if (!value.equals(this.savedName)) {
+            this.savedName = value;
+            ClientPlayNetworking.send(new DeckRenamePayload(this.hand == InteractionHand.MAIN_HAND, value));
+        }
+    }
+
+    @Override
+    public void tick() {
+        if (this.nameBox != null && !this.nameBox.isFocused()) {
+            saveName();
+        }
+    }
+
+    @Override
+    public void removed() {
+        saveName();
+        super.removed();
     }
 
     private ItemStack deckCase() {
@@ -237,6 +286,15 @@ public class DeckCaseScreen extends Screen {
         DeckContents deck = deck();
         boolean pickingClass = deck.deckClass() == CardClass.NEUTRAL;
         this.search.visible = !pickingClass && this.tab != Tab.BACKS;
+        this.nameBox.visible = !pickingClass;
+        // A deck without a name of its own is called after its class, so picking a class changes the name.
+        if (deck.deckClass() != this.nameClass) {
+            this.nameClass = deck.deckClass();
+            if (!this.nameBox.isFocused() && DeckBuilding.customName(deckCase()).isEmpty()) {
+                this.nameBox.setValue(deckCase().getHoverName().getString());
+                this.savedName = this.nameBox.getValue();
+            }
+        }
 
         g.fill(this.panelX, this.panelY, this.panelX + this.panelWidth, this.panelY + this.panelHeight, WOOD);
         g.outline(this.panelX, this.panelY, this.panelWidth, this.panelHeight, WOOD_DARK);
@@ -278,7 +336,10 @@ public class DeckCaseScreen extends Screen {
             int previewX = this.listX - PADDING - previewWidth;
             int previewY = Math.max(this.panelY + 4, Math.min(mouseY - previewHeight / 2, this.panelY + this.panelHeight - previewHeight - 4));
             CardRenderer.draw(g, this.font, CardItem.of(hoveredRow, deck.cards().count(hoveredRow, true) > 0), previewX, previewY, previewScale);
-            tooltip = rowTooltip(hoveredRow, deck);
+            // No tooltip here: it would cover the card. The row's count already turns red if copies are missing.
+            tooltip = null;
+        } else if (this.nameBox.visible && !this.nameBox.isFocused() && this.nameBox.isMouseOver(mouseX, mouseY)) {
+            tooltip = List.of(Component.translatable("deck_ui.craftbound.rename_hint").withStyle(ChatFormatting.GRAY));
         }
         if (this.dragging) {
             drawDrag(g, mouseX, mouseY);
@@ -334,6 +395,11 @@ public class DeckCaseScreen extends Screen {
             g.fill(x, this.tabsY, x + width, this.tabsY + 16, selected ? PAGE : hover ? 0xFF8A5A3A : 0xFF6B4423);
             g.outline(x, this.tabsY, width, 16, WOOD_DARK);
             g.centeredText(this.font, labels[i], x + width / 2, this.tabsY + 4, selected ? TEXT_DARK : 0xFFFFFFFF);
+            // How many new cards are waiting on the class and Neutral tabs.
+            int fresh = i == 0 ? NewCards.count(deck.deckClass()) : i == 1 ? NewCards.count(CardClass.NEUTRAL) : 0;
+            if (fresh > 0) {
+                NewCards.badge(g, this.font, x + width - 7, this.tabsY - 4, fresh);
+            }
             this.tabButtons.add(new int[]{x, this.tabsY, width, 16, i});
             x += width + 4;
         }
@@ -396,16 +462,26 @@ public class DeckCaseScreen extends Screen {
             int[] spare = spare(counts, deck, id);
             // Show the Enchanted version if that's the only kind you have a spare copy of.
             boolean showEnchanted = spare[0] == 0 && spare[1] > 0;
+            // New cards glow blue until you hover them, like Hearthstone.
+            boolean isNew = NewCards.isNew(id);
+            if (isNew) {
+                NewCards.glow(g, x, y, cardWidth, cardHeight);
+            }
             List<CardRenderer.HoverRegion> regions = CardRenderer.draw(g, this.font, CardItem.of(id, showEnchanted), x, y, scale);
             String reason = spare[0] + spare[1] == 0 ? "deck_ui.craftbound.none_left" : DeckBuilding.whyNot(deck, id);
             if (reason != null) {
                 g.fill(x, y, x + cardWidth, y + cardHeight, 0x99000000);
             }
             drawCardLabel(g, id, counts, deck, x, y + cardHeight + 2, cardWidth);
+            if (isNew) {
+                Component label = Component.translatable("deck_ui.craftbound.new");
+                g.text(this.font, label, x + cardWidth / 2 - this.font.width(label) / 2, y + cardHeight + 2, 0xFF7FD0FF);
+            }
 
             Spot spot = new Spot(x, y, cardWidth, cardHeight, id);
             this.cardSpots.add(spot);
             if (spot.contains(mouseX, mouseY)) {
+                NewCards.seen(id);
                 for (CardRenderer.HoverRegion region : regions) {
                     if (region.contains(mouseX, mouseY)) {
                         tooltip = region.lines();
@@ -474,26 +550,28 @@ public class DeckCaseScreen extends Screen {
         return tooltip;
     }
 
-    // The deck list on the right, with the class name, a 0/30 bar and the Done button. Returns the hovered row.
+    // The deck list on the right, under the deck's name (a text box: click it to rename the deck), with a 0/30 bar
+    // and the Done button. Returns the hovered row.
     private Identifier drawDeckList(GuiGraphicsExtractor g, DeckContents deck, int mouseX, int mouseY) {
-        // If your binders are missing cards this deck lists, the title says so in red.
+        // An underline shows the name can be edited.
+        if (this.nameBox.isFocused() || this.nameBox.isMouseOver(mouseX, mouseY)) {
+            g.fill(this.listX, this.tabsY + 13, this.listX + LIST_WIDTH, this.tabsY + 14, this.nameBox.isFocused() ? GOLD : 0x80FFD27A);
+        }
+
+        // 0/30 progress bar. If your binders are missing cards this deck lists, it says so in red.
         int missingTotal = 0;
         for (Identifier id : Cards.collectible()) {
             missingTotal += missing(deck, id);
         }
-        Component title = missingTotal > 0
-                ? Component.translatable("deck_ui.craftbound.deck_title_missing", deck.deckClass().displayName(), missingTotal)
-                : Component.translatable("deck_ui.craftbound.deck_title", deck.deckClass().displayName());
-        CardRenderer.fitText(g, this.font, title, this.listX, this.tabsY + 4, LIST_WIDTH, missingTotal > 0 ? 0xFFFF6A5A : GOLD, false);
-
-        // 0/30 progress bar.
         int barY = this.filterY;
         float filled = deck.size() / (float) DeckRules.DECK_SIZE;
         g.fill(this.listX, barY, this.listX + LIST_WIDTH, barY + 14, 0xFF1E1410);
         g.fill(this.listX + 1, barY + 1, this.listX + 1 + Math.round((LIST_WIDTH - 2) * filled), barY + 13,
                 deck.size() == DeckRules.DECK_SIZE ? 0xFF3FAE2A : 0xFF17A84F);
-        g.centeredText(this.font, Component.translatable("deck_ui.craftbound.cards_count", deck.size(), DeckRules.DECK_SIZE),
-                this.listX + LIST_WIDTH / 2, barY + 3, 0xFFFFFFFF);
+        Component count = missingTotal > 0
+                ? Component.translatable("deck_ui.craftbound.cards_missing", deck.size(), DeckRules.DECK_SIZE, missingTotal)
+                : Component.translatable("deck_ui.craftbound.cards_count", deck.size(), DeckRules.DECK_SIZE);
+        g.centeredText(this.font, count, this.listX + LIST_WIDTH / 2, barY + 3, missingTotal > 0 ? 0xFFFF8A7A : 0xFFFFFFFF);
 
         int listTop = this.gridY;
         int listHeight = this.gridHeight;
@@ -576,21 +654,6 @@ public class DeckCaseScreen extends Screen {
         }
     }
 
-    private List<Component> rowTooltip(Identifier id, DeckContents deck) {
-        List<Component> lines = new ArrayList<>();
-        lines.add(Component.translatable("binder_ui.craftbound.owned", deck.cards().count(id, false)).withStyle(ChatFormatting.GRAY));
-        if (deck.cards().count(id, true) > 0) {
-            lines.add(Component.translatable("binder_ui.craftbound.owned_enchanted", deck.cards().count(id, true))
-                    .withStyle(ChatFormatting.LIGHT_PURPLE));
-        }
-        int missing = missing(deck, id);
-        if (missing > 0) {
-            lines.add(Component.translatable("deck_ui.craftbound.missing", missing).withStyle(ChatFormatting.RED));
-        }
-        lines.add(Component.translatable("deck_ui.craftbound.hint_remove").withStyle(ChatFormatting.DARK_GRAY));
-        return lines;
-    }
-
     private int[] drawButton(GuiGraphicsExtractor g, Component label, int x, int y, int width, int mouseX, int mouseY) {
         int height = 18;
         boolean hover = mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
@@ -612,6 +675,7 @@ public class DeckCaseScreen extends Screen {
             return true;
         }
         this.search.setFocused(false);
+        this.nameBox.setFocused(false);
         double mouseX = event.x();
         double mouseY = event.y();
         boolean mainHand = this.hand == InteractionHand.MAIN_HAND;
@@ -839,6 +903,13 @@ public class DeckCaseScreen extends Screen {
     public boolean keyPressed(KeyEvent event) {
         if (this.zoomed != null && event.isEscape()) {
             this.zoomed = null;
+            return true;
+        }
+        // Enter saves the deck's name.
+        if (this.nameBox.isFocused() && event.isConfirmation()) {
+            this.nameBox.setFocused(false);
+            this.setFocused(null);
+            saveName();
             return true;
         }
         return super.keyPressed(event);

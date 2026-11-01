@@ -29,6 +29,8 @@ public class ModNetworking {
         PayloadTypeRegistry.serverboundPlay().register(DeckClassPayload.TYPE, DeckClassPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(DeckSleevePayload.TYPE, DeckSleevePayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(DisenchantExtrasPayload.TYPE, DisenchantExtrasPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(DeckRenamePayload.TYPE, DeckRenamePayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(CardSeenPayload.TYPE, CardSeenPayload.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(DisenchantExtrasPayload.TYPE, (payload, context) -> {
             ServerPlayer player = context.player();
@@ -75,6 +77,25 @@ public class ModNetworking {
             }
             DeckBuilding.migrate(context.player(), deckCase);
             DeckBuilding.setClass(deckCase, CardClass.values()[payload.deckClass()]);
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(DeckRenamePayload.TYPE, (payload, context) -> {
+            ItemStack deckCase = context.player().getItemInHand(payload.mainHand() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND);
+            if (deckCase.is(ModItems.DECK_CASE)) {
+                DeckBuilding.rename(deckCase, payload.name());
+            }
+        });
+
+        // A new card has been looked at: it stops being new in every binder you're carrying.
+        ServerPlayNetworking.registerGlobalReceiver(CardSeenPayload.TYPE, (payload, context) -> {
+            Inventory inventory = context.player().getInventory();
+            for (int i = 0; i < inventory.getContainerSize(); i++) {
+                ItemStack stack = inventory.getItem(i);
+                BinderContents contents = stack.get(ModComponents.BINDER_CONTENTS);
+                if (stack.is(ModItems.BINDER) && contents != null && contents.isNew(payload.card())) {
+                    stack.set(ModComponents.BINDER_CONTENTS, contents.markSeen(payload.card()));
+                }
+            }
         });
 
         ServerPlayNetworking.registerGlobalReceiver(TakeFromBinderPayload.TYPE, (payload, context) -> {

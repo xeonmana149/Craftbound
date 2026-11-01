@@ -96,7 +96,8 @@ public class CardRenderer {
         // Name ribbon. The name is coloured by rarity and starts with "Enchanted" on Enchanted cards.
         int ribbonTop = 90;
         g.fill(4, ribbonTop, WIDTH - 4, ribbonTop + 14, FRAME_DARK);
-        g.centeredText(font, stack.getHoverName(), WIDTH / 2, ribbonTop + 3, WHITE);
+        // Long names like "Enchanted Golden Apple" shrink to fit the ribbon instead of spilling over.
+        fitText(g, font, stack.getHoverName(), WIDTH / 2, ribbonTop + 3, WIDTH - 12, WHITE, true);
         List<Component> nameLines = new ArrayList<>();
         nameLines.add(stack.getHoverName());
         if (card.token()) {
@@ -258,6 +259,21 @@ public class CardRenderer {
         g.fill(x + 1, y + 1, x + 17, y + 17, color);
         g.fill(x + 1, y + 1, x + 17, y + 3, 0x40FFFFFF);
         g.centeredText(font, String.valueOf(value), x + 9, y + 5, WHITE);
+    }
+
+    // Draws text at normal size if it fits in maxWidth, otherwise shrunk just enough to fit.
+    // x is the left edge, or the centre when centred.
+    public static void fitText(GuiGraphicsExtractor g, Font font, Component text, int x, int y, int maxWidth, int color, boolean centred) {
+        int width = font.width(text);
+        float scale = width > maxWidth ? maxWidth / (float) width : 1.0F;
+        float left = centred ? x - width * scale / 2.0F : x;
+        // Keep the text vertically centred on its line as it shrinks.
+        float top = y + font.lineHeight * (1.0F - scale) / 2.0F;
+        g.pose().pushMatrix();
+        g.pose().translate(left, top);
+        g.pose().scale(scale, scale);
+        g.text(font, text, 0, 0, color);
+        g.pose().popMatrix();
     }
 
     public static final int MINI_WIDTH = 36;

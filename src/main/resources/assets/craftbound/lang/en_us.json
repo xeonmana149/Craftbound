@@ -110,6 +110,11 @@
   "binder_ui.craftbound.hint_take_enchanted": "Ctrl+click: take an Enchanted copy (Ctrl+Shift: all)",
   "binder_ui.craftbound.hint_inspect": "Right-click: inspect",
   "binder_ui.craftbound.file_all": "File all cards",
+  "binder_ui.craftbound.disenchant": "Disenchant extras",
+  "binder_ui.craftbound.disenchant_confirm": "Confirm: %s cards for %s XP",
+  "binder_ui.craftbound.disenchant_preview": "%s extra cards → %s XP",
+  "binder_ui.craftbound.disenchant_none": "No extra cards to disenchant",
+  "binder_ui.craftbound.disenchant_hint": "Breaks down copies you can't put in a deck (more than 2 of a card, or 1 Legendary) into experience. Normal copies go first, so you keep your Enchanted ones.",
 
   "pack_ui.craftbound.reveal_all": "Reveal all",
   "pack_ui.craftbound.done": "Done",

@@ -1,6 +1,7 @@
 package craftbound.network;
 
 import craftbound.binder.BinderContents;
+import craftbound.binder.Disenchanting;
 import craftbound.card.CardClass;
 import craftbound.deck.DeckBuilding;
 import craftbound.component.ModComponents;
@@ -27,6 +28,24 @@ public class ModNetworking {
         PayloadTypeRegistry.serverboundPlay().register(DeckEditPayload.TYPE, DeckEditPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(DeckClassPayload.TYPE, DeckClassPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(DeckSleevePayload.TYPE, DeckSleevePayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(DisenchantExtrasPayload.TYPE, DisenchantExtrasPayload.CODEC);
+
+        ServerPlayNetworking.registerGlobalReceiver(DisenchantExtrasPayload.TYPE, (payload, context) -> {
+            ServerPlayer player = context.player();
+            ItemStack binder = player.getItemInHand(payload.mainHand() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND);
+            if (!binder.is(ModItems.BINDER)) {
+                return;
+            }
+            Disenchanting.Result result = Disenchanting.disenchantExtras(
+                    binder.getOrDefault(ModComponents.BINDER_CONTENTS, BinderContents.EMPTY));
+            if (result.cards() == 0) {
+                return;
+            }
+            binder.set(ModComponents.BINDER_CONTENTS, result.contents());
+            player.giveExperiencePoints(result.xp());
+            player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
+                    SoundEvents.GRINDSTONE_USE, SoundSource.PLAYERS, 0.8F, 1.0F);
+        });
 
         ServerPlayNetworking.registerGlobalReceiver(DeckSleevePayload.TYPE, (payload, context) -> {
             ItemStack deckCase = context.player().getItemInHand(payload.mainHand() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND);

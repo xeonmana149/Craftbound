@@ -2,6 +2,8 @@ package craftbound.client.binder;
 
 import craftbound.client.Tooltips;
 import craftbound.binder.BinderContents;
+import craftbound.binder.Disenchanting;
+import craftbound.network.DisenchantExtrasPayload;
 import craftbound.card.Cards;
 import craftbound.client.card.CardInspectScreen;
 import craftbound.client.card.CardRenderer;
@@ -49,6 +51,8 @@ public class BinderScreen extends Screen {
     private int[] previousButton;
     private int[] nextButton;
     private int[] fileButton;
+    private int[] disenchantButton;
+    private boolean confirmingDisenchant = false;
     private int[] book;
 
     private record Pocket(int x, int y, Identifier card) {
@@ -135,12 +139,27 @@ public class BinderScreen extends Screen {
         this.previousButton = this.spread > 0 ? drawButton(g, "<", bookX - 30, bookY + PAGE_HEIGHT / 2 - 10, mouseX, mouseY) : null;
         this.nextButton = this.spread < spreadCount() - 1
                 ? drawButton(g, ">", bookX + BOOK_WIDTH + 12, bookY + PAGE_HEIGHT / 2 - 10, mouseX, mouseY) : null;
+        // File all cards and Disenchant extras, side by side under the book.
         Component fileLabel = Component.translatable("binder_ui.craftbound.file_all");
+        Disenchanting.Result extras = Disenchanting.disenchantExtras(contents);
+        Component disenchantLabel = this.confirmingDisenchant
+                ? Component.translatable("binder_ui.craftbound.disenchant_confirm", extras.cards(), extras.xp())
+                : Component.translatable("binder_ui.craftbound.disenchant");
         int fileWidth = this.font.width(fileLabel) + 12;
-        this.fileButton = drawButton(g, fileLabel, this.width / 2 - fileWidth / 2, bookY + PAGE_HEIGHT + 34, mouseX, mouseY);
+        int disenchantWidth = this.font.width(disenchantLabel) + 12;
+        int buttonsLeft = this.width / 2 - (fileWidth + 8 + disenchantWidth) / 2;
+        int buttonsY = bookY + PAGE_HEIGHT + 34;
+        this.fileButton = drawButton(g, fileLabel, buttonsLeft, buttonsY, mouseX, mouseY);
+        this.disenchantButton = drawButton(g, disenchantLabel, buttonsLeft + fileWidth + 8, buttonsY, mouseX, mouseY);
 
         if (hovered != null) {
             Tooltips.show(g, this.font, pocketTooltip(hovered.card(), contents), mouseX, mouseY);
+        } else if (inside(this.disenchantButton, mouseX, mouseY)) {
+            Component hint = extras.cards() == 0
+                    ? Component.translatable("binder_ui.craftbound.disenchant_none")
+                    : Component.translatable("binder_ui.craftbound.disenchant_preview", extras.cards(), extras.xp());
+            Tooltips.show(g, this.font, List.of(hint, Component.translatable("binder_ui.craftbound.disenchant_hint")
+                    .withStyle(ChatFormatting.GRAY)), mouseX, mouseY);
         }
     }
 
@@ -202,6 +221,18 @@ public class BinderScreen extends Screen {
             ClientPlayNetworking.send(new FileAllCardsPayload(mainHand));
             return true;
         }
+        // Disenchant asks for a second click to confirm, since the cards are gone afterwards.
+        if (inside(this.disenchantButton, mouseX, mouseY)) {
+            BinderContents current = binder().getOrDefault(ModComponents.BINDER_CONTENTS, BinderContents.EMPTY);
+            if (this.confirmingDisenchant) {
+                ClientPlayNetworking.send(new DisenchantExtrasPayload(mainHand));
+                this.confirmingDisenchant = false;
+            } else if (Disenchanting.disenchantExtras(current).cards() > 0) {
+                this.confirmingDisenchant = true;
+            }
+            return true;
+        }
+        this.confirmingDisenchant = false;
         BinderContents contents = binder().getOrDefault(ModComponents.BINDER_CONTENTS, BinderContents.EMPTY);
         for (Pocket pocket : this.pockets) {
             if (!inside(new int[]{pocket.x(), pocket.y(), POCKET_WIDTH, POCKET_HEIGHT}, mouseX, mouseY)

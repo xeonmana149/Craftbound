@@ -3,6 +3,7 @@ package craftbound.client.deck;
 import craftbound.binder.BinderContents;
 import craftbound.card.CardClass;
 import craftbound.card.CardDefinition;
+import craftbound.card.CardRarity;
 import craftbound.card.Cards;
 import craftbound.card.DeckRules;
 import craftbound.client.Tooltips;
@@ -67,6 +68,8 @@ public class DeckCaseScreen extends Screen {
     private final InteractionHand hand;
     private Tab tab = Tab.CLASS;
     private int costFilter = ALL_COSTS;
+    // Only show cards of this rarity, or every rarity when null.
+    private CardRarity rarityFilter = null;
     private int page = 0;
     private int scroll = 0;
     private EditBox search;
@@ -100,6 +103,7 @@ public class DeckCaseScreen extends Screen {
     private final List<Spot> rowSpots = new ArrayList<>();
     private final List<int[]> tabButtons = new ArrayList<>();
     private final List<int[]> costButtons = new ArrayList<>();
+    private final List<int[]> rarityButtons = new ArrayList<>();
     private final List<int[]> classChoices = new ArrayList<>();
     private int[] listArea;
     private int[] previousButton;
@@ -206,6 +210,7 @@ public class DeckCaseScreen extends Screen {
             if (card.cardClass() != tabClass) continue;
             if (this.costFilter == HIGH_COST && card.cost() < HIGH_COST) continue;
             if (this.costFilter != ALL_COSTS && this.costFilter != HIGH_COST && card.cost() != this.costFilter) continue;
+            if (this.rarityFilter != null && card.rarity() != this.rarityFilter) continue;
             if (!query.isEmpty() && !Cards.name(id).getString().toLowerCase(Locale.ROOT).contains(query)) continue;
             shown.add(id);
         }
@@ -241,6 +246,7 @@ public class DeckCaseScreen extends Screen {
         this.rowSpots.clear();
         this.tabButtons.clear();
         this.costButtons.clear();
+        this.rarityButtons.clear();
         this.classChoices.clear();
         this.previousButton = null;
         this.nextButton = null;
@@ -346,6 +352,20 @@ public class DeckCaseScreen extends Screen {
             this.costButtons.add(new int[]{x, this.filterY, width, 14, cost});
             x += width + 3;
         }
+
+        // Rarity buttons after a small gap, each in its rarity's colour. Click again to show every rarity.
+        x += 10;
+        for (CardRarity rarity : CardRarity.values()) {
+            Component label = rarity.displayName();
+            int width = this.font.width(label) + 8;
+            boolean selected = this.rarityFilter == rarity;
+            boolean hover = mouseX >= x && mouseX < x + width && mouseY >= this.filterY && mouseY < this.filterY + 14;
+            g.fill(x, this.filterY, x + width, this.filterY + 14, selected ? 0xFF000000 | rarity.rgb() : hover ? 0xFF4A3A30 : 0xFF2E241E);
+            g.outline(x, this.filterY, width, 14, selected ? 0xFFFFFFFF : WOOD_DARK);
+            g.centeredText(this.font, label, x + width / 2, this.filterY + 3, selected ? 0xFFFFFFFF : 0xFF000000 | rarity.rgb());
+            this.rarityButtons.add(new int[]{x, this.filterY, width, 14, rarity.ordinal()});
+            x += width + 3;
+        }
     }
 
     // The grid of full-size cards. Returns a tooltip to show, if any.
@@ -359,8 +379,8 @@ public class DeckCaseScreen extends Screen {
         float scale = cardScale();
         int cardWidth = Math.round(CardRenderer.WIDTH * scale);
         int cardHeight = Math.round(CardRenderer.HEIGHT * scale);
-        int gridWidth = COLUMNS * cardWidth + (COLUMNS - 1) * CARD_GAP;
-        int startX = this.leftX + (this.leftWidth - gridWidth) / 2;
+        // Cards fill in from the left, like reading a page.
+        int startX = this.leftX;
 
         if (shown.isEmpty()) {
             g.centeredText(this.font, Component.translatable("deck_ui.craftbound.no_cards"),
@@ -423,8 +443,7 @@ public class DeckCaseScreen extends Screen {
         int cardWidth = Math.round(CardRenderer.WIDTH * scale);
         int cardHeight = Math.round(CardRenderer.HEIGHT * scale);
         List<Identifier> sleeves = new ArrayList<>(Sleeves.ids());
-        int gridWidth = COLUMNS * cardWidth + (COLUMNS - 1) * CARD_GAP;
-        int startX = this.leftX + (this.leftWidth - gridWidth) / 2;
+        int startX = this.leftX;
         List<Component> tooltip = null;
         for (int i = 0; i < sleeves.size() && i < COLUMNS * ROWS; i++) {
             Identifier sleeve = sleeves.get(i);
@@ -520,7 +539,8 @@ public class DeckCaseScreen extends Screen {
         CardDefinition card = Cards.get(id);
         g.fill(x, y + 1, x + 12, y + 11, 0xFF17A84F);
         g.centeredText(this.font, String.valueOf(card.cost()), x + 6, y + 2, 0xFFFFFFFF);
-        g.text(this.font, CardItem.of(id).getHoverName(), x + 15, y + 2, 0xFFFFFFFF);
+        // Long names shrink so they never run into the count.
+        CardRenderer.fitText(g, this.font, CardItem.of(id).getHoverName(), x + 15, y + 2, LIST_WIDTH - 45, 0xFFFFFFFF, false);
         String count = "x" + deck.copies(id);
         int countX = x + LIST_WIDTH - 8 - this.font.width(count);
         g.text(this.font, count, countX, y + 2, TEXT_DARK, false);
@@ -585,6 +605,14 @@ public class DeckCaseScreen extends Screen {
         for (int[] tabButton : this.tabButtons) {
             if (inside(tabButton, mouseX, mouseY)) {
                 this.tab = Tab.values()[tabButton[4]];
+                this.page = 0;
+                return true;
+            }
+        }
+        for (int[] rarityButton : this.rarityButtons) {
+            if (inside(rarityButton, mouseX, mouseY)) {
+                CardRarity clicked = CardRarity.values()[rarityButton[4]];
+                this.rarityFilter = this.rarityFilter == clicked ? null : clicked;
                 this.page = 0;
                 return true;
             }

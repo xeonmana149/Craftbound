@@ -28,11 +28,12 @@ public class ModBlocks {
             FabricBlockEntityTypeBuilder.create(CardDisplayBlockEntity::new, CARD_DISPLAY).build());
 
     private static final ResourceKey<EntityType<?>> SEAT_KEY = ResourceKey.create(Registries.ENTITY_TYPE, Craftbound.id("seat"));
+    // Seats must be allowed to save with the world: in 26.3 the server won't let anyone ride an entity that can't.
+    // Empty seats remove themselves on their next tick, so none are left lying around.
     public static final EntityType<SeatEntity> SEAT = Registry.register(BuiltInRegistries.ENTITY_TYPE, SEAT_KEY,
             EntityType.Builder.<SeatEntity>of(SeatEntity::new, MobCategory.MISC)
                     .sized(0.1F, 0.1F)
                     .noSummon()
-                    .noSave()
                     .clientTrackingRange(10)
                     .build(SEAT_KEY));
 

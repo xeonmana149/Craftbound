@@ -10,7 +10,6 @@ import net.minecraft.world.level.storage.ValueInput;
 import net.minecraft.world.level.storage.ValueOutput;
 
 // An invisible seat for sitting at a card table. The player rides it; once they get up, it disappears.
-// It isn't saved with the world, so no empty seats are left behind.
 public class SeatEntity extends Entity {
     public SeatEntity(EntityType<? extends SeatEntity> type, Level level) {
         super(type, level);

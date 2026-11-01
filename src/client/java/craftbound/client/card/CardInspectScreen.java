@@ -1,5 +1,6 @@
 package craftbound.client.card;
 
+import craftbound.client.Tooltips;
 import craftbound.card.CardDefinition;
 import craftbound.card.Cards;
 import craftbound.card.Keyword;
@@ -131,7 +132,7 @@ public class CardInspectScreen extends Screen {
                 if (region.keyword() != null && this.mainRegions.contains(region)) {
                     panel = region;
                 } else {
-                    g.setComponentTooltipForNextFrame(this.font, region.lines(), mouseX, mouseY);
+                    Tooltips.show(g, this.font, region.lines(), mouseX, mouseY);
                 }
                 break;
             }

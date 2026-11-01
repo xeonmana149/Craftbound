@@ -8,6 +8,8 @@ import craftbound.card.DeckRules;
 import craftbound.component.ModComponents;
 import craftbound.item.CardItem;
 import craftbound.item.ModItems;
+import craftbound.item.SleeveItem;
+import craftbound.sleeve.Sleeves;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.util.Prediction;
@@ -22,6 +24,10 @@ public class DeckBuilding {
         CardDefinition card = Cards.get(id);
         if (card == null || card.token()) {
             return "deck_ui.craftbound.not_allowed";
+        }
+        // A deck has no class until you pick one, and you can't add anything before that.
+        if (deck.deckClass() == CardClass.NEUTRAL) {
+            return "deck_ui.craftbound.pick_class";
         }
         if (!DeckRules.allowed(id, deck.deckClass())) {
             return "deck_ui.craftbound.wrong_class";
@@ -65,13 +71,50 @@ public class DeckBuilding {
         }
     }
 
-    // A deck can only switch class if every card in it is still allowed afterwards.
+    // A deck's class is one of the real classes, and it can only change if every card already in the deck is
+    // still allowed afterwards. Neutral means "not picked yet": an empty deck can go back to that to pick again.
     public static void setClass(ItemStack deckCase, CardClass newClass) {
         DeckContents deck = deckCase.getOrDefault(ModComponents.DECK_CONTENTS, DeckContents.EMPTY);
-        if (!canSwitchTo(deck, newClass)) {
+        if (newClass == CardClass.NEUTRAL ? deck.size() > 0 : !canSwitchTo(deck, newClass)) {
             return;
         }
         deckCase.set(ModComponents.DECK_CONTENTS, deck.withClass(newClass));
+    }
+
+    // Puts a sleeve from your inventory on the Deck Case; the sleeve it had goes back to your inventory.
+    // Classic is the default card back, so picking it just takes the current sleeve off.
+    public static void setSleeve(ServerPlayer player, ItemStack deckCase, Identifier sleeve) {
+        Identifier current = deckCase.get(ModComponents.SLEEVE_ID);
+        Identifier currentOrClassic = current == null ? Sleeves.CLASSIC : current;
+        if (sleeve.equals(currentOrClassic)) {
+            return;
+        }
+        Inventory inventory = player.getInventory();
+        if (!sleeve.equals(Sleeves.CLASSIC)) {
+            ItemStack owned = findSleeve(inventory, sleeve);
+            if (owned.isEmpty()) {
+                return;
+            }
+            owned.shrink(1);
+        }
+        if (current != null) {
+            inventory.placeItemBackInInventory(SleeveItem.of(current), Prediction.SERVER_ONLY);
+        }
+        if (sleeve.equals(Sleeves.CLASSIC)) {
+            deckCase.remove(ModComponents.SLEEVE_ID);
+        } else {
+            deckCase.set(ModComponents.SLEEVE_ID, sleeve);
+        }
+    }
+
+    private static ItemStack findSleeve(Inventory inventory, Identifier sleeve) {
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (stack.is(ModItems.SLEEVE) && sleeve.equals(stack.get(ModComponents.SLEEVE_ID))) {
+                return stack;
+            }
+        }
+        return ItemStack.EMPTY;
     }
 
     public static boolean canSwitchTo(DeckContents deck, CardClass newClass) {

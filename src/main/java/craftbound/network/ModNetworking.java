@@ -26,6 +26,14 @@ public class ModNetworking {
         PayloadTypeRegistry.clientboundPlay().register(PackOpenedPayload.TYPE, PackOpenedPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(DeckEditPayload.TYPE, DeckEditPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(DeckClassPayload.TYPE, DeckClassPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(DeckSleevePayload.TYPE, DeckSleevePayload.CODEC);
+
+        ServerPlayNetworking.registerGlobalReceiver(DeckSleevePayload.TYPE, (payload, context) -> {
+            ItemStack deckCase = context.player().getItemInHand(payload.mainHand() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND);
+            if (deckCase.is(ModItems.DECK_CASE)) {
+                DeckBuilding.setSleeve(context.player(), deckCase, payload.sleeve());
+            }
+        });
 
         ServerPlayNetworking.registerGlobalReceiver(DeckEditPayload.TYPE, (payload, context) -> {
             ServerPlayer player = context.player();

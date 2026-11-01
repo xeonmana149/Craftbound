@@ -1,5 +1,6 @@
 package craftbound.client.binder;
 
+import craftbound.client.Tooltips;
 import craftbound.binder.BinderContents;
 import craftbound.card.Cards;
 import craftbound.client.card.CardInspectScreen;
@@ -139,7 +140,7 @@ public class BinderScreen extends Screen {
         this.fileButton = drawButton(g, fileLabel, this.width / 2 - fileWidth / 2, bookY + PAGE_HEIGHT + 34, mouseX, mouseY);
 
         if (hovered != null) {
-            g.setComponentTooltipForNextFrame(this.font, pocketTooltip(hovered.card(), contents), mouseX, mouseY);
+            Tooltips.show(g, this.font, pocketTooltip(hovered.card(), contents), mouseX, mouseY);
         }
     }
 

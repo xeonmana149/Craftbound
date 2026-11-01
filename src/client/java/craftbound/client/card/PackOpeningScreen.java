@@ -1,5 +1,6 @@
 package craftbound.client.card;
 
+import craftbound.client.Tooltips;
 import craftbound.card.BoosterPacks;
 import craftbound.card.CardRarity;
 import craftbound.card.Cards;
@@ -162,7 +163,7 @@ public class PackOpeningScreen extends Screen {
 
         for (CardRenderer.HoverRegion region : regions) {
             if (region.contains(mouseX, mouseY)) {
-                g.setComponentTooltipForNextFrame(this.font, region.lines(), mouseX, mouseY);
+                Tooltips.show(g, this.font, region.lines(), mouseX, mouseY);
                 break;
             }
         }

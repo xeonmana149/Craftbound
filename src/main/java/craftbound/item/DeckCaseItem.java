@@ -1,6 +1,11 @@
 package craftbound.item;
 
 import craftbound.component.ModComponents;
+import craftbound.deck.DeckBuilding;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.level.Level;
 import net.minecraft.resources.Identifier;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.SlotAccess;
@@ -10,11 +15,21 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 
-// Holds a deck of real cards, built from the binders in your inventory. Right-click it to build the deck.
+// Holds a deck list built from the cards in your binders (the cards stay in the binder). Right-click it to build the deck.
 // Click a sleeve onto it in your inventory to change your card backs; the old sleeve comes back to your cursor.
 public class DeckCaseItem extends Item {
     public DeckCaseItem(Properties properties) {
         super(properties);
+    }
+
+    // Right-clicking opens the deck builder on the client. On the server it's a chance to hand back cards from
+    // a Deck Case made before decks became lists.
+    @Override
+    public InteractionResult use(Level level, Player player, InteractionHand hand) {
+        if (player instanceof ServerPlayer serverPlayer) {
+            DeckBuilding.migrate(serverPlayer, player.getItemInHand(hand));
+        }
+        return InteractionResult.SUCCESS;
     }
 
     @Override

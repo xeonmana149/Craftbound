@@ -60,10 +60,11 @@ public class ModNetworking {
             if (!deckCase.is(ModItems.DECK_CASE)) {
                 return;
             }
+            DeckBuilding.migrate(player, deckCase);
             if (payload.add()) {
                 DeckBuilding.add(player, deckCase, payload.card(), payload.enchanted());
             } else {
-                DeckBuilding.remove(player, deckCase, payload.card(), payload.enchanted());
+                DeckBuilding.remove(deckCase, payload.card(), payload.enchanted());
             }
         });
 
@@ -72,6 +73,7 @@ public class ModNetworking {
             if (!deckCase.is(ModItems.DECK_CASE) || payload.deckClass() < 0 || payload.deckClass() >= CardClass.values().length) {
                 return;
             }
+            DeckBuilding.migrate(context.player(), deckCase);
             DeckBuilding.setClass(deckCase, CardClass.values()[payload.deckClass()]);
         });
 

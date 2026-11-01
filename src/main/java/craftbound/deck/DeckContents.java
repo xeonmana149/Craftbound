@@ -9,9 +9,11 @@ import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.resources.Identifier;
 
-// What's in a Deck Case: the deck's class and the real cards in it (normal and Enchanted counts, like a binder).
-public record DeckContents(CardClass deckClass, BinderContents cards) {
-    public static final DeckContents EMPTY = new DeckContents(CardClass.NEUTRAL, BinderContents.EMPTY);
+// What's in a Deck Case: the deck's class and its list of cards (normal and Enchanted counts, like a binder).
+// The cards themselves stay in your binder. list is false only for Deck Cases from before decks were lists,
+// which still hold real cards until DeckBuilding.migrate hands them back.
+public record DeckContents(CardClass deckClass, BinderContents cards, boolean list) {
+    public static final DeckContents EMPTY = new DeckContents(CardClass.NEUTRAL, BinderContents.EMPTY, true);
 
     private static final Codec<CardClass> CLASS_CODEC = Codec.STRING.xmap(DeckContents::classFromName, CardClass::name);
     private static final StreamCodec<ByteBuf, CardClass> CLASS_STREAM_CODEC =
@@ -19,12 +21,14 @@ public record DeckContents(CardClass deckClass, BinderContents cards) {
 
     public static final Codec<DeckContents> CODEC = RecordCodecBuilder.create(instance -> instance.group(
             CLASS_CODEC.optionalFieldOf("class", CardClass.NEUTRAL).forGetter(DeckContents::deckClass),
-            BinderContents.CODEC.optionalFieldOf("cards", BinderContents.EMPTY).forGetter(DeckContents::cards)
+            BinderContents.CODEC.optionalFieldOf("cards", BinderContents.EMPTY).forGetter(DeckContents::cards),
+            Codec.BOOL.optionalFieldOf("list", false).forGetter(DeckContents::list)
     ).apply(instance, DeckContents::new));
 
     public static final StreamCodec<ByteBuf, DeckContents> STREAM_CODEC = StreamCodec.composite(
             CLASS_STREAM_CODEC, DeckContents::deckClass,
             BinderContents.STREAM_CODEC, DeckContents::cards,
+            ByteBufCodecs.BOOL, DeckContents::list,
             DeckContents::new);
 
     // Unknown class names in old saves fall back to Neutral instead of breaking the item.
@@ -45,11 +49,15 @@ public record DeckContents(CardClass deckClass, BinderContents cards) {
         return cards.count(id, false) + cards.count(id, true);
     }
 
+    public DeckContents asList() {
+        return new DeckContents(deckClass, cards, true);
+    }
+
     public DeckContents withClass(CardClass newClass) {
-        return new DeckContents(newClass, cards);
+        return new DeckContents(newClass, cards, list);
     }
 
     public DeckContents add(Identifier id, boolean enchanted, int amount) {
-        return new DeckContents(deckClass, cards.add(id, enchanted, amount));
+        return new DeckContents(deckClass, cards.add(id, enchanted, amount), list);
     }
 }

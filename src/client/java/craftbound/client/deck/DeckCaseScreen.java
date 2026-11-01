@@ -392,10 +392,11 @@ public class DeckCaseScreen extends Screen {
             int x = startX + (i % COLUMNS) * (cardWidth + CARD_GAP);
             int y = this.gridY + (i / COLUMNS) * (cardHeight + LABEL_HEIGHT + CARD_GAP);
             int[] counts = available.getOrDefault(id, new int[2]);
-            // Show the Enchanted version if that's all you have left.
-            boolean showEnchanted = counts[0] == 0 && counts[1] > 0;
+            int[] spare = spare(counts, deck, id);
+            // Show the Enchanted version if that's the only kind you have a spare copy of.
+            boolean showEnchanted = spare[0] == 0 && spare[1] > 0;
             List<CardRenderer.HoverRegion> regions = CardRenderer.draw(g, this.font, CardItem.of(id, showEnchanted), x, y, scale);
-            String reason = counts[0] + counts[1] == 0 ? "deck_ui.craftbound.none_left" : DeckBuilding.whyNot(deck, id);
+            String reason = spare[0] + spare[1] == 0 ? "deck_ui.craftbound.none_left" : DeckBuilding.whyNot(deck, id);
             if (reason != null) {
                 g.fill(x, y, x + cardWidth, y + cardHeight, 0x99000000);
             }
@@ -474,8 +475,15 @@ public class DeckCaseScreen extends Screen {
 
     // The deck list on the right, with the class name, a 0/30 bar and the Done button. Returns the hovered row.
     private Identifier drawDeckList(GuiGraphicsExtractor g, DeckContents deck, int mouseX, int mouseY) {
-        g.text(this.font, Component.translatable("deck_ui.craftbound.deck_title", deck.deckClass().displayName()),
-                this.listX, this.tabsY + 4, GOLD);
+        // If your binders are missing cards this deck lists, the title says so in red.
+        int missingTotal = 0;
+        for (Identifier id : Cards.collectible()) {
+            missingTotal += missing(deck, id);
+        }
+        Component title = missingTotal > 0
+                ? Component.translatable("deck_ui.craftbound.deck_title_missing", deck.deckClass().displayName(), missingTotal)
+                : Component.translatable("deck_ui.craftbound.deck_title", deck.deckClass().displayName());
+        CardRenderer.fitText(g, this.font, title, this.listX, this.tabsY + 4, LIST_WIDTH, missingTotal > 0 ? 0xFFFF6A5A : GOLD, false);
 
         // 0/30 progress bar.
         int barY = this.filterY;
@@ -534,7 +542,25 @@ public class DeckCaseScreen extends Screen {
         return hovered;
     }
 
+    // Copies you own but haven't listed in this deck yet: [normal, Enchanted].
+    private static int[] spare(int[] owned, DeckContents deck, Identifier id) {
+        return new int[]{
+                Math.max(0, owned[0] - deck.cards().count(id, false)),
+                Math.max(0, owned[1] - deck.cards().count(id, true))
+        };
+    }
+
+    // How many copies the deck lists that your binders don't have (normal plus Enchanted).
+    private int missing(DeckContents deck, Identifier id) {
+        if (this.minecraft.player == null) {
+            return 0;
+        }
+        Inventory inventory = this.minecraft.player.getInventory();
+        return DeckBuilding.missing(inventory, deck, id, false) + DeckBuilding.missing(inventory, deck, id, true);
+    }
+
     // One line of the deck list: cost, name in its rarity colour, and how many (purple star if any are Enchanted).
+    // The count turns red if your binders are missing copies the deck needs.
     private void drawDeckRow(GuiGraphicsExtractor g, Identifier id, DeckContents deck, int x, int y) {
         CardDefinition card = Cards.get(id);
         g.fill(x, y + 1, x + 12, y + 11, 0xFF17A84F);
@@ -543,7 +569,7 @@ public class DeckCaseScreen extends Screen {
         CardRenderer.fitText(g, this.font, CardItem.of(id).getHoverName(), x + 15, y + 2, LIST_WIDTH - 45, 0xFFFFFFFF, false);
         String count = "x" + deck.copies(id);
         int countX = x + LIST_WIDTH - 8 - this.font.width(count);
-        g.text(this.font, count, countX, y + 2, TEXT_DARK, false);
+        g.text(this.font, count, countX, y + 2, missing(deck, id) > 0 ? 0xFFD02020 : TEXT_DARK, false);
         if (deck.cards().count(id, true) > 0) {
             g.text(this.font, "✦", countX - 9, y + 2, 0xFFB070FF, false);
         }
@@ -555,6 +581,10 @@ public class DeckCaseScreen extends Screen {
         if (deck.cards().count(id, true) > 0) {
             lines.add(Component.translatable("binder_ui.craftbound.owned_enchanted", deck.cards().count(id, true))
                     .withStyle(ChatFormatting.LIGHT_PURPLE));
+        }
+        int missing = missing(deck, id);
+        if (missing > 0) {
+            lines.add(Component.translatable("deck_ui.craftbound.missing", missing).withStyle(ChatFormatting.RED));
         }
         lines.add(Component.translatable("deck_ui.craftbound.hint_remove").withStyle(ChatFormatting.DARK_GRAY));
         return lines;
@@ -645,17 +675,17 @@ public class DeckCaseScreen extends Screen {
             if (!card.contains(mouseX, mouseY)) {
                 continue;
             }
-            int[] counts = available.getOrDefault(card.id(), new int[2]);
+            int[] spare = spare(available.getOrDefault(card.id(), new int[2]), deck, card.id());
             if (event.button() == 1) {
                 // Right-click only zooms in.
-                zoom(card.id(), counts[0] == 0 && counts[1] > 0);
+                zoom(card.id(), spare[0] == 0 && spare[1] > 0);
                 return true;
             }
             // Left: click to add it, or drag it onto the deck list.
-            // Ctrl takes an Enchanted copy. Otherwise a normal one, or Enchanted if that's all you have.
-            boolean enchanted = event.hasControlDown() || counts[0] == 0;
+            // Ctrl adds an Enchanted copy. Otherwise a normal one, or Enchanted if that's all you have spare.
+            boolean enchanted = event.hasControlDown() || spare[0] == 0;
             startPress(card.id(), enchanted, false, mouseX, mouseY);
-            this.pressedCanMove = counts[enchanted ? 1 : 0] > 0;
+            this.pressedCanMove = spare[enchanted ? 1 : 0] > 0;
             return true;
         }
         for (Spot row : this.rowSpots) {

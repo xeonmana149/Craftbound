@@ -2,6 +2,8 @@ package craftbound.deck;
 
 import craftbound.ModAdvancements;
 import craftbound.binder.BinderContents;
+import craftbound.binder.Disenchanting;
+import craftbound.item.BinderItem;
 import craftbound.card.CardClass;
 import craftbound.card.CardDefinition;
 import craftbound.card.Cards;
@@ -17,9 +19,62 @@ import net.minecraft.util.Prediction;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
-// Moving real cards between the binders in your inventory and a Deck Case. Runs on the server only.
-// Adding a card takes it out of a binder; removing it puts it back into a binder.
+// Building decks, the Hearthstone way: a Deck Case stores a list of cards, and the cards themselves stay in
+// your binder. Every Deck Case uses the same collection, so one pair of Zombies can be in all your decks.
+// You can only add copies you own, and a deck needs the binder that owns its cards to be played.
+// Runs on the server only, except the checks the screen borrows to grey cards out.
 public class DeckBuilding {
+    // How many copies of a card (normal or Enchanted) the binders in this inventory own.
+    public static int owned(Inventory inventory, Identifier id, boolean enchanted) {
+        int total = 0;
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (stack.is(ModItems.BINDER)) {
+                total += stack.getOrDefault(ModComponents.BINDER_CONTENTS, BinderContents.EMPTY).count(id, enchanted);
+            }
+        }
+        return total;
+    }
+
+    // How many copies the deck lists that the binders you're carrying don't have. A deck missing cards can't be played.
+    public static int missing(Inventory inventory, DeckContents deck, Identifier id, boolean enchanted) {
+        return Math.max(0, deck.cards().count(id, enchanted) - owned(inventory, id, enchanted));
+    }
+
+    // Deck Cases from before decks became lists hold real cards taken out of a binder. The first time one is
+    // used, those cards go back into a binder you're carrying (or into your inventory) and the deck stays as a list.
+    public static void migrate(ServerPlayer player, ItemStack deckCase) {
+        DeckContents deck = deckCase.getOrDefault(ModComponents.DECK_CONTENTS, DeckContents.EMPTY);
+        if (deck.list()) {
+            return;
+        }
+        ItemStack binder = firstBinder(player.getInventory());
+        int disenchanted = 0;
+        int xp = 0;
+        for (Identifier id : Cards.collectible()) {
+            for (boolean enchanted : new boolean[]{false, true}) {
+                int count = deck.cards().count(id, enchanted);
+                if (count <= 0) {
+                    continue;
+                }
+                if (binder.isEmpty()) {
+                    ItemStack cards = CardItem.of(id, enchanted);
+                    cards.setCount(count);
+                    player.getInventory().placeItemBackInInventory(cards, Prediction.SERVER_ONLY);
+                } else {
+                    Disenchanting.Result result = Disenchanting.file(
+                            binder.getOrDefault(ModComponents.BINDER_CONTENTS, BinderContents.EMPTY), id, enchanted, count);
+                    binder.set(ModComponents.BINDER_CONTENTS, result.contents());
+                    disenchanted += result.disenchanted();
+                    xp += result.xp();
+                }
+            }
+        }
+        deckCase.set(ModComponents.DECK_CONTENTS, deck.asList());
+        if (!binder.isEmpty()) {
+            BinderItem.afterFiling(player, binder, disenchanted, xp);
+        }
+    }
     // Why a card can't be added right now, or null if it can. The screen uses the same check to grey cards out.
     public static String whyNot(DeckContents deck, Identifier id) {
         CardDefinition card = Cards.get(id);
@@ -42,17 +97,12 @@ public class DeckBuilding {
         return null;
     }
 
+    // Adds a copy to the deck list, as long as the deck rules allow it and you own a copy not already listed.
     public static void add(ServerPlayer player, ItemStack deckCase, Identifier id, boolean enchanted) {
         DeckContents deck = deckCase.getOrDefault(ModComponents.DECK_CONTENTS, DeckContents.EMPTY);
-        if (whyNot(deck, id) != null) {
+        if (whyNot(deck, id) != null || owned(player.getInventory(), id, enchanted) <= deck.cards().count(id, enchanted)) {
             return;
         }
-        ItemStack binder = findBinderWith(player.getInventory(), id, enchanted);
-        if (binder.isEmpty()) {
-            return;
-        }
-        BinderContents contents = binder.getOrDefault(ModComponents.BINDER_CONTENTS, BinderContents.EMPTY);
-        binder.set(ModComponents.BINDER_CONTENTS, contents.add(id, enchanted, -1));
         DeckContents updated = deck.add(id, enchanted, 1);
         deckCase.set(ModComponents.DECK_CONTENTS, updated);
         if (updated.size() == DeckRules.DECK_SIZE) {
@@ -60,19 +110,11 @@ public class DeckBuilding {
         }
     }
 
-    public static void remove(ServerPlayer player, ItemStack deckCase, Identifier id, boolean enchanted) {
+    // Takes a copy off the deck list. The card itself never left your binder.
+    public static void remove(ItemStack deckCase, Identifier id, boolean enchanted) {
         DeckContents deck = deckCase.getOrDefault(ModComponents.DECK_CONTENTS, DeckContents.EMPTY);
-        if (deck.cards().count(id, enchanted) <= 0) {
-            return;
-        }
-        deckCase.set(ModComponents.DECK_CONTENTS, deck.add(id, enchanted, -1));
-        ItemStack binder = firstBinder(player.getInventory());
-        if (binder.isEmpty()) {
-            // No binder to put it back in, so hand over the card itself.
-            player.getInventory().placeItemBackInInventory(CardItem.of(id, enchanted), Prediction.SERVER_ONLY);
-        } else {
-            BinderContents contents = binder.getOrDefault(ModComponents.BINDER_CONTENTS, BinderContents.EMPTY);
-            binder.set(ModComponents.BINDER_CONTENTS, contents.add(id, enchanted, 1));
+        if (deck.cards().count(id, enchanted) > 0) {
+            deckCase.set(ModComponents.DECK_CONTENTS, deck.add(id, enchanted, -1));
         }
     }
 
@@ -129,17 +171,6 @@ public class DeckBuilding {
             }
         }
         return true;
-    }
-
-    private static ItemStack findBinderWith(Inventory inventory, Identifier id, boolean enchanted) {
-        for (int i = 0; i < inventory.getContainerSize(); i++) {
-            ItemStack stack = inventory.getItem(i);
-            if (stack.is(ModItems.BINDER)
-                    && stack.getOrDefault(ModComponents.BINDER_CONTENTS, BinderContents.EMPTY).count(id, enchanted) > 0) {
-                return stack;
-            }
-        }
-        return ItemStack.EMPTY;
     }
 
     private static ItemStack firstBinder(Inventory inventory) {

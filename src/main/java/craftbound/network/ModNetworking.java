@@ -38,7 +38,7 @@ public class ModNetworking {
             }
             Disenchanting.Result result = Disenchanting.disenchantExtras(
                     binder.getOrDefault(ModComponents.BINDER_CONTENTS, BinderContents.EMPTY));
-            if (result.cards() == 0) {
+            if (result.disenchanted() == 0) {
                 return;
             }
             binder.set(ModComponents.BINDER_CONTENTS, result.contents());
@@ -103,15 +103,19 @@ public class ModNetworking {
             }
             Inventory inventory = player.getInventory();
             boolean filedAny = false;
+            int disenchanted = 0;
+            int xp = 0;
             for (int i = 0; i < inventory.getContainerSize(); i++) {
                 ItemStack stack = inventory.getItem(i);
                 if (BinderItem.canFile(stack)) {
-                    BinderItem.file(binder, stack);
+                    Disenchanting.Result result = BinderItem.file(binder, stack);
+                    disenchanted += result.disenchanted();
+                    xp += result.xp();
                     filedAny = true;
                 }
             }
             if (filedAny) {
-                BinderItem.checkAdvancements(player, binder);
+                BinderItem.afterFiling(player, binder, disenchanted, xp);
                 player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
                         SoundEvents.BUNDLE_INSERT, SoundSource.PLAYERS, 0.8F, 1.0F);
             }

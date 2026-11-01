@@ -81,6 +81,12 @@ public class Cards {
         return result;
     }
 
+    // A card's collector number: its pocket number in the binder (1, 2, 3...). Tokens have none (0).
+    // New cards should be added at the end of the list above, so existing numbers never change.
+    public static int collectorNumber(Identifier id) {
+        return collectible().indexOf(id) + 1;
+    }
+
     // Collectible cards of one rarity. Tokens are left out, so packs never give them.
     public static List<Identifier> ofRarity(CardRarity rarity) {
         List<Identifier> result = new ArrayList<>();

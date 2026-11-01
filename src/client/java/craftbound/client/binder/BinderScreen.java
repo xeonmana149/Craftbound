@@ -143,21 +143,25 @@ public class BinderScreen extends Screen {
         Component fileLabel = Component.translatable("binder_ui.craftbound.file_all");
         Disenchanting.Result extras = Disenchanting.disenchantExtras(contents);
         Component disenchantLabel = this.confirmingDisenchant
-                ? Component.translatable("binder_ui.craftbound.disenchant_confirm", extras.cards(), extras.xp())
+                ? Component.translatable("binder_ui.craftbound.disenchant_confirm", extras.disenchanted(), extras.xp())
                 : Component.translatable("binder_ui.craftbound.disenchant");
+        // Disenchant extras only appears if this binder is over its limits (e.g. filled before limits existed);
+        // new cards over the limit are disenchanted automatically as they're filed.
+        boolean showDisenchant = extras.disenchanted() > 0;
         int fileWidth = this.font.width(fileLabel) + 12;
-        int disenchantWidth = this.font.width(disenchantLabel) + 12;
-        int buttonsLeft = this.width / 2 - (fileWidth + 8 + disenchantWidth) / 2;
+        int disenchantWidth = showDisenchant ? this.font.width(disenchantLabel) + 12 + 8 : 0;
+        int buttonsLeft = this.width / 2 - (fileWidth + disenchantWidth) / 2;
         int buttonsY = bookY + PAGE_HEIGHT + 34;
         this.fileButton = drawButton(g, fileLabel, buttonsLeft, buttonsY, mouseX, mouseY);
-        this.disenchantButton = drawButton(g, disenchantLabel, buttonsLeft + fileWidth + 8, buttonsY, mouseX, mouseY);
+        this.disenchantButton = showDisenchant
+                ? drawButton(g, disenchantLabel, buttonsLeft + fileWidth + 8, buttonsY, mouseX, mouseY) : null;
 
         if (hovered != null) {
             Tooltips.show(g, this.font, pocketTooltip(hovered.card(), contents), mouseX, mouseY);
         } else if (inside(this.disenchantButton, mouseX, mouseY)) {
-            Component hint = extras.cards() == 0
+            Component hint = extras.disenchanted() == 0
                     ? Component.translatable("binder_ui.craftbound.disenchant_none")
-                    : Component.translatable("binder_ui.craftbound.disenchant_preview", extras.cards(), extras.xp());
+                    : Component.translatable("binder_ui.craftbound.disenchant_preview", extras.disenchanted(), extras.xp());
             Tooltips.show(g, this.font, List.of(hint, Component.translatable("binder_ui.craftbound.disenchant_hint")
                     .withStyle(ChatFormatting.GRAY)), mouseX, mouseY);
         }
@@ -227,7 +231,7 @@ public class BinderScreen extends Screen {
             if (this.confirmingDisenchant) {
                 ClientPlayNetworking.send(new DisenchantExtrasPayload(mainHand));
                 this.confirmingDisenchant = false;
-            } else if (Disenchanting.disenchantExtras(current).cards() > 0) {
+            } else if (Disenchanting.disenchantExtras(current).disenchanted() > 0) {
                 this.confirmingDisenchant = true;
             }
             return true;

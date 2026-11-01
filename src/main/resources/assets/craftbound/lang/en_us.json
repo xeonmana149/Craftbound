@@ -97,6 +97,8 @@
   "card_ui.craftbound.token.desc": "Made by other cards. Never found in packs.",
   "card_ui.craftbound.creates": "Creates",
   "card_ui.craftbound.pin_hint": "Click to pin or unpin the card it creates.",
+  "card_ui.craftbound.number": "Card #%s of %s",
+  "card_ui.craftbound.number.desc": "Its pocket number in the Card Binder.",
 
   "item.craftbound.binder": "Card Binder",
   "binder_ui.craftbound.collected": "Collected %s/%s",
@@ -114,7 +116,8 @@
   "binder_ui.craftbound.disenchant_confirm": "Confirm: %s cards for %s XP",
   "binder_ui.craftbound.disenchant_preview": "%s extra cards → %s XP",
   "binder_ui.craftbound.disenchant_none": "No extra cards to disenchant",
-  "binder_ui.craftbound.disenchant_hint": "Breaks down copies you can't put in a deck (more than 2 of a card, or 1 Legendary) into experience. Normal copies go first, so you keep your Enchanted ones.",
+  "binder_ui.craftbound.disenchant_hint": "A binder keeps 2 normal and 2 Enchanted copies of each card (1 of each for Legendaries). This breaks down anything over that into experience.",
+  "binder_ui.craftbound.auto_disenchanted": "Disenchanted %s extra cards: +%s XP",
 
   "pack_ui.craftbound.reveal_all": "Reveal all",
   "pack_ui.craftbound.done": "Done",

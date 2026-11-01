@@ -122,7 +122,9 @@ public class CardRenderer {
         int padding = 4;
         float textLeft = 8 + padding;
         int textWidth = WIDTH - 16 - 2 - padding * 2;
-        int textHeight = boxBottom - boxTop - 2 - padding;
+        int number = Cards.collectorNumber(id);
+        // Leave a little room at the bottom for the collector number.
+        int textHeight = boxBottom - boxTop - 2 - padding - (number > 0 ? 4 : 0);
         float textScale = 1.0F;
         List<FormattedCharSequence> lines = wrapText(font, id, textWidth);
         while (lines.size() * font.lineHeight * textScale > textHeight && textScale > 0.5F) {
@@ -140,6 +142,20 @@ public class CardRenderer {
             lineY += font.lineHeight;
         }
         g.pose().popMatrix();
+
+        // Collector number, small, in the bottom-right corner of the text box: its pocket in the binder.
+        if (number > 0) {
+            String numberText = "#" + number;
+            float numberScale = 0.6F;
+            g.pose().pushMatrix();
+            g.pose().translate(WIDTH - 11 - font.width(numberText) * numberScale, boxBottom - 3 - font.lineHeight * numberScale);
+            g.pose().scale(numberScale, numberScale);
+            g.text(font, numberText, 0, 0, 0xFF8A6A48, false);
+            g.pose().popMatrix();
+            regions.add(region(x, y, scale, WIDTH - 24, boxBottom - 9, 14, 7, List.of(
+                    Component.translatable("card_ui.craftbound.number", number, Cards.collectible().size()).withStyle(ChatFormatting.GOLD),
+                    Component.translatable("card_ui.craftbound.number.desc").withStyle(ChatFormatting.GRAY))));
+        }
 
         // Cost (top-left), attack (bottom-left) and health (bottom-right). Items have no attack or health.
         drawStat(g, font, 2, 2, card.cost(), EMERALD);

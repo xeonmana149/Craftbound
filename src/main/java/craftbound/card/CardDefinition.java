@@ -52,6 +52,11 @@ public record CardDefinition(CardKind kind, CardClass cardClass, CardRarity rari
         for (Component clause : CardText.clauses(Cards.text(id))) {
             tooltip.accept(clause.copy().withStyle(ChatFormatting.DARK_GRAY));
         }
+        int number = Cards.collectorNumber(id);
+        if (number > 0) {
+            tooltip.accept(Component.translatable("card_ui.craftbound.number", number, Cards.collectible().size())
+                    .withStyle(ChatFormatting.DARK_GRAY));
+        }
     }
 
     public static class Builder {

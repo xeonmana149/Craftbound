@@ -157,26 +157,12 @@ public class BinderScreen extends Screen {
         g.fill(x + 6, y + 33, x + 10, y + 37, 0xFF000000 | card.rarity().rgb());
         g.item(CardRenderer.placeholderArt(id, card), x + POCKET_WIDTH / 2 - 8, y + 10);
         if (hasEnchanted) {
-            drawPocketShimmer(g, x + 3, y + 3, POCKET_WIDTH - 6, POCKET_HEIGHT - 6);
+            CardRenderer.drawDiagonalShimmer(g, x + 3, y + 3, POCKET_WIDTH - 6, POCKET_HEIGHT - 6, 8, 0x60);
             g.outline(x + 2, y + 2, POCKET_WIDTH - 4, POCKET_HEIGHT - 4, ENCHANTED_EDGE);
         }
         int total = contents.count(id, false) + contents.count(id, true);
         String count = "x" + total;
         g.text(this.font, count, x + POCKET_WIDTH - 5 - this.font.width(count), y + POCKET_HEIGHT - 13, 0xFFFFFFFF);
-    }
-
-    // The same purple sweep as an inspected Enchanted card, shrunk to fit a pocket.
-    private static void drawPocketShimmer(GuiGraphicsExtractor g, int x, int y, int width, int height) {
-        float progress = (System.currentTimeMillis() % 2000L) / 2000.0F;
-        int bandCenter = x - 10 + (int) (progress * (width + 20));
-        for (int dx = -8; dx <= 8; dx++) {
-            int column = bandCenter + dx;
-            if (column < x || column >= x + width) {
-                continue;
-            }
-            int alpha = (int) (0x60 * (1.0F - Math.abs(dx) / 8.0F));
-            g.fill(column, y, column + 1, y + height, (alpha << 24) | 0xB070FF);
-        }
     }
 
     private List<Component> pocketTooltip(Identifier id, BinderContents contents) {

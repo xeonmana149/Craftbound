@@ -258,18 +258,34 @@ public class CardRenderer {
         }
     }
 
-    // A purple band that sweeps across the card every two seconds.
     private static void drawEnchantedShimmer(GuiGraphicsExtractor g) {
-        float progress = (System.currentTimeMillis() % 2000L) / 2000.0F;
-        int bandCenter = -30 + (int) (progress * (WIDTH + 60));
-        for (int dx = -20; dx <= 20; dx++) {
-            int column = bandCenter + dx;
-            if (column < 0 || column >= WIDTH) {
-                continue;
-            }
-            int alpha = (int) (0x70 * (1.0F - Math.abs(dx) / 20.0F));
-            g.fill(column, 0, column + 1, HEIGHT, (alpha << 24) | 0xB070FF);
-        }
+        drawDiagonalShimmer(g, 0, 0, WIDTH, HEIGHT, 20, 0x70);
         g.outline(0, 0, WIDTH, HEIGHT, 0xFFB070FF);
+    }
+
+    // A purple band that sweeps diagonally across a rectangle, from the top-left corner to the bottom-right,
+    // then rests for a moment before the next sweep. Used on Enchanted cards and binder pockets.
+    public static void drawDiagonalShimmer(GuiGraphicsExtractor g, int x, int y, int width, int height, int halfWidth, int maxAlpha) {
+        long time = System.currentTimeMillis() % 2400L;
+        if (time > 1600L) {
+            return;
+        }
+        float progress = time / 1600.0F;
+        // The band slants like "/". Its centre is wherever column + row equals `diagonal`, which grows over the sweep.
+        int diagonal = -halfWidth + (int) (progress * (width + height + halfWidth * 2));
+        int step = 2;
+        for (int row = 0; row < height; row += step) {
+            int bottom = Math.min(row + step, height);
+            for (int offset = -halfWidth; offset <= halfWidth; offset += step) {
+                int column = diagonal - row + offset;
+                int left = Math.max(column, 0);
+                int right = Math.min(column + step, width);
+                if (left >= right) {
+                    continue;
+                }
+                int alpha = (int) (maxAlpha * (1.0F - Math.abs(offset) / (float) (halfWidth + 1)));
+                g.fill(x + left, y + row, x + right, y + bottom, (alpha << 24) | 0xB070FF);
+            }
+        }
     }
 }

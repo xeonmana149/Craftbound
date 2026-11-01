@@ -20,6 +20,8 @@ public class Cards {
     public static final Identifier DRAGON_EGG = register("dragon_egg", CardDefinition.item(CardRarity.COMMON, 0).token());
     public static final Identifier VEX = register("vex", CardDefinition.mob(CardRarity.COMMON, 1, 1, 1).token()
             .keywords(Keyword.SPRINT));
+    // The second player in a match starts with one of these.
+    public static final Identifier EXPERIENCE_BOTTLE = register("experience_bottle", CardDefinition.item(CardRarity.COMMON, 0).token());
 
     public static final Identifier ZOMBIE = register("zombie", CardDefinition.mob(CardRarity.COMMON, 2, 2, 3)
             .type(MobType.UNDEAD).keywords(Keyword.DROP).creates(Keyword.DROP, ROTTEN_FLESH));

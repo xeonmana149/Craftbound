@@ -1,6 +1,9 @@
 package craftbound.block;
 
+import craftbound.game.MatchManager;
 import java.util.List;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.InteractionResult;
@@ -17,7 +20,7 @@ import net.minecraft.world.phys.shapes.Shapes;
 import net.minecraft.world.phys.shapes.VoxelShape;
 
 // A table for card games. Right-click it to sit down on the side you're standing on, facing the table.
-// Matches will start from here once the game is built.
+// Right-click it again while sitting to play a practice match against the Card Master.
 public class CardTableBlock extends Block {
     private static final VoxelShape SHAPE = Shapes.or(
             Block.box(0, 12, 0, 16, 16, 16),
@@ -40,6 +43,13 @@ public class CardTableBlock extends Block {
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos, Player player, BlockHitResult hit) {
         if (level.isClientSide()) {
+            return InteractionResult.SUCCESS;
+        }
+        // Already sitting at a table: right-clicking it starts a practice match against the Card Master.
+        if (player.getVehicle() instanceof SeatEntity) {
+            if (player instanceof ServerPlayer serverPlayer) {
+                MatchManager.startPractice(serverPlayer);
+            }
             return InteractionResult.SUCCESS;
         }
         if (player.isPassenger()) {
@@ -68,6 +78,9 @@ public class CardTableBlock extends Block {
         player.startRiding(seat);
         player.setYRot(yaw);
         player.setYHeadRot(yaw);
+        if (player instanceof ServerPlayer serverPlayer) {
+            serverPlayer.sendOverlayMessage(Component.translatable("match_ui.craftbound.sit_hint"));
+        }
         return InteractionResult.SUCCESS;
     }
 }

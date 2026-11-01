@@ -25,24 +25,24 @@ public class CardEffects {
             Minion victim = enemy.minion(target.minionId());
             if (victim != null) {
                 enemy.board.remove(victim);
-                match.log("The Enderman teleports " + Match.name(victim.card) + " back to " + enemy.name + "'s hand.");
+                match.log("The Enderman teleports " + Match.name(victim.card) + " back to " + enemy.name + "'s hand.", Cards.ENDERMAN);
                 match.giveCard(target.side(), victim.card);
             }
         } else if (id.equals(Cards.WARDEN)) {
             // Sonic Boom: 3 damage to every enemy mob.
-            match.log("The Warden's Sonic Boom hits every enemy mob for 3.");
+            match.log("The Warden's Sonic Boom hits every enemy mob for 3.", Cards.WARDEN);
             for (Minion enemy : new ArrayList<>(match.opponent(side).board)) {
                 match.damage(enemy, 3, null);
             }
         } else if (id.equals(Cards.WITHER)) {
-            match.log("The Wither blasts every other mob for 2.");
+            match.log("The Wither blasts every other mob for 2.", Cards.WITHER);
             for (Minion other : everyMob(match)) {
                 if (other != minion) {
                     match.damage(other, 2, null);
                 }
             }
         } else if (id.equals(Cards.EVOKER)) {
-            match.log("The Evoker summons two Vexes.");
+            match.log("The Evoker summons two Vexes.", Cards.EVOKER);
             match.summon(side, new CardRef(Cards.VEX, false));
             match.summon(side, new CardRef(Cards.VEX, false));
         }
@@ -56,12 +56,12 @@ public class CardEffects {
         } else if (id.equals(Cards.SKELETON)) {
             match.giveCard(side, new CardRef(Cards.ARROW, false));
         } else if (id.equals(Cards.CREEPER)) {
-            match.log("The Creeper explodes, dealing 2 to every other mob!");
+            match.log("The Creeper explodes, dealing 2 to every other mob!", Cards.CREEPER);
             for (Minion other : everyMob(match)) {
                 match.damage(other, 2, null);
             }
         } else if (id.equals(Cards.CHARGED_CREEPER)) {
-            match.log("The Charged Creeper explodes, dealing 4 to every other mob and the enemy hero!");
+            match.log("The Charged Creeper explodes, dealing 4 to every other mob and the enemy hero!", Cards.CHARGED_CREEPER);
             for (Minion other : everyMob(match)) {
                 match.damage(other, 4, null);
             }

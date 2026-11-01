@@ -7,6 +7,8 @@ import java.util.UUID;
 // One side of a match: a real player or the Card Master AI.
 public class MatchPlayer {
     public final String name;
+    // Shown on the player's nameplate: their deck's class, or null for the Card Master.
+    public String deckClass;
     // The real player's id, or null for the AI.
     public final UUID playerId;
     public int health = Match.START_HEALTH;

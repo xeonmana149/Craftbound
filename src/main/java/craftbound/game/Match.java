@@ -6,6 +6,7 @@ import craftbound.card.Keyword;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import net.minecraft.resources.Identifier;
 import net.minecraft.util.RandomSource;
 
 // The rules of a Craftbound match, from the Mobdeck prototype. Runs on the server; players only send requests.
@@ -28,7 +29,11 @@ public class Match {
     public boolean over = false;
     // 0 or 1, or -1 for a draw.
     public int winner = -1;
-    public final List<String> log = new ArrayList<>();
+    // The battle log. Each line can carry the card it's about, for its icon; turn headers mark each new turn.
+    public record LogEntry(String text, Identifier card, int round, String turnOf) {
+    }
+
+    public final List<LogEntry> log = new ArrayList<>();
     final RandomSource random;
     private int nextMinionId = 1;
 
@@ -67,7 +72,15 @@ public class Match {
     }
 
     void log(String line) {
-        this.log.add(line);
+        log(line, (Identifier) null);
+    }
+
+    void log(String line, CardRef card) {
+        log(line, card == null ? null : card.id());
+    }
+
+    void log(String line, Identifier card) {
+        this.log.add(new LogEntry(line, card, 0, null));
         if (this.log.size() > 40) {
             this.log.remove(0);
         }
@@ -78,6 +91,8 @@ public class Match {
     private void startTurn() {
         this.turn++;
         MatchPlayer player = this.players[this.current];
+        // A header in the battle log: "TURN 2 - NAME", counting each pair of turns as one round.
+        this.log.add(new LogEntry("", null, (this.turn + 1) / 2, player.name));
         player.maxXp = Math.min(MAX_XP, player.maxXp + 1);
         player.xp = player.maxXp;
         for (Minion minion : player.board) {
@@ -129,7 +144,7 @@ public class Match {
         }
         CardRef card = player.deck.remove(0);
         if (player.hand.size() >= MAX_HAND) {
-            log(player.name + "'s hand is full, so " + name(card) + " is lost.");
+            log(player.name + "'s hand is full, so " + name(card) + " is lost.", card);
             return;
         }
         player.hand.add(card);
@@ -139,7 +154,7 @@ public class Match {
     void giveCard(int side, CardRef card) {
         MatchPlayer player = this.players[side];
         if (player.hand.size() >= MAX_HAND) {
-            log(player.name + "'s hand is full, so " + name(card) + " is lost.");
+            log(player.name + "'s hand is full, so " + name(card) + " is lost.", card);
             return;
         }
         player.hand.add(card);
@@ -198,12 +213,12 @@ public class Match {
         player.hand.remove(handIndex);
         if (definition.isMob()) {
             Minion minion = summon(side, card);
-            log(player.name + " summons " + name(card) + ".");
+            log(player.name + " summons " + name(card) + ".", card);
             if (minion != null) {
                 CardEffects.onSpawn(this, side, minion, targetOk ? target : Target.NONE);
             }
         } else {
-            log(player.name + " plays " + name(card) + ".");
+            log(player.name + " plays " + name(card) + ".", card);
             CardEffects.onItem(this, side, card, targetOk ? target : Target.NONE);
         }
         resolveDeaths();
@@ -256,10 +271,10 @@ public class Match {
         attacker.ready = false;
         if (target.hero()) {
             enemy.health -= attacker.attack;
-            log(name(attacker.card) + " hits " + enemy.name + " for " + attacker.attack + ".");
+            log(name(attacker.card) + " hits " + enemy.name + " for " + attacker.attack + ".", attacker.card);
         } else {
             Minion defender = enemy.minion(target.minionId());
-            log(name(attacker.card) + " attacks " + name(defender.card) + ".");
+            log(name(attacker.card) + " attacks " + name(defender.card) + ".", attacker.card);
             damage(defender, attacker.attack, attacker);
             // The defender hits back, unless the attacker is Ranged or the defender is a Block.
             if (!attacker.has(Keyword.RANGED) && !defender.has(Keyword.BLOCK)) {
@@ -310,10 +325,10 @@ public class Match {
                     }
                     anyDied = true;
                     this.players[side].board.remove(minion);
-                    log(name(minion.card) + " dies.");
+                    log(name(minion.card) + " dies.", minion.card);
                     CardEffects.onDrop(this, side, minion);
                     if (minion.totem) {
-                        log("The Totem of Undying brings " + name(minion.card) + " back!");
+                        log("The Totem of Undying brings " + name(minion.card) + " back!", Cards.TOTEM_OF_UNDYING);
                         summon(side, minion.card);
                     }
                 }

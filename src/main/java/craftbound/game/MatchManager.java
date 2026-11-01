@@ -78,12 +78,16 @@ public class MatchManager {
             return;
         }
         MatchPlayer you = new MatchPlayer(player.getName().getString(), player.getUUID(), deck);
+        you.deckClass = deckClass;
         MatchPlayer cardMaster = new MatchPlayer("Card Master", null, cardMasterDeck());
         Match match = new Match(you, cardMaster, player.getRandom());
         MATCHES.put(player.getUUID(), match);
         AI_COOLDOWN.put(match, AI_DELAY);
         send(player, match);
     }
+
+    // The class of the deck found by playableDeck, for the nameplate.
+    private static String deckClass;
 
     // The cards from the first Deck Case that's ready to play, or null (with a message saying why).
     private static List<CardRef> playableDeck(ServerPlayer player) {
@@ -116,6 +120,7 @@ public class MatchManager {
                 problem = "match_ui.craftbound.deck_missing";
                 continue;
             }
+            deckClass = deck.deckClass().name();
             return cards;
         }
         player.sendOverlayMessage(Component.translatable(problem, PRACTICE_MIN_DECK));

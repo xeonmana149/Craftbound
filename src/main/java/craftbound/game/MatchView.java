@@ -15,9 +15,15 @@ public class MatchView {
         root.addProperty("myTurn", !match.over && match.current == viewer);
         root.addProperty("over", match.over);
         root.addProperty("winner", match.winner);
+        // The battle log: plain lines (with the card they're about, for an icon) and turn headers.
         JsonArray log = new JsonArray();
-        for (int i = Math.max(0, match.log.size() - 14); i < match.log.size(); i++) {
-            log.add(match.log.get(i));
+        for (Match.LogEntry entry : match.log) {
+            JsonObject line = new JsonObject();
+            line.addProperty("text", entry.text());
+            line.addProperty("card", entry.card() == null ? "" : entry.card().toString());
+            line.addProperty("round", entry.round());
+            line.addProperty("turnOf", entry.turnOf() == null ? "" : entry.turnOf());
+            log.add(line);
         }
         root.add("log", log);
 
@@ -26,6 +32,8 @@ public class MatchView {
             MatchPlayer player = match.player(side);
             JsonObject p = new JsonObject();
             p.addProperty("name", player.name);
+            p.addProperty("cls", player.deckClass == null ? "" : player.deckClass);
+            p.addProperty("ai", player.isAi());
             p.addProperty("health", player.health);
             p.addProperty("xp", player.xp);
             p.addProperty("maxXp", player.maxXp);

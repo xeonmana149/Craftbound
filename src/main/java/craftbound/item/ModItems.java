@@ -1,0 +1,24 @@
+package craftbound.item;
+
+import craftbound.Craftbound;
+import java.util.function.Function;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.world.item.Item;
+
+public class ModItems {
+    public static final Item CARD = register("card", CardItem::new, new Item.Properties());
+    public static final Item BOOSTER_PACK = register("booster_pack", BoosterPackItem::new, new Item.Properties());
+
+    public static Item register(String name, Function<Item.Properties, Item> factory, Item.Properties properties) {
+        ResourceKey<Item> key = ResourceKey.create(Registries.ITEM, Craftbound.id(name));
+        Item item = factory.apply(properties.setId(key));
+        Registry.register(BuiltInRegistries.ITEM, key, item);
+        return item;
+    }
+
+    public static void initialize() {
+    }
+}

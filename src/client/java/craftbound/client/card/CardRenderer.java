@@ -294,6 +294,87 @@ public class CardRenderer {
         return new ItemStack(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(itemName)));
     }
 
+    // A class power drawn as a card, like Hearthstone's hero power card: the XP cost on top, round art, the name
+    // on a ribbon and "Class Power" with what it does. Framed in the class's colour. Greyed out once used.
+    public static void drawPower(GuiGraphicsExtractor g, Font font, Component name, Component description, ItemStack icon,
+                                 CardClass cardClass, int cost, boolean used, int x, int y, float scale) {
+        g.pose().pushMatrix();
+        g.pose().translate(x, y);
+        g.pose().scale(scale, scale);
+        int[] frame = frameColors(cardClass);
+        g.fill(0, 0, WIDTH, HEIGHT, frame[0]);
+        g.fill(0, 0, WIDTH, 2, frame[1]);
+        g.fill(0, 0, 2, HEIGHT, frame[1]);
+        g.fill(0, HEIGHT - 2, WIDTH, HEIGHT, frame[2]);
+        g.fill(WIDTH - 2, 0, WIDTH, HEIGHT, frame[2]);
+
+        // Round art: a gold ring with the power's item inside.
+        int centerX = WIDTH / 2;
+        int centerY = 54;
+        octagon(g, centerX - 38, centerY - 38, 76, FRAME_DARK);
+        octagon(g, centerX - 36, centerY - 36, 72, 0xFFE8B84A);
+        octagon(g, centerX - 32, centerY - 32, 64, ITEM_BACKDROP);
+        g.pose().pushMatrix();
+        g.pose().translate(centerX, centerY);
+        g.pose().scale(3.0F, 3.0F);
+        g.item(icon, -8, -8);
+        g.pose().popMatrix();
+
+        // XP cost on top, over the ring.
+        drawStat(g, font, centerX - 9, 4, cost, EMERALD);
+
+        // Name ribbon.
+        int ribbonTop = 96;
+        g.fill(4, ribbonTop, WIDTH - 4, ribbonTop + 14, FRAME_DARK);
+        fitText(g, font, name, centerX, ribbonTop + 3, WIDTH - 12, WHITE, true);
+
+        // "Class Power" and what it does, shrunk to fit the parchment.
+        int boxTop = 114;
+        int boxBottom = HEIGHT - 8;
+        g.fill(8, boxTop, WIDTH - 8, boxBottom, PARCHMENT);
+        g.fill(8, boxBottom - 2, WIDTH - 8, boxBottom, PARCHMENT_DARK);
+        Component heading = Component.translatable("card_ui.craftbound.class_power").withStyle(ChatFormatting.BOLD);
+        int textWidth = WIDTH - 24;
+        int textHeight = boxBottom - boxTop - 6;
+        float textScale = 1.0F;
+        List<FormattedCharSequence> lines = powerLines(font, heading, description, textWidth);
+        while (lines.size() * font.lineHeight * textScale > textHeight && textScale > 0.5F) {
+            textScale -= 0.05F;
+            lines = powerLines(font, heading, description, Math.round(textWidth / textScale));
+        }
+        float textTop = boxTop + 3 + (textHeight - lines.size() * font.lineHeight * textScale) / 2.0F;
+        g.pose().pushMatrix();
+        g.pose().translate(centerX, textTop);
+        g.pose().scale(textScale, textScale);
+        int lineY = 0;
+        for (FormattedCharSequence line : lines) {
+            g.text(font, line, -font.width(line) / 2, lineY, TEXT_DARK, false);
+            lineY += font.lineHeight;
+        }
+        g.pose().popMatrix();
+
+        if (used) {
+            g.fill(0, 0, WIDTH, HEIGHT, 0x90000000);
+        }
+        g.pose().popMatrix();
+    }
+
+    // The heading on its own line(s), then the description.
+    private static List<FormattedCharSequence> powerLines(Font font, Component heading, Component description, int width) {
+        List<FormattedCharSequence> lines = new ArrayList<>(font.split(heading, width));
+        lines.addAll(font.split(description, width));
+        return lines;
+    }
+
+    // A square with its corners cut off.
+    private static void octagon(GuiGraphicsExtractor g, int x, int y, int size, int color) {
+        int cut = size / 4;
+        for (int row = 0; row < size; row++) {
+            int inset = row < cut ? cut - row : row >= size - cut ? row - (size - cut) + 1 : 0;
+            g.fill(x + inset, y + row, x + size - inset, y + row + 1, color);
+        }
+    }
+
     private static void drawStat(GuiGraphicsExtractor g, Font font, int x, int y, int value, int color) {
         g.fill(x, y, x + 18, y + 18, FRAME_DARK);
         g.fill(x + 1, y + 1, x + 17, y + 17, color);

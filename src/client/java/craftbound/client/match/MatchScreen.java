@@ -59,7 +59,7 @@ public class MatchScreen extends Screen {
     private static final int MY_BANNER = 1300;
     private static final int THEIR_BANNER = 900;
     private static final int GAME_OVER_DELAY = 1100;
-    private static final int NAMEPLATE_HEIGHT = 24;
+    private static final int NAMEPLATE_HEIGHT = 15;
 
     // Colours of the table, from the prototype.
     private static final int MORTAR = 0xFF121315;
@@ -174,8 +174,6 @@ public class MatchScreen extends Screen {
     private final Spot[] heroSpots = new Spot[2];
     private final int[][] toolSpots = new int[2][];
     private final int[][] powerSpots = new int[2][];
-    private final int[][] xpSpots = new int[2][];
-    private final int[][] deckSpots = new int[2][];
     private final int[][] nameplateSpots = new int[2][];
     private record HistorySpot(int x, int y, int size, LogLine line) {
     }
@@ -516,7 +514,7 @@ public class MatchScreen extends Screen {
                     schedule(750, () -> MatchSounds.item(id));
                 }
                 MatchSounds.play("item.book.page_turn", 0.8F, 0.5F);
-                return 1050;
+                return 1150;
             }
             case "POWER" -> {
                 side.xp = Math.max(0, side.xp - this.shown.powerCost);
@@ -885,12 +883,13 @@ public class MatchScreen extends Screen {
             return;
         }
         String who = this.shown.sides[side].name;
-        float scale = Math.min(0.95F, (this.boardBottom - this.boardTop + 30) / (float) CardRenderer.HEIGHT);
+        // Big, at the far left of the screen (over the battle log for a moment), like Hearthstone.
+        float scale = Math.min(1.0F, this.height * 0.5F / CardRenderer.HEIGHT);
         int w = Math.round(CardRenderer.WIDTH * scale);
         int h = Math.round(CardRenderer.HEIGHT * scale);
-        int x = this.boardLeft + 8;
+        int x = 8;
         int y = this.middle - h / 2;
-        effect(0, 1150, true, (g, t) -> {
+        effect(0, 1400, true, (g, t) -> {
             float size = t < 0.12F ? MatchArt.pop(t / 0.12F) : t > 0.88F ? 1.0F - MatchArt.easeIn((t - 0.88F) / 0.12F) : 1.0F;
             g.pose().pushMatrix();
             g.pose().translate(x + w / 2.0F, y + h / 2.0F);
@@ -1252,7 +1251,6 @@ public class MatchScreen extends Screen {
     private void drawDeck(GuiGraphicsExtractor g, int s) {
         Side side = this.shown.sides[s];
         int y = s == this.shown.you ? this.myDeckY : this.theirDeckY;
-        this.deckSpots[s] = new int[]{this.deckX - 2, y - 4, this.deckW + 6, this.deckH + 6};
         if (side.deck <= 0) {
             g.outline(this.deckX, y, this.deckW, this.deckH, 0x80FFFFFF);
             return;
@@ -1303,7 +1301,6 @@ public class MatchScreen extends Screen {
         float scale = Math.max(1.0F, orb / 7.0F);
         int textWidth = Math.round(this.font.width(number) * scale);
         MatchArt.outlined(g, this.font, number, rowLeft - 6 - textWidth, y + orb / 2.0F - 4 * scale, color, scale, false);
-        this.xpSpots[s] = new int[]{rowLeft - 8 - textWidth, y - 3, right - rowLeft + textWidth + 10, orb + 6};
     }
 
     // How far an XP-holding orb is from the end of the filled orbs (0 = the last one), for the cost preview.
@@ -1371,26 +1368,23 @@ public class MatchScreen extends Screen {
     }
 
     // A nameplate beside each hero, the same for both players: name, class and how many cards they have.
-    // Yours sits in the bottom-left corner, theirs in the top-right.
+    // Just the player's (or the Card Master's) name: yours in the bottom-left corner, theirs in the top-right.
+    // The class is the colour round their portrait; hand and deck sizes are on the table.
     private void drawNameplate(GuiGraphicsExtractor g, int s) {
         Side side = this.shown.sides[s];
-        int width = nameplateWidth();
+        Component name = Component.literal(side.name).withStyle(ChatFormatting.BOLD);
+        int width = Math.min(Math.max(60, Math.round(this.width * 0.23F)), this.font.width(name) + 12);
         int height = NAMEPLATE_HEIGHT;
         boolean mine = s == this.shown.you;
         int x = mine ? 6 : this.width - 6 - width;
         int y = mine ? this.height - 6 - height : 4;
         this.nameplateSpots[s] = new int[]{x, y, width, height};
+        // A gold edge while it's their turn.
         boolean active = this.shown.playing && !this.shown.over && this.shown.current == s;
         g.fill(x - 1, y - 1, x + width + 1, y + height + 1, 0xFF000000);
         g.fillGradient(x, y, x + width, y + height, PANEL, PANEL_DARK);
         g.outline(x + 1, y + 1, width - 2, height - 2, active ? MatchArt.GOLD : PANEL_EDGE);
-        CardRenderer.fitText(g, this.font, Component.literal(side.name).withStyle(ChatFormatting.BOLD), x + 5, y + 3, width - 10, MatchArt.TEXT, false);
-        String chip = side.cardClass.displayName().getString().toUpperCase(Locale.ROOT);
-        int chipWidth = Math.round(this.font.width(chip) * 0.6F) + 6;
-        g.fill(x + 5, y + 13, x + 5 + chipWidth, y + 21, classColor(side.cardClass));
-        CardRenderer.fitText(g, this.font, Component.literal(chip), x + 8, y + 13, chipWidth - 6, 0xFFFFFFFF, false);
-        Component meta = Component.translatable("match_ui.craftbound.meta", side.handCount, side.deck);
-        CardRenderer.fitText(g, this.font, meta, x + 9 + chipWidth, y + 13, width - chipWidth - 13, MatchArt.TEXT_DIM, false);
+        CardRenderer.fitText(g, this.font, name, x + width / 2, y + 3, width - 10, MatchArt.TEXT, true);
     }
 
     // The deck's name: what the player called it, or its class ("Farmer Deck").
@@ -1406,11 +1400,6 @@ public class MatchScreen extends Screen {
             case FARMER -> 0xFF4E8A2A;
             case NEUTRAL -> 0xFF5D5E66;
         };
-    }
-
-    // Narrow enough on small screens that your nameplate never reaches your hand.
-    private int nameplateWidth() {
-        return Math.max(60, Math.min(116, Math.round(this.width * 0.23F)));
     }
 
     // A hero: portrait (the player's face), health heart, and the attack badge while holding a tool on their turn.
@@ -1434,10 +1423,13 @@ public class MatchScreen extends Screen {
             g.outline(x - 4, y - 4, size + 8, size + 8, over ? MatchArt.GOLD_LIGHT : MatchArt.RED);
             g.outline(x - 3, y - 3, size + 6, size + 6, over ? MatchArt.GOLD_LIGHT : MatchArt.RED);
         }
-        MatchArt.octagon(g, x - 3, y - 3, size + 6, 0xFF000000);
-        MatchArt.octagon(g, x - 2, y - 2, size + 4, MatchArt.GOLD);
-        MatchArt.octagon(g, x, y, size, classColor(side.cardClass));
-        MatchArt.octagon(g, x + 2, y + 2, size - 4, 0xFF2B2C31);
+        // The border's colour says the class: red Fighter, blue Builder, green Farmer.
+        int classColor = classColor(side.cardClass);
+        MatchArt.octagon(g, x - 4, y - 4, size + 8, 0xFF000000);
+        MatchArt.octagon(g, x - 3, y - 3, size + 6, lighter(classColor));
+        MatchArt.octagon(g, x - 2, y - 2, size + 4, classColor);
+        MatchArt.octagon(g, x + 2, y + 2, size - 4, 0xFF000000);
+        MatchArt.octagon(g, x + 3, y + 3, size - 6, 0xFF2B2C31);
         drawFace(g, side, x + 4, y + 4, size - 8);
         float flash = pulse(this.flashes.getOrDefault("h:" + s, -1L), 260);
         if (flash > 0) {
@@ -1528,6 +1520,13 @@ public class MatchScreen extends Screen {
         g.pose().popMatrix();
         int gem = Math.max(9, Math.round(size * 0.38F));
         MatchArt.cost(g, this.font, x + size / 2 - gem / 2, y - gem / 2, gem, this.shown.powerCost);
+    }
+
+    private static int lighter(int color) {
+        int r = Math.min(255, ((color >> 16) & 0xFF) + 70);
+        int gr = Math.min(255, ((color >> 8) & 0xFF) + 70);
+        int b = Math.min(255, (color & 0xFF) + 70);
+        return 0xFF000000 | (r << 16) | (gr << 8) | b;
     }
 
     private static int darker(int color) {
@@ -1816,11 +1815,33 @@ public class MatchScreen extends Screen {
         }
     }
 
-    // Hovering a card in your hand lifts it up big; hovering a mob shows its card in the middle of the board;
-    // hovering a log icon shows the card it was about.
+    // Hovering shows a card beside the thing you hover, never over the middle of the board:
+    // - a card in your hand lifts up big;
+    // - a mob: its card next to it, with any status it has written under the card;
+    // - a hero's tool or class power: its card above it (yours) or below it (theirs);
+    // - a battle log icon: the card it was about, with what happened written under it.
+    // Keywords aren't explained here: that's what the rulebook is for.
     private void drawPreview(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         if (this.dragging != null || this.attacker != null || this.awaitingTarget != null) {
             return;
+        }
+        float smallScale = Math.min(0.8F, this.height * 0.42F / CardRenderer.HEIGHT);
+        int smallW = Math.round(CardRenderer.WIDTH * smallScale);
+        int smallH = Math.round(CardRenderer.HEIGHT * smallScale);
+        for (int s = 0; s < 2; s++) {
+            Side side = this.shown.sides[s];
+            if (inside(this.toolSpots[s], mouseX, mouseY) && side.tool != null) {
+                int[] at = besideHero(this.toolSpots[s], s, smallW, smallH);
+                CardRenderer.draw(g, this.font, CardItem.of(side.tool.id, side.tool.enchanted), at[0], at[1], smallScale);
+                return;
+            }
+            if (inside(this.powerSpots[s], mouseX, mouseY) && side.power != HeroPowers.Power.NONE) {
+                int[] at = besideHero(this.powerSpots[s], s, smallW, smallH);
+                CardRenderer.drawPower(g, this.font, side.power.displayName(), side.power.description(),
+                        new ItemStack(BuiltInRegistries.ITEM.getValue(side.power.icon())), side.cardClass,
+                        this.shown.powerCost, side.powerUsed, at[0], at[1], smallScale);
+                return;
+            }
         }
         if (this.hoveredHand >= 0 && this.hoveredHand < this.shown.me().hand.size() && this.hoveredHand < this.handSpots.size()) {
             HandCard card = this.shown.me().hand.get(this.hoveredHand);
@@ -1835,7 +1856,6 @@ public class MatchScreen extends Screen {
                 g.outline(x - 2, y - 2, w + 4, h + 4, MatchArt.GLOW);
             }
             CardRenderer.draw(g, this.font, CardItem.of(card.id, card.enchanted), x, y, scale);
-            drawCardExtras(g, card.id, x, y, w, scale);
             return;
         }
         for (Spot spot : this.mobSpots) {
@@ -1846,13 +1866,21 @@ public class MatchScreen extends Screen {
             if (mob == null) {
                 return;
             }
-            float scale = Math.min(1.0F, (this.boardBottom - this.boardTop + 20) / (float) CardRenderer.HEIGHT);
-            int w = Math.round(CardRenderer.WIDTH * scale);
-            int h = Math.round(CardRenderer.HEIGHT * scale);
-            int x = this.centerX - w / 2;
-            int y = this.middle - h / 2;
-            CardRenderer.draw(g, this.font, CardItem.of(mob.id, mob.enchanted), x, y, scale);
-            drawCardExtras(g, mob.id, x, y, w, scale);
+            // To the right of the mob, or to its left near the right edge.
+            List<FormattedCharSequence> notes = new ArrayList<>();
+            for (Component status : statuses(mob, spot.side())) {
+                notes.addAll(this.font.split(status, Math.max(smallW, 110) - 8));
+            }
+            int noteHeight = notes.isEmpty() ? 0 : notes.size() * this.font.lineHeight + 11;
+            int x = spot.x() + spot.width() + 12;
+            if (x + smallW > this.width - 4) {
+                x = spot.x() - 12 - smallW;
+            }
+            int y = Math.max(4, Math.min(this.height - smallH - noteHeight - 4, spot.centerY() - smallH / 2));
+            CardRenderer.draw(g, this.font, CardItem.of(mob.id, mob.enchanted), x, y, smallScale);
+            if (!notes.isEmpty()) {
+                drawNote(g, notes, x, y + smallH + 4, Math.max(smallW, 110));
+            }
             return;
         }
         for (HistorySpot spot : this.historySpots) {
@@ -1870,123 +1898,61 @@ public class MatchScreen extends Screen {
             int x = spot.x() + spot.size() + 8;
             int y = Math.max(4, Math.min(this.height - h - boxHeight - 8, spot.y() - (h + boxHeight) / 2));
             CardRenderer.draw(g, this.font, CardItem.of(spot.line().card()), x, y, scale);
-            int boxY = y + h + 4;
-            g.fill(x - 1, boxY - 1, x + boxWidth + 1, boxY + boxHeight + 1, 0xFF000000);
-            g.fill(x, boxY, x + boxWidth, boxY + boxHeight, 0xF014110D);
-            g.outline(x, boxY, boxWidth, boxHeight, MatchArt.GOLD_DARK);
-            int textY = boxY + 4;
-            for (FormattedCharSequence line : lines) {
-                g.text(this.font, line, x + 4, textY, MatchArt.TEXT);
-                textY += this.font.lineHeight;
-            }
+            drawNote(g, lines, x, y + h + 4, boxWidth);
             return;
         }
     }
 
-    // Keyword rules to the left of a big card and the cards it creates to the right, like the inspect screen.
-    private void drawCardExtras(GuiGraphicsExtractor g, Identifier id, int x, int y, int width, float scale) {
-        CardDefinition card = Cards.get(id);
-        if (card == null) {
-            return;
-        }
-        int boxWidth = 120;
-        int boxX = x - 8 - boxWidth;
-        int boxY = y + 8;
-        for (Keyword keyword : card.keywords()) {
-            List<FormattedCharSequence> lines = new ArrayList<>();
-            lines.addAll(this.font.split(keyword.displayName().copy().withStyle(ChatFormatting.GOLD), boxWidth - 10));
-            lines.addAll(this.font.split(keyword.description(), boxWidth - 10));
-            int boxHeight = lines.size() * this.font.lineHeight + 10;
-            g.fill(boxX - 1, boxY - 1, boxX + boxWidth + 1, boxY + boxHeight + 1, 0xFF000000);
-            g.fill(boxX, boxY, boxX + boxWidth, boxY + boxHeight, 0xF014110D);
-            g.outline(boxX, boxY, boxWidth, boxHeight, MatchArt.GOLD_DARK);
-            int textY = boxY + 5;
-            for (FormattedCharSequence line : lines) {
-                g.text(this.font, line, boxX + 5, textY, MatchArt.TEXT);
-                textY += this.font.lineHeight;
-            }
-            boxY += boxHeight + 6;
-        }
-        float relatedScale = scale * 0.6F;
-        int relatedHeight = Math.round(CardRenderer.HEIGHT * relatedScale);
-        int relatedX = x + width + 10;
-        int relatedY = y + 14;
-        for (var related : card.related()) {
-            g.text(this.font, Component.translatable("card_ui.craftbound.creates"), relatedX, relatedY - 10, MatchArt.GOLD_LIGHT);
-            CardRenderer.draw(g, this.font, CardItem.of(related.card()), relatedX, relatedY, relatedScale);
-            relatedY += relatedHeight + 16;
+    // Where a tool or power card goes: above it for you (the board is above your hero), below it for them.
+    private int[] besideHero(int[] spot, int side, int width, int height) {
+        int x = Math.max(4, Math.min(this.width - width - 4, spot[0] + spot[2] / 2 - width / 2));
+        int y = side == this.shown.you ? spot[1] - height - 10 : spot[1] + spot[3] + 10;
+        return new int[]{x, Math.max(4, Math.min(this.height - height - 4, y))};
+    }
+
+    // A small dark box of text, for what goes under a previewed card.
+    private void drawNote(GuiGraphicsExtractor g, List<FormattedCharSequence> lines, int x, int y, int width) {
+        int height = lines.size() * this.font.lineHeight + 7;
+        g.fill(x - 1, y - 1, x + width + 1, y + height + 1, 0xFF000000);
+        g.fill(x, y, x + width, y + height, 0xF014110D);
+        g.outline(x, y, width, height, MatchArt.GOLD_DARK);
+        int textY = y + 4;
+        for (FormattedCharSequence line : lines) {
+            g.text(this.font, line, x + 4, textY, MatchArt.TEXT);
+            textY += this.font.lineHeight;
         }
     }
 
-    // Tooltips for the small things: heroes, tools, powers, XP, decks and the log.
+    // What's going on with a mob that its card doesn't say: frozen, withered, a totem, invulnerable, not ready.
+    private List<Component> statuses(Mob mob, int side) {
+        List<Component> lines = new ArrayList<>();
+        if (mob.frozen) lines.add(Component.translatable("match_ui.craftbound.status.frozen").withStyle(ChatFormatting.AQUA));
+        if (mob.withered) lines.add(Component.translatable("match_ui.craftbound.status.withered").withStyle(ChatFormatting.GRAY));
+        if (mob.totem) lines.add(Component.translatable("match_ui.craftbound.status.totem").withStyle(ChatFormatting.GOLD));
+        if (mob.invulnerable) lines.add(Component.translatable("match_ui.craftbound.status.invulnerable").withStyle(ChatFormatting.YELLOW));
+        if (side == this.shown.you && !mob.ready && this.shown.myTurn && !mob.block) {
+            lines.add(Component.translatable("match_ui.craftbound.status.not_ready").withStyle(ChatFormatting.GRAY));
+        }
+        return lines;
+    }
+
+    // The only floating tooltips left, kept to what you need: your deck's name on your nameplate, and log lines
+    // that aren't about a card. Everything else shows as a card beside what you hover (see drawPreview).
     private void drawTooltips(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         if (this.dragging != null || this.attacker != null) {
             return;
         }
         List<Component> lines = new ArrayList<>();
         for (int s = 0; s < 2; s++) {
-            Side side = this.shown.sides[s];
-            if (inside(this.toolSpots[s], mouseX, mouseY) && side.tool != null) {
-                lines.add(Cards.name(side.tool.id).copy().withStyle(ChatFormatting.GOLD));
-                lines.add(Component.translatable("match_ui.craftbound.tool_tip", side.tool.attack, side.tool.uses).withStyle(ChatFormatting.GRAY));
-                if (side.tool.ranged) {
-                    lines.add(Keyword.RANGED.description().copy().withStyle(ChatFormatting.GRAY));
-                }
-            } else if (inside(this.powerSpots[s], mouseX, mouseY) && side.power != HeroPowers.Power.NONE) {
-                lines.add(side.power.displayName().copy().withStyle(ChatFormatting.GOLD));
-                lines.add(side.power.description().copy().withStyle(ChatFormatting.GRAY));
-                lines.add(Component.translatable("match_ui.craftbound.power_cost", this.shown.powerCost).withStyle(ChatFormatting.GREEN));
-                if (side.powerUsed) {
-                    lines.add(Component.translatable("match_ui.craftbound.power_used").withStyle(ChatFormatting.DARK_GRAY));
-                }
-            } else if (inside(this.xpSpots[s], mouseX, mouseY)) {
-                lines.add(Component.translatable("match_ui.craftbound.xp_tip", side.xp, side.maxXp).withStyle(ChatFormatting.GREEN));
-                lines.add(Component.translatable("match_ui.craftbound.xp_tip.desc").withStyle(ChatFormatting.GRAY));
-            } else if (inside(this.deckSpots[s], mouseX, mouseY)) {
-                lines.add(Component.translatable("match_ui.craftbound.deck_tip", side.deck).withStyle(ChatFormatting.GOLD));
-                if (side.deck == 0) {
-                    lines.add(Component.translatable("match_ui.craftbound.deck_tip.empty").withStyle(ChatFormatting.GRAY));
-                }
-            } else if ((this.heroSpots[s] != null && this.heroSpots[s].contains(mouseX, mouseY)) || inside(this.nameplateSpots[s], mouseX, mouseY)) {
-                lines.add(Component.literal(side.name).withStyle(ChatFormatting.GOLD));
-                lines.add(Component.translatable("match_ui.craftbound.deck_name", deckName(side)).withStyle(ChatFormatting.GRAY));
-                lines.add(Component.translatable("match_ui.craftbound.hero_tip", side.health, Match.START_HEALTH).withStyle(ChatFormatting.RED));
-                if (s == this.shown.you && side.heroReady) {
-                    lines.add(Component.translatable("match_ui.craftbound.hero_ready").withStyle(ChatFormatting.GREEN));
-                }
+            if (inside(this.nameplateSpots[s], mouseX, mouseY)) {
+                lines.add(Component.translatable("match_ui.craftbound.deck_name", deckName(this.shown.sides[s])).withStyle(ChatFormatting.GRAY));
             }
-        }
-        for (Spot spot : this.mobSpots) {
-            if (!spot.contains(mouseX, mouseY)) {
-                continue;
-            }
-            Mob mob = this.shown.sides[spot.side()].mob(spot.mid());
-            if (mob == null) {
-                break;
-            }
-            if (mob.frozen) lines.add(Component.translatable("match_ui.craftbound.status.frozen").withStyle(ChatFormatting.AQUA));
-            if (mob.withered) lines.add(Component.translatable("match_ui.craftbound.status.withered").withStyle(ChatFormatting.GRAY));
-            if (mob.totem) lines.add(Component.translatable("match_ui.craftbound.status.totem").withStyle(ChatFormatting.GOLD));
-            if (mob.invulnerable) lines.add(Component.translatable("match_ui.craftbound.status.invulnerable").withStyle(ChatFormatting.YELLOW));
-            if (spot.side() == this.shown.you && !mob.ready && this.shown.myTurn && !mob.block) {
-                lines.add(Component.translatable("match_ui.craftbound.status.not_ready").withStyle(ChatFormatting.GRAY));
-            }
-            break;
         }
         for (HistorySpot spot : this.historySpots) {
-            if (mouseX >= spot.x() && mouseX < spot.x() + spot.size() && mouseY >= spot.y() && mouseY < spot.y() + spot.size()) {
-                if (spot.line() == null) {
-                    lines.add(Component.translatable("match_ui.craftbound.log").withStyle(ChatFormatting.GOLD));
-                    lines.add(Component.translatable("match_ui.craftbound.log.desc").withStyle(ChatFormatting.GRAY));
-                } else if (spot.line().card() == null || Cards.get(spot.line().card()) == null) {
-                    // Lines about a card show under the card instead (see drawPreview).
-                    lines.add(Component.literal(spot.line().text()));
-                }
-                break;
+            boolean over = mouseX >= spot.x() && mouseX < spot.x() + spot.size() && mouseY >= spot.y() && mouseY < spot.y() + spot.size();
+            if (over && spot.line() != null && (spot.line().card() == null || Cards.get(spot.line().card()) == null)) {
+                lines.add(Component.literal(spot.line().text()));
             }
-        }
-        if (inside(this.menuButton, mouseX, mouseY)) {
-            lines.add(Component.translatable("match_ui.craftbound.menu"));
         }
         if (!lines.isEmpty()) {
             Tooltips.show(g, this.font, lines, mouseX, mouseY);

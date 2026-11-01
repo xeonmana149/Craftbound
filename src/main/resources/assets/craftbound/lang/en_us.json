@@ -77,7 +77,9 @@
   "binder_ui.craftbound.missing": "Not collected yet",
   "binder_ui.craftbound.owned": "Owned: %s",
   "binder_ui.craftbound.owned_enchanted": "Enchanted: %s",
+  "binder_ui.craftbound.collected_enchanted": "Enchanted %s/%s",
   "binder_ui.craftbound.hint_take": "Left-click: take one (Shift: take all)",
+  "binder_ui.craftbound.hint_take_enchanted": "Ctrl+click: take an Enchanted copy (Ctrl+Shift: all)",
   "binder_ui.craftbound.hint_inspect": "Right-click: inspect",
   "binder_ui.craftbound.file_all": "File all cards",
 

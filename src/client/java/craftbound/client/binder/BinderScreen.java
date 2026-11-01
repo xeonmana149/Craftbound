@@ -94,8 +94,12 @@ public class BinderScreen extends Screen {
         g.fill(bookX + PAGE_WIDTH + SPINE, bookY, bookX + BOOK_WIDTH, bookY + PAGE_HEIGHT, PAGE);
         g.fill(bookX + PAGE_WIDTH, bookY - 4, bookX + PAGE_WIDTH + SPINE, bookY + PAGE_HEIGHT + 4, COVER_DARK);
 
+        // Two counters on the cover: normal collection on the left page's side, Enchanted on the right.
         g.centeredText(this.font, Component.translatable("binder_ui.craftbound.collected",
-                contents.collected(collection), collection.size()), this.width / 2, bookY - 15, 0xFFFFD27A);
+                contents.collected(collection), collection.size()), bookX + PAGE_WIDTH / 2, bookY - 15, 0xFFFFD27A);
+        g.centeredText(this.font, Component.translatable("binder_ui.craftbound.collected_enchanted",
+                        contents.collectedEnchanted(collection), collection.size()),
+                bookX + PAGE_WIDTH + SPINE + PAGE_WIDTH / 2, bookY - 15, 0xFFD9A8FF);
 
         // Pockets.
         this.pockets.clear();
@@ -144,6 +148,7 @@ public class BinderScreen extends Screen {
     }
 
     // A miniature card: frame, sky, the card's placeholder art, a rarity gem and how many you own.
+    // If you own an Enchanted copy, that's the one on show: purple edge and a shimmer sweeping across it.
     private void drawFilledPocket(GuiGraphicsExtractor g, int x, int y, Identifier id, BinderContents contents) {
         CardDefinition card = Cards.get(id);
         boolean hasEnchanted = contents.count(id, true) > 0;
@@ -152,11 +157,26 @@ public class BinderScreen extends Screen {
         g.fill(x + 6, y + 33, x + 10, y + 37, 0xFF000000 | card.rarity().rgb());
         g.item(CardRenderer.placeholderArt(id, card), x + POCKET_WIDTH / 2 - 8, y + 10);
         if (hasEnchanted) {
+            drawPocketShimmer(g, x + 3, y + 3, POCKET_WIDTH - 6, POCKET_HEIGHT - 6);
             g.outline(x + 2, y + 2, POCKET_WIDTH - 4, POCKET_HEIGHT - 4, ENCHANTED_EDGE);
         }
         int total = contents.count(id, false) + contents.count(id, true);
         String count = "x" + total;
         g.text(this.font, count, x + POCKET_WIDTH - 5 - this.font.width(count), y + POCKET_HEIGHT - 13, 0xFFFFFFFF);
+    }
+
+    // The same purple sweep as an inspected Enchanted card, shrunk to fit a pocket.
+    private static void drawPocketShimmer(GuiGraphicsExtractor g, int x, int y, int width, int height) {
+        float progress = (System.currentTimeMillis() % 2000L) / 2000.0F;
+        int bandCenter = x - 10 + (int) (progress * (width + 20));
+        for (int dx = -8; dx <= 8; dx++) {
+            int column = bandCenter + dx;
+            if (column < x || column >= x + width) {
+                continue;
+            }
+            int alpha = (int) (0x60 * (1.0F - Math.abs(dx) / 8.0F));
+            g.fill(column, y, column + 1, y + height, (alpha << 24) | 0xB070FF);
+        }
     }
 
     private List<Component> pocketTooltip(Identifier id, BinderContents contents) {
@@ -173,6 +193,9 @@ public class BinderScreen extends Screen {
         }
         lines.add(Component.empty());
         lines.add(Component.translatable("binder_ui.craftbound.hint_take").withStyle(ChatFormatting.DARK_GRAY));
+        if (contents.count(id, true) > 0) {
+            lines.add(Component.translatable("binder_ui.craftbound.hint_take_enchanted").withStyle(ChatFormatting.DARK_GRAY));
+        }
         lines.add(Component.translatable("binder_ui.craftbound.hint_inspect").withStyle(ChatFormatting.DARK_GRAY));
         return lines;
     }
@@ -214,13 +237,18 @@ public class BinderScreen extends Screen {
                     || !contents.owns(pocket.card())) {
                 continue;
             }
-            // Take normal copies first; once they're gone, the Enchanted ones.
-            boolean enchanted = contents.count(pocket.card(), false) == 0;
+            boolean ownsEnchanted = contents.count(pocket.card(), true) > 0;
             if (event.button() == 1) {
-                this.minecraft.gui.setScreen(new CardInspectScreen(CardItem.of(pocket.card(), enchanted), this));
-            } else {
-                ClientPlayNetworking.send(new TakeFromBinderPayload(mainHand, pocket.card(), enchanted, event.hasShiftDown()));
+                // Inspect the best copy you own.
+                this.minecraft.gui.setScreen(new CardInspectScreen(CardItem.of(pocket.card(), ownsEnchanted), this));
+                return true;
             }
+            // Ctrl takes an Enchanted copy. Otherwise normal copies come out first, then Enchanted once they're gone.
+            boolean enchanted = event.hasControlDown() || contents.count(pocket.card(), false) == 0;
+            if (enchanted && !ownsEnchanted) {
+                return true;
+            }
+            ClientPlayNetworking.send(new TakeFromBinderPayload(mainHand, pocket.card(), enchanted, event.hasShiftDown()));
             return true;
         }
         if (!inside(this.book, mouseX, mouseY)) {

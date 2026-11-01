@@ -68,6 +68,8 @@ public class ModComponents {
         ItemComponentTooltipProviderRegistry.addFirst(BINDER_CONTENTS, contents -> (context, tooltip, flag, components) -> {
             tooltip.accept(Component.translatable("binder_ui.craftbound.collected",
                     contents.collected(Cards.collectible()), Cards.collectible().size()).withStyle(ChatFormatting.GOLD));
+            tooltip.accept(Component.translatable("binder_ui.craftbound.collected_enchanted",
+                    contents.collectedEnchanted(Cards.collectible()), Cards.collectible().size()).withStyle(ChatFormatting.LIGHT_PURPLE));
             tooltip.accept(Component.translatable("binder_ui.craftbound.holds", contents.total()).withStyle(ChatFormatting.GRAY));
             tooltip.accept(Component.translatable("binder_ui.craftbound.how_to").withStyle(ChatFormatting.DARK_GRAY));
         });

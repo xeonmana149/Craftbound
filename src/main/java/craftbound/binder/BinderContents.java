@@ -57,6 +57,15 @@ public record BinderContents(Map<Identifier, Integer> cards, Map<Identifier, Int
         return collected;
     }
 
+    // How many cards of the collection you own an Enchanted copy of.
+    public int collectedEnchanted(List<Identifier> collection) {
+        int collected = 0;
+        for (Identifier id : collection) {
+            if (count(id, true) > 0) collected++;
+        }
+        return collected;
+    }
+
     // Returns new contents with `amount` copies added (or removed, if negative).
     public BinderContents add(Identifier id, boolean isEnchanted, int amount) {
         Map<Identifier, Integer> changed = new HashMap<>(isEnchanted ? enchanted : cards);

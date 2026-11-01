@@ -1,16 +1,20 @@
 package craftbound.game;
 
+import craftbound.card.CardClass;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import net.minecraft.resources.Identifier;
 
 // One side of a match: a real player or the Card Master AI.
 public class MatchPlayer {
     public final String name;
-    // Shown on the player's nameplate: their deck's class, or null for the Card Master.
-    public String deckClass;
+    // The deck's class, which decides the hero's power.
+    public final CardClass heroClass;
     // The real player's id, or null for the AI.
     public final UUID playerId;
+    // The card backs this player's deck uses.
+    public final Identifier sleeve;
     public int health = Match.START_HEALTH;
     public int xp = 0;
     public int maxXp = 0;
@@ -19,10 +23,21 @@ public class MatchPlayer {
     public final List<CardRef> deck;
     public final List<CardRef> hand = new ArrayList<>();
     public final List<Minion> board = new ArrayList<>();
+    // The tool the hero holds, or null.
+    public Tool tool;
+    // Each turn the hero can attack once (with a tool) and use their power once.
+    public boolean heroAttacked;
+    public boolean powerUsed;
+    // Farmer: after a Sow, the next use of the power is Reap.
+    public boolean reap;
+    // How many of the match's events this player's screen has been sent.
+    int eventsSent;
 
-    public MatchPlayer(String name, UUID playerId, List<CardRef> deck) {
+    public MatchPlayer(String name, UUID playerId, CardClass heroClass, Identifier sleeve, List<CardRef> deck) {
         this.name = name;
         this.playerId = playerId;
+        this.heroClass = heroClass;
+        this.sleeve = sleeve;
         this.deck = new ArrayList<>(deck);
     }
 

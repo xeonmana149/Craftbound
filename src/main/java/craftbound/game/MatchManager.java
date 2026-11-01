@@ -8,12 +8,13 @@ import craftbound.card.DeckRules;
 import craftbound.component.ModComponents;
 import craftbound.deck.DeckBuilding;
 import craftbound.deck.DeckContents;
-import craftbound.item.ModItems;
+import craftbound.entity.CardMasterEntity;
 import craftbound.network.MatchActionPayload;
 import craftbound.network.MatchStatePayload;
+import craftbound.sleeve.Sleeves;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -21,23 +22,32 @@ import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
-import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
-// Runs every match on the server: starts practice matches against the Card Master, passes players' moves to
-// the rules, lets the AI take its turn one move at a time, and sends each player what they can see.
+// Runs every match on the server: starts matches from the card table (against the Card Master or another
+// player), passes players' moves to the rules, lets the AI take its turn one move at a time, and sends each
+// player what they can see.
 public class MatchManager {
-    // While the card pool is small, practice decks only need this many cards (a full deck is 30).
+    // While the card pool is small, decks only need this many cards to play (a full deck is 30).
     public static final int PRACTICE_MIN_DECK = 10;
-    // Ticks between the Card Master's moves (20 ticks = 1 second), so you can follow what it does.
-    private static final int AI_DELAY = 25;
+    // Ticks between the Card Master's moves (20 ticks = 1 second), so its animations can play out.
+    private static final int AI_DELAY = 30;
+    // A longer wait at the start of its turn, for the turn banner and its draw.
+    private static final int AI_TURN_START_DELAY = 45;
+    // And before its very first move, for the coin toss and mulligan to finish on screen.
+    private static final int AI_FIRST_MOVE_DELAY = 90;
+
+    // A deck picked at the table: its cards, class and card backs.
+    public record DeckChoice(List<CardRef> cards, CardClass deckClass, Identifier sleeve) {
+    }
 
     private static final Map<UUID, Match> MATCHES = new HashMap<>();
     private static final Map<Match, Integer> AI_COOLDOWN = new HashMap<>();
+    private static final Map<Match, CardMasterEntity> CARD_MASTERS = new HashMap<>();
 
     public static void initialize() {
         PayloadTypeRegistry.clientboundPlay().register(MatchStatePayload.TYPE, MatchStatePayload.CODEC);
@@ -47,91 +57,108 @@ public class MatchManager {
         ServerTickEvents.END_SERVER_TICK.register(MatchManager::tick);
         // Leaving the game forfeits the match.
         ServerPlayConnectionEvents.DISCONNECT.register((listener, server) -> {
-            Match match = MATCHES.remove(listener.player.getUUID());
+            Match match = MATCHES.get(listener.player.getUUID());
             if (match != null) {
                 match.concede(match.sideOf(listener.player.getUUID()));
-                AI_COOLDOWN.remove(match);
+                sendAll(server, match);
+                finish(match);
             }
         });
+        TableLobby.initialize();
     }
 
     public static boolean inMatch(ServerPlayer player) {
         return MATCHES.containsKey(player.getUUID());
     }
 
-    // Shows a running match again (e.g. if you closed the screen).
+    // Shows a running match again (e.g. if you closed the screen), skipping the animations you missed.
     public static void resend(ServerPlayer player) {
         Match match = MATCHES.get(player.getUUID());
         if (match != null) {
+            int side = match.sideOf(player.getUUID());
+            match.player(side).eventsSent = match.events.size();
             send(player, match);
         }
     }
 
-    // A practice match against the Card Master, using the first playable Deck Case in your inventory.
-    public static void startPractice(ServerPlayer player) {
+    // Why the Deck Case in this inventory slot can't be played, as a translation key, or null if it can.
+    public static String whyCantPlay(ServerPlayer player, int slot) {
+        Inventory inventory = player.getInventory();
+        if (slot < 0 || slot >= inventory.getContainerSize()) {
+            return "match_ui.craftbound.no_deck";
+        }
+        ItemStack stack = inventory.getItem(slot);
+        if (stack.has(ModComponents.DECK_CONTENTS)) {
+            DeckBuilding.migrate(player, stack);
+        }
+        return DeckBuilding.whyCantPlay(inventory, stack);
+    }
+
+    // The deck in that slot, ready to shuffle. Check whyCantPlay first.
+    public static DeckChoice deckIn(ServerPlayer player, int slot) {
+        ItemStack stack = player.getInventory().getItem(slot);
+        DeckContents deck = stack.getOrDefault(ModComponents.DECK_CONTENTS, DeckContents.EMPTY);
+        List<CardRef> cards = new ArrayList<>();
+        for (Identifier id : Cards.collectible()) {
+            for (boolean enchanted : new boolean[]{false, true}) {
+                for (int n = 0; n < deck.cards().count(id, enchanted); n++) {
+                    cards.add(new CardRef(id, enchanted));
+                }
+            }
+        }
+        Identifier sleeve = stack.get(ModComponents.SLEEVE_ID);
+        return new DeckChoice(cards, deck.deckClass(), sleeve == null ? Sleeves.CLASSIC : sleeve);
+    }
+
+    // A match against the Card Master, who has just sat down at the table (or null if it got lost on the way).
+    public static void startVsCardMaster(ServerPlayer player, DeckChoice deck, CardMasterEntity cardMaster) {
         if (inMatch(player)) {
-            resend(player);
+            if (cardMaster != null) {
+                cardMaster.leave(false);
+            }
             return;
         }
-        List<CardRef> deck = playableDeck(player);
-        if (deck == null) {
-            return;
-        }
-        MatchPlayer you = new MatchPlayer(player.getName().getString(), player.getUUID(), deck);
-        you.deckClass = deckClass;
-        MatchPlayer cardMaster = new MatchPlayer("Card Master", null, cardMasterDeck());
-        Match match = new Match(you, cardMaster, player.getRandom());
+        MatchPlayer you = new MatchPlayer(player.getName().getString(), player.getUUID(), deck.deckClass(), deck.sleeve(), deck.cards());
+        CardClass masterClass = randomClass(player);
+        MatchPlayer master = new MatchPlayer("Card Master", null, masterClass, Sleeves.CLASSIC, cardMasterDeck(masterClass));
+        Match match = new Match(you, master, player.getRandom());
         MATCHES.put(player.getUUID(), match);
-        AI_COOLDOWN.put(match, AI_DELAY);
+        if (cardMaster != null) {
+            CARD_MASTERS.put(match, cardMaster);
+        }
+        // The Card Master decides its mulligan straight away; the game begins once you've done yours.
+        MatchAI.mulligan(match, match.sideOf(player.getUUID()) == 0 ? 1 : 0);
+        AI_COOLDOWN.put(match, AI_FIRST_MOVE_DELAY);
         send(player, match);
     }
 
-    // The class of the deck found by playableDeck, for the nameplate.
-    private static String deckClass;
-
-    // The cards from the first Deck Case that's ready to play, or null (with a message saying why).
-    private static List<CardRef> playableDeck(ServerPlayer player) {
-        Inventory inventory = player.getInventory();
-        String problem = "match_ui.craftbound.no_deck";
-        for (int i = 0; i < inventory.getContainerSize(); i++) {
-            ItemStack stack = inventory.getItem(i);
-            if (!stack.is(ModItems.DECK_CASE)) {
-                continue;
-            }
-            DeckBuilding.migrate(player, stack);
-            DeckContents deck = stack.getOrDefault(ModComponents.DECK_CONTENTS, DeckContents.EMPTY);
-            if (deck.deckClass() == CardClass.NEUTRAL || deck.size() < PRACTICE_MIN_DECK) {
-                problem = "match_ui.craftbound.deck_too_small";
-                continue;
-            }
-            List<CardRef> cards = new ArrayList<>();
-            boolean missing = false;
-            for (Identifier id : Cards.collectible()) {
-                for (boolean enchanted : new boolean[]{false, true}) {
-                    if (DeckBuilding.missing(inventory, deck, id, enchanted) > 0) {
-                        missing = true;
-                    }
-                    for (int n = 0; n < deck.cards().count(id, enchanted); n++) {
-                        cards.add(new CardRef(id, enchanted));
-                    }
-                }
-            }
-            if (missing) {
-                problem = "match_ui.craftbound.deck_missing";
-                continue;
-            }
-            deckClass = deck.deckClass().name();
-            return cards;
+    // A match between two players at the same table.
+    public static void startVersus(ServerPlayer first, DeckChoice firstDeck, ServerPlayer second, DeckChoice secondDeck) {
+        if (inMatch(first) || inMatch(second)) {
+            return;
         }
-        player.sendOverlayMessage(Component.translatable(problem, PRACTICE_MIN_DECK));
-        return null;
+        MatchPlayer a = new MatchPlayer(first.getName().getString(), first.getUUID(), firstDeck.deckClass(), firstDeck.sleeve(), firstDeck.cards());
+        MatchPlayer b = new MatchPlayer(second.getName().getString(), second.getUUID(), secondDeck.deckClass(), secondDeck.sleeve(), secondDeck.cards());
+        Match match = new Match(a, b, first.getRandom());
+        MATCHES.put(first.getUUID(), match);
+        MATCHES.put(second.getUUID(), match);
+        send(first, match);
+        send(second, match);
     }
 
-    // The Card Master plays every card in the game: 2 of each, 1 of each Legendary.
-    private static List<CardRef> cardMasterDeck() {
+    private static CardClass randomClass(ServerPlayer player) {
+        CardClass[] classes = {CardClass.FIGHTER, CardClass.BUILDER, CardClass.FARMER};
+        return classes[player.getRandom().nextInt(classes.length)];
+    }
+
+    // The Card Master plays every Neutral card and every card of its class: 2 of each, 1 of each Legendary.
+    private static List<CardRef> cardMasterDeck(CardClass cardClass) {
         List<CardRef> deck = new ArrayList<>();
         for (Identifier id : Cards.collectible()) {
             CardDefinition card = Cards.get(id);
+            if (!DeckRules.allowed(id, cardClass)) {
+                continue;
+            }
             int copies = card.rarity() == CardRarity.LEGENDARY ? 1 : DeckRules.maxCopies(card.rarity());
             for (int n = 0; n < copies; n++) {
                 deck.add(new CardRef(id, false));
@@ -151,15 +178,22 @@ public class MatchManager {
         switch (payload.action()) {
             case MatchActionPayload.PLAY -> match.playCard(side, payload.index(), target);
             case MatchActionPayload.ATTACK -> match.attack(side, payload.index(), target);
+            case MatchActionPayload.POWER -> match.usePower(side);
             case MatchActionPayload.END_TURN -> {
                 match.endTurn(side);
-                AI_COOLDOWN.put(match, AI_DELAY);
+                AI_COOLDOWN.put(match, AI_TURN_START_DELAY);
+            }
+            case MatchActionPayload.MULLIGAN -> {
+                match.mulligan(side, payload.index());
+                if (match.phase == Match.Phase.PLAYING) {
+                    AI_COOLDOWN.put(match, AI_FIRST_MOVE_DELAY);
+                }
             }
             case MatchActionPayload.CONCEDE -> match.concede(side);
             default -> {
             }
         }
-        send(player, match);
+        sendAll(player.level().getServer(), match);
         if (match.over) {
             finish(match);
         }
@@ -167,11 +201,8 @@ public class MatchManager {
 
     // The Card Master takes one move every AI_DELAY ticks during its turn.
     private static void tick(MinecraftServer server) {
-        Iterator<Map.Entry<UUID, Match>> entries = MATCHES.entrySet().iterator();
-        while (entries.hasNext()) {
-            Map.Entry<UUID, Match> entry = entries.next();
-            Match match = entry.getValue();
-            if (match.over || !match.player(match.current).isAi()) {
+        for (Match match : new HashSet<>(MATCHES.values())) {
+            if (match.over || match.phase != Match.Phase.PLAYING || !match.player(match.current).isAi()) {
                 continue;
             }
             int cooldown = AI_COOLDOWN.getOrDefault(match, 0) - 1;
@@ -179,15 +210,11 @@ public class MatchManager {
             if (cooldown > 0) {
                 continue;
             }
-            MatchAI.step(match, match.current);
-            AI_COOLDOWN.put(match, AI_DELAY);
-            ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
-            if (player != null) {
-                send(player, match);
-            }
+            boolean keepsGoing = MatchAI.step(match, match.current);
+            AI_COOLDOWN.put(match, keepsGoing ? AI_DELAY : AI_TURN_START_DELAY);
+            sendAll(server, match);
             if (match.over) {
-                AI_COOLDOWN.remove(match);
-                entries.remove();
+                finish(match);
             }
         }
     }
@@ -195,10 +222,30 @@ public class MatchManager {
     private static void finish(Match match) {
         AI_COOLDOWN.remove(match);
         MATCHES.values().removeIf(m -> m == match);
+        CardMasterEntity cardMaster = CARD_MASTERS.remove(match);
+        if (cardMaster != null && !cardMaster.isRemoved()) {
+            boolean masterWon = match.winner >= 0 && match.player(match.winner).isAi();
+            cardMaster.leave(masterWon);
+        }
+    }
+
+    private static void sendAll(MinecraftServer server, Match match) {
+        for (MatchPlayer player : match.players) {
+            if (player.playerId == null) {
+                continue;
+            }
+            ServerPlayer online = server.getPlayerList().getPlayer(player.playerId);
+            if (online != null) {
+                send(online, match);
+            }
+        }
     }
 
     private static void send(ServerPlayer player, Match match) {
         int side = match.sideOf(player.getUUID());
-        ServerPlayNetworking.send(player, new MatchStatePayload(MatchView.build(match, side)));
+        MatchPlayer viewer = match.player(side);
+        String json = MatchView.build(match, side, viewer.eventsSent);
+        viewer.eventsSent = match.events.size();
+        ServerPlayNetworking.send(player, new MatchStatePayload(json));
     }
 }

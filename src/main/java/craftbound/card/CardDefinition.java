@@ -36,8 +36,17 @@ public record CardDefinition(CardKind kind, CardClass cardClass, CardRarity rari
         return new Builder(CardKind.ITEM, rarity, cost, 0, 0);
     }
 
+    // A tool for your hero: it hits for `attack` and lasts `uses` attacks (stored as health).
+    public static Builder tool(CardRarity rarity, int cost, int attack, int uses) {
+        return new Builder(CardKind.TOOL, rarity, cost, attack, uses);
+    }
+
     public boolean isMob() {
         return kind == CardKind.MOB;
+    }
+
+    public boolean isTool() {
+        return kind == CardKind.TOOL;
     }
 
     // The lines under the card's name in the inventory.
@@ -45,6 +54,8 @@ public record CardDefinition(CardKind kind, CardClass cardClass, CardRarity rari
         tooltip.accept(Component.translatable("card_ui.craftbound.cost_short", cost).withStyle(ChatFormatting.GREEN));
         if (isMob()) {
             tooltip.accept(Component.translatable("card_ui.craftbound.stats_short", attack, health).withStyle(ChatFormatting.GRAY));
+        } else if (isTool()) {
+            tooltip.accept(Component.translatable("card_ui.craftbound.tool_stats_short", attack, health).withStyle(ChatFormatting.GRAY));
         }
         if (mobType != null) {
             tooltip.accept(mobType.displayName().copy().withStyle(ChatFormatting.GRAY));

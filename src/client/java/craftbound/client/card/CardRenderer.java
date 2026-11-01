@@ -1,5 +1,6 @@
 package craftbound.client.card;
 
+import craftbound.card.CardClass;
 import craftbound.card.CardDefinition;
 import craftbound.card.CardText;
 import craftbound.card.Cards;
@@ -37,6 +38,7 @@ public class CardRenderer {
     private static final int EMERALD = 0xFF17A84F;
     private static final int ATTACK = 0xFFE0A21B;
     private static final int HEALTH = 0xFFC8322B;
+    private static final int USES = 0xFF7E858C;
     private static final int WHITE = 0xFFFFFFFF;
 
     // An area of the card that shows a tooltip when the mouse is over it. Coordinates are on screen.
@@ -62,12 +64,13 @@ public class CardRenderer {
         g.pose().translate(x, y);
         g.pose().scale(scale, scale);
 
-        // Frame, lit from the top-left like Minecraft items.
-        g.fill(0, 0, WIDTH, HEIGHT, FRAME);
-        g.fill(0, 0, WIDTH, 2, FRAME_LIGHT);
-        g.fill(0, 0, 2, HEIGHT, FRAME_LIGHT);
-        g.fill(0, HEIGHT - 2, WIDTH, HEIGHT, FRAME_DARK);
-        g.fill(WIDTH - 2, 0, WIDTH, HEIGHT, FRAME_DARK);
+        // Frame, lit from the top-left like Minecraft items. Class cards are tinted with their class's colour.
+        int[] frame = frameColors(card.cardClass());
+        g.fill(0, 0, WIDTH, HEIGHT, frame[0]);
+        g.fill(0, 0, WIDTH, 2, frame[1]);
+        g.fill(0, 0, 2, HEIGHT, frame[1]);
+        g.fill(0, HEIGHT - 2, WIDTH, HEIGHT, frame[2]);
+        g.fill(WIDTH - 2, 0, WIDTH, HEIGHT, frame[2]);
 
         // Art window: sky over grass for mobs, plain blue for items. The item or spawn egg stands in for real art.
         int artTop = 8;
@@ -171,6 +174,16 @@ public class CardRenderer {
             regions.add(region(x, y, scale, WIDTH - 22, HEIGHT - 20, 18, 18, List.of(
                     Component.translatable("card_ui.craftbound.health", card.health()).withStyle(ChatFormatting.RED),
                     Component.translatable("card_ui.craftbound.health.desc").withStyle(ChatFormatting.GRAY))));
+        } else if (card.isTool()) {
+            // Tools: how hard the hero hits (bottom-left) and how many attacks it lasts (bottom-right, grey).
+            drawStat(g, font, 4, HEIGHT - 20, card.attack(), ATTACK);
+            regions.add(region(x, y, scale, 4, HEIGHT - 20, 18, 18, List.of(
+                    Component.translatable("card_ui.craftbound.attack", card.attack()).withStyle(ChatFormatting.GOLD),
+                    Component.translatable("card_ui.craftbound.tool_attack.desc").withStyle(ChatFormatting.GRAY))));
+            drawStat(g, font, WIDTH - 22, HEIGHT - 20, card.health(), USES);
+            regions.add(region(x, y, scale, WIDTH - 22, HEIGHT - 20, 18, 18, List.of(
+                    Component.translatable("card_ui.craftbound.uses", card.health()).withStyle(ChatFormatting.GRAY),
+                    Component.translatable("card_ui.craftbound.uses.desc").withStyle(ChatFormatting.GRAY))));
         }
 
         // Mob type plate along the bottom edge, between attack and health.
@@ -260,6 +273,17 @@ public class CardRenderer {
         g.pose().scale(3.0F, 3.0F);
         g.item(art, -8, -8);
         g.pose().popMatrix();
+    }
+
+    // Frame colours (base, light edge, dark edge): Neutral cards keep the brown frame; class cards use the
+    // prototype's class colours (Fighter red, Builder blue, Farmer green).
+    private static int[] frameColors(CardClass cardClass) {
+        return switch (cardClass) {
+            case FIGHTER -> new int[]{0xFF9A3A2E, 0xFFC25A4C, 0xFF4A1410};
+            case BUILDER -> new int[]{0xFF3F5E9E, 0xFF6286C6, 0xFF162A52};
+            case FARMER -> new int[]{0xFF4E7E2C, 0xFF72A64A, 0xFF1E3A0E};
+            case NEUTRAL -> new int[]{FRAME, FRAME_LIGHT, FRAME_DARK};
+        };
     }
 
     // The Minecraft item that stands in for a card's art: the card's chosen art item if it has one,

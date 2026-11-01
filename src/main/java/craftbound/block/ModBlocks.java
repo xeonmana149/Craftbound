@@ -8,8 +8,6 @@ import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
-import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.MobCategory;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
@@ -26,16 +24,6 @@ public class ModBlocks {
     public static final BlockEntityType<CardDisplayBlockEntity> CARD_DISPLAY_ENTITY = Registry.register(
             BuiltInRegistries.BLOCK_ENTITY_TYPE, Craftbound.id("card_display"),
             FabricBlockEntityTypeBuilder.create(CardDisplayBlockEntity::new, CARD_DISPLAY).build());
-
-    private static final ResourceKey<EntityType<?>> SEAT_KEY = ResourceKey.create(Registries.ENTITY_TYPE, Craftbound.id("seat"));
-    // Seats must be allowed to save with the world: in 26.3 the server won't let anyone ride an entity that can't.
-    // Empty seats remove themselves on their next tick, so none are left lying around.
-    public static final EntityType<SeatEntity> SEAT = Registry.register(BuiltInRegistries.ENTITY_TYPE, SEAT_KEY,
-            EntityType.Builder.<SeatEntity>of(SeatEntity::new, MobCategory.MISC)
-                    .sized(0.1F, 0.1F)
-                    .noSummon()
-                    .clientTrackingRange(10)
-                    .build(SEAT_KEY));
 
     // Registers a block and the item you hold to place it.
     private static Block register(String name, Function<BlockBehaviour.Properties, Block> factory, BlockBehaviour.Properties properties) {

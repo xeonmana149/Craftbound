@@ -41,6 +41,30 @@ public class DeckBuilding {
         return Math.max(0, deck.cards().count(id, enchanted) - owned(inventory, id, enchanted));
     }
 
+    // Why this Deck Case can't be played at a card table, as a translation key, or null if it can. The table's
+    // lobby uses it to grey out decks; the server checks again when you press Ready.
+    public static String whyCantPlay(Inventory inventory, ItemStack deckCase) {
+        if (!deckCase.is(ModItems.DECK_CASE)) {
+            return "match_ui.craftbound.no_deck";
+        }
+        DeckContents deck = deckCase.getOrDefault(ModComponents.DECK_CONTENTS, DeckContents.EMPTY);
+        if (deck.deckClass() == CardClass.NEUTRAL || deck.size() < craftbound.game.MatchManager.PRACTICE_MIN_DECK) {
+            return "match_ui.craftbound.deck_too_small";
+        }
+        // Old Deck Cases hold their own cards; they turn into lists when played.
+        if (!deck.list()) {
+            return null;
+        }
+        for (Identifier id : Cards.collectible()) {
+            for (boolean enchanted : new boolean[]{false, true}) {
+                if (missing(inventory, deck, id, enchanted) > 0) {
+                    return "match_ui.craftbound.deck_missing";
+                }
+            }
+        }
+        return null;
+    }
+
     // Deck Cases from before decks became lists hold real cards taken out of a binder. The first time one is
     // used, those cards go back into a binder you're carrying (or into your inventory) and the deck stays as a list.
     public static void migrate(ServerPlayer player, ItemStack deckCase) {

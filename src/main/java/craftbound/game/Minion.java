@@ -11,7 +11,8 @@ public class Minion {
     public final CardRef card;
     public int attack;
     public int health;
-    public final int maxHealth;
+    // Goes up when the mob gets +health (e.g. Bone Meal).
+    public int maxHealth;
     // Can it attack this turn? Mobs can't attack the turn they arrive, unless they have Sprint.
     public boolean ready;
     // Frozen by a Shulker: it skips its owner's next turn of attacking.

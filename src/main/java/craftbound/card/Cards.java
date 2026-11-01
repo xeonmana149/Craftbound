@@ -58,6 +58,53 @@ public class Cards {
     public static final Identifier ENDER_DRAGON = register("ender_dragon", CardDefinition.mob(CardRarity.LEGENDARY, 10, 8, 8)
             .type(MobType.ENDER).keywords(Keyword.SPRINT, Keyword.DROP).creates(Keyword.DROP, DRAGON_EGG));
 
+    // --- Class cards (from the Mobdeck prototype) -------------------------------------------------------
+    // Tokens made by the class powers and cards. They aren't collectible, so they don't change binder numbers.
+    public static final Identifier CRAFTED_SWORD = register("crafted_sword", CardDefinition.tool(CardRarity.COMMON, 0, 1, 1)
+            .cardClass(CardClass.FIGHTER).token().art("wooden_sword"));
+    public static final Identifier COBBLESTONE_WALL = register("cobblestone_wall", CardDefinition.mob(CardRarity.COMMON, 0, 0, 2)
+            .cardClass(CardClass.BUILDER).token().keywords(Keyword.BLOCK, Keyword.SHIELD).art("cobblestone_wall"));
+    public static final Identifier WHEAT = register("wheat", CardDefinition.mob(CardRarity.COMMON, 0, 0, 2)
+            .cardClass(CardClass.FARMER).token().type(MobType.CROP).keywords(Keyword.BLOCK).art("wheat"));
+
+    // Fighter: swords and hard hitters.
+    public static final Identifier IRON_SWORD = register("iron_sword", CardDefinition.tool(CardRarity.RARE, 3, 3, 2)
+            .cardClass(CardClass.FIGHTER));
+    public static final Identifier DIAMOND_SWORD = register("diamond_sword", CardDefinition.tool(CardRarity.EPIC, 5, 5, 2)
+            .cardClass(CardClass.FIGHTER));
+    public static final Identifier POTION_OF_STRENGTH = register("potion_of_strength", CardDefinition.item(CardRarity.COMMON, 1)
+            .cardClass(CardClass.FIGHTER).art("potion"));
+    public static final Identifier VINDICATOR = register("vindicator", CardDefinition.mob(CardRarity.COMMON, 4, 4, 3)
+            .cardClass(CardClass.FIGHTER).type(MobType.ILLAGER).keywords(Keyword.SPRINT));
+    public static final Identifier SWEEPING_EDGE = register("sweeping_edge", CardDefinition.item(CardRarity.RARE, 3)
+            .cardClass(CardClass.FIGHTER).art("enchanted_book"));
+
+    // Builder: blocks that work for you, and a bow.
+    public static final Identifier FURNACE = register("furnace", CardDefinition.mob(CardRarity.COMMON, 2, 0, 3)
+            .cardClass(CardClass.BUILDER).keywords(Keyword.BLOCK).art("furnace"));
+    public static final Identifier DISPENSER = register("dispenser", CardDefinition.mob(CardRarity.RARE, 3, 0, 3)
+            .cardClass(CardClass.BUILDER).keywords(Keyword.BLOCK).art("dispenser"));
+    public static final Identifier BEACON = register("beacon", CardDefinition.mob(CardRarity.EPIC, 5, 0, 5)
+            .cardClass(CardClass.BUILDER).keywords(Keyword.BLOCK).art("beacon"));
+    public static final Identifier PISTON = register("piston", CardDefinition.item(CardRarity.RARE, 2)
+            .cardClass(CardClass.BUILDER));
+    public static final Identifier BOW = register("bow", CardDefinition.tool(CardRarity.COMMON, 2, 2, 2)
+            .cardClass(CardClass.BUILDER).keywords(Keyword.RANGED));
+
+    // Farmer: crops to protect and harvest, and the animals that help them grow.
+    public static final Identifier BEE = register("bee", CardDefinition.mob(CardRarity.COMMON, 2, 1, 1)
+            .cardClass(CardClass.FARMER).type(MobType.ARTHROPOD).keywords(Keyword.SPRINT, Keyword.SPAWN).creates(Keyword.SPAWN, WHEAT));
+    public static final Identifier BONE_MEAL = register("bone_meal", CardDefinition.item(CardRarity.COMMON, 1)
+            .cardClass(CardClass.FARMER));
+    public static final Identifier SWEET_BERRY_BUSH = register("sweet_berry_bush", CardDefinition.mob(CardRarity.COMMON, 2, 0, 3)
+            .cardClass(CardClass.FARMER).type(MobType.CROP).keywords(Keyword.BLOCK, Keyword.SHIELD).art("sweet_berries"));
+    public static final Identifier BOUNTIFUL_HARVEST = register("bountiful_harvest", CardDefinition.item(CardRarity.RARE, 3)
+            .cardClass(CardClass.FARMER).art("hay_block"));
+    public static final Identifier COMPOSTER = register("composter", CardDefinition.mob(CardRarity.RARE, 2, 0, 3)
+            .cardClass(CardClass.FARMER).keywords(Keyword.BLOCK).art("composter"));
+    public static final Identifier SNIFFER = register("sniffer", CardDefinition.mob(CardRarity.EPIC, 6, 5, 6)
+            .cardClass(CardClass.FARMER).type(MobType.ANIMAL).keywords(Keyword.SPAWN).creates(Keyword.SPAWN, WHEAT));
+
     private static Identifier register(String name, CardDefinition.Builder card) {
         Identifier id = Craftbound.id(name);
         CARDS.put(id, card.build());

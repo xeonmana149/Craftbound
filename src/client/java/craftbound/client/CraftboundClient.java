@@ -9,7 +9,10 @@ import craftbound.client.card.PackOpeningScreen;
 import craftbound.client.card.SleevePreviewScreen;
 import craftbound.client.deck.DeckCaseScreen;
 import craftbound.client.match.MatchScreen;
+import craftbound.client.match.TableScreen;
 import craftbound.network.MatchStatePayload;
+import craftbound.network.TableLobbyPayload;
+import craftbound.entity.ModEntities;
 import craftbound.component.ModComponents;
 import craftbound.item.ModItems;
 import craftbound.network.PackOpenedPayload;
@@ -20,15 +23,15 @@ import net.fabricmc.fabric.api.client.rendering.v1.EntityRendererRegistry;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.renderer.entity.NoopRenderer;
+import net.minecraft.client.renderer.entity.WanderingTraderRenderer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 
 public class CraftboundClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
-		// The seat at a card table is invisible; the display stand draws its card.
-		EntityRendererRegistry.register(ModBlocks.SEAT, NoopRenderer::new);
+		// The Card Master looks like a wandering trader; the display stand draws its card.
+		EntityRendererRegistry.register(ModEntities.CARD_MASTER, WanderingTraderRenderer::new);
 		BlockEntityRendererRegistry.register(ModBlocks.CARD_DISPLAY_ENTITY, CardDisplayRenderer::new);
 		CardDisplayBlock.openInspect = card -> Minecraft.getInstance().gui.setScreen(new CardInspectScreen(card));
 
@@ -38,6 +41,20 @@ public class CraftboundClient implements ClientModInitializer {
 				screen.update(payload.json());
 			} else {
 				context.client().gui.setScreen(new MatchScreen(payload.json()));
+			}
+		});
+
+		// The card table's lobby: open it, update it, or close it once you're waiting for an opponent.
+		ClientPlayNetworking.registerGlobalReceiver(TableLobbyPayload.TYPE, (payload, context) -> {
+			Screen current = context.client().gui.screen();
+			if (payload.close()) {
+				if (current instanceof TableScreen) {
+					context.client().gui.setScreen(null);
+				}
+			} else if (current instanceof TableScreen screen && screen.table().equals(payload.table())) {
+				screen.update(payload.waiting(), payload.error());
+			} else {
+				context.client().gui.setScreen(new TableScreen(payload.table(), payload.waiting(), payload.error()));
 			}
 		});
 

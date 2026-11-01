@@ -2,6 +2,7 @@ package craftbound;
 
 import craftbound.block.ModBlocks;
 import craftbound.component.ModComponents;
+import craftbound.entity.ModEntities;
 import craftbound.game.MatchManager;
 import craftbound.item.ModCreativeTabs;
 import craftbound.item.ModItems;
@@ -33,6 +34,7 @@ public class Craftbound implements ModInitializer {
 		ModComponents.initialize();
 		ModItems.initialize();
 		ModBlocks.initialize();
+		ModEntities.initialize();
 		ModCreativeTabs.initialize();
 		ModNetworking.initialize();
 		ModLoot.initialize();

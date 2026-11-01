@@ -36,8 +36,16 @@ public class CardInspectScreen extends Screen {
     private final List<int[]> visibleCardRects = new ArrayList<>();
     private Keyword hoveredCreatedFrom;
 
+    // The screen to go back to on close, e.g. the binder. Null means back to the game.
+    private final Screen parent;
+
     public CardInspectScreen(ItemStack card) {
+        this(card, null);
+    }
+
+    public CardInspectScreen(ItemStack card, Screen parent) {
         super(card.getHoverName());
+        this.parent = parent;
         // A copy, so the screen keeps showing the card even if the stack in your hand changes.
         this.card = card.copy();
         Identifier id = card.get(ModComponents.CARD_ID);
@@ -193,6 +201,11 @@ public class CardInspectScreen extends Screen {
 
     private static boolean inside(double mouseX, double mouseY, int x, int y, int width, int height) {
         return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
+    }
+
+    @Override
+    public void onClose() {
+        this.minecraft.gui.setScreen(this.parent);
     }
 
     // Looking at a card shouldn't pause the game.

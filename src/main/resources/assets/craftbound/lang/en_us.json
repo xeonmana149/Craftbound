@@ -68,5 +68,23 @@
   "card_ui.craftbound.token": "Token",
   "card_ui.craftbound.token.desc": "Made by other cards. Never found in packs.",
   "card_ui.craftbound.creates": "Creates",
-  "card_ui.craftbound.pin_hint": "Click to pin or unpin the card it creates."
+  "card_ui.craftbound.pin_hint": "Click to pin or unpin the card it creates.",
+
+  "item.craftbound.binder": "Card Binder",
+  "binder_ui.craftbound.collected": "Collected %s/%s",
+  "binder_ui.craftbound.holds": "Holds %s cards",
+  "binder_ui.craftbound.how_to": "Click cards onto it in your inventory to file them.",
+  "binder_ui.craftbound.missing": "Not collected yet",
+  "binder_ui.craftbound.owned": "Owned: %s",
+  "binder_ui.craftbound.owned_enchanted": "Enchanted: %s",
+  "binder_ui.craftbound.hint_take": "Left-click: take one (Shift: take all)",
+  "binder_ui.craftbound.hint_inspect": "Right-click: inspect",
+  "binder_ui.craftbound.file_all": "File all cards",
+
+  "item.craftbound.sleeve": "Sleeve",
+  "sleeve.craftbound.classic": "Classic Sleeve",
+  "sleeve.craftbound.emerald": "Emerald Sleeve",
+  "sleeve.craftbound.redstone": "Redstone Sleeve",
+  "sleeve.craftbound.ender": "Ender Sleeve",
+  "sleeve_ui.craftbound.desc": "A card back design for your Deck Case."
 }

@@ -1,26 +1,40 @@
 package craftbound.client;
 
+import craftbound.client.binder.BinderScreen;
 import craftbound.client.card.CardInspectScreen;
+import craftbound.client.card.SleevePreviewScreen;
 import craftbound.component.ModComponents;
 import craftbound.item.ModItems;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.ItemStack;
 
 public class CraftboundClient implements ClientModInitializer {
 	@Override
 	public void onInitializeClient() {
-		// Right-clicking a card opens the inspect screen. Screens only exist on the client,
-		// so this lives here rather than in CardItem.
+		// Right-clicking a card, binder or sleeve opens its screen. Screens only exist on the client,
+		// so this lives here rather than in the item classes.
 		UseItemCallback.EVENT.register((player, level, hand) -> {
-			ItemStack stack = player.getItemInHand(hand);
-			if (level.isClientSide() && stack.is(ModItems.CARD) && stack.has(ModComponents.CARD_ID)) {
-				Minecraft.getInstance().gui.setScreen(new CardInspectScreen(stack));
-				return InteractionResult.SUCCESS;
+			if (!level.isClientSide()) {
+				return InteractionResult.PASS;
 			}
-			return InteractionResult.PASS;
+			ItemStack stack = player.getItemInHand(hand);
+			Screen screen = null;
+			if (stack.is(ModItems.CARD) && stack.has(ModComponents.CARD_ID)) {
+				screen = new CardInspectScreen(stack);
+			} else if (stack.is(ModItems.BINDER)) {
+				screen = new BinderScreen(hand);
+			} else if (stack.is(ModItems.SLEEVE)) {
+				screen = new SleevePreviewScreen(stack);
+			}
+			if (screen == null) {
+				return InteractionResult.PASS;
+			}
+			Minecraft.getInstance().gui.setScreen(screen);
+			return InteractionResult.SUCCESS;
 		});
 	}
 }

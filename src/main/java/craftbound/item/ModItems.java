@@ -1,6 +1,8 @@
 package craftbound.item;
 
 import craftbound.Craftbound;
+import craftbound.binder.BinderContents;
+import craftbound.component.ModComponents;
 import java.util.function.Function;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -11,6 +13,10 @@ import net.minecraft.world.item.Item;
 public class ModItems {
     public static final Item CARD = register("card", CardItem::new, new Item.Properties());
     public static final Item BOOSTER_PACK = register("booster_pack", BoosterPackItem::new, new Item.Properties());
+    public static final Item BINDER = register("binder", BinderItem::new, new Item.Properties()
+            .stacksTo(1)
+            .component(ModComponents.BINDER_CONTENTS, BinderContents.EMPTY));
+    public static final Item SLEEVE = register("sleeve", SleeveItem::new, new Item.Properties().stacksTo(1));
 
     public static Item register(String name, Function<Item.Properties, Item> factory, Item.Properties properties) {
         ResourceKey<Item> key = ResourceKey.create(Registries.ITEM, Craftbound.id(name));

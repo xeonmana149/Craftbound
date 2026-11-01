@@ -4,6 +4,7 @@ import craftbound.card.CardDefinition;
 import craftbound.card.Cards;
 import craftbound.card.Keyword;
 import craftbound.component.ModComponents;
+import craftbound.sleeve.Sleeves;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.ChatFormatting;
@@ -204,8 +205,7 @@ public class CardRenderer {
 
     // Shows the matching Minecraft item (or the mob's spawn egg) three times bigger until real card art exists.
     private static void drawArt(GuiGraphicsExtractor g, Identifier id, CardDefinition card, int centerX, int centerY) {
-        String itemName = card.isMob() ? id.getPath() + "_spawn_egg" : id.getPath();
-        ItemStack art = new ItemStack(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(itemName)));
+        ItemStack art = placeholderArt(id, card);
         if (art.is(Items.AIR)) {
             return;
         }
@@ -216,11 +216,46 @@ public class CardRenderer {
         g.pose().popMatrix();
     }
 
+    // The Minecraft item that stands in for a card's art: the mob's spawn egg, or the item of the same name.
+    public static ItemStack placeholderArt(Identifier id, CardDefinition card) {
+        String itemName = card.isMob() ? id.getPath() + "_spawn_egg" : id.getPath();
+        return new ItemStack(BuiltInRegistries.ITEM.getValue(Identifier.withDefaultNamespace(itemName)));
+    }
+
     private static void drawStat(GuiGraphicsExtractor g, Font font, int x, int y, int value, int color) {
         g.fill(x, y, x + 18, y + 18, FRAME_DARK);
         g.fill(x + 1, y + 1, x + 17, y + 17, color);
         g.fill(x + 1, y + 1, x + 17, y + 3, 0x40FFFFFF);
         g.centeredText(font, String.valueOf(value), x + 9, y + 5, WHITE);
+    }
+
+    // Draws the back of a card in a sleeve's colours: a framed panel with a diamond emblem in the middle.
+    public static void drawBack(GuiGraphicsExtractor g, Sleeves.Design design, int x, int y, int scale) {
+        g.pose().pushMatrix();
+        g.pose().translate(x, y);
+        g.pose().scale(scale, scale);
+
+        g.fillGradient(0, 0, WIDTH, HEIGHT, design.base(), design.baseDark());
+        g.fill(0, 0, WIDTH, 4, design.border());
+        g.fill(0, HEIGHT - 4, WIDTH, HEIGHT, design.border());
+        g.fill(0, 0, 4, HEIGHT, design.border());
+        g.fill(WIDTH - 4, 0, WIDTH, HEIGHT, design.border());
+        g.outline(5, 5, WIDTH - 10, HEIGHT - 10, 0xFF000000);
+        g.outline(10, 10, WIDTH - 20, HEIGHT - 20, design.border());
+
+        drawDiamond(g, WIDTH / 2, HEIGHT / 2, 26, design.emblemDark());
+        drawDiamond(g, WIDTH / 2, HEIGHT / 2, 22, design.emblem());
+        drawDiamond(g, WIDTH / 2 - 6, HEIGHT / 2 - 6, 5, 0x60FFFFFF);
+
+        g.pose().popMatrix();
+    }
+
+    // A diamond made of one-pixel rows, `radius` pixels from the centre to each point.
+    private static void drawDiamond(GuiGraphicsExtractor g, int centerX, int centerY, int radius, int color) {
+        for (int row = -radius; row <= radius; row++) {
+            int halfWidth = radius - Math.abs(row);
+            g.fill(centerX - halfWidth, centerY + row, centerX + halfWidth + 1, centerY + row + 1, color);
+        }
     }
 
     // A purple band that sweeps across the card every two seconds.

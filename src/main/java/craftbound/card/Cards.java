@@ -40,6 +40,17 @@ public class Cards {
         return CARDS.keySet();
     }
 
+    // Every card you can collect, in order. These are the binder's numbered pockets.
+    public static List<Identifier> collectible() {
+        List<Identifier> result = new ArrayList<>();
+        for (Map.Entry<Identifier, CardDefinition> entry : CARDS.entrySet()) {
+            if (!entry.getValue().token()) {
+                result.add(entry.getKey());
+            }
+        }
+        return result;
+    }
+
     // Collectible cards of one rarity. Tokens are left out, so packs never give them.
     public static List<Identifier> ofRarity(CardRarity rarity) {
         List<Identifier> result = new ArrayList<>();

@@ -8,6 +8,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import craftbound.card.CardClass;
 import craftbound.card.CardDefinition;
 import craftbound.card.Cards;
+import craftbound.card.Keyword;
 import craftbound.client.Tooltips;
 import craftbound.client.card.CardRenderer;
 import craftbound.item.CardItem;
@@ -114,6 +115,10 @@ public class MatchScreen extends Screen {
     private Spot attacker;
     // A mob that picks a target (the Enderman) waits here for you to click one.
     private HandCard awaitingTarget;
+    // Where that waiting mob is drawn, for its aiming arrow.
+    private Spot pendingSpot;
+    // The hand card under the mouse, for the big preview (-1 for none).
+    private int hoveredHand = -1;
 
     public MatchScreen(String json) {
         super(Component.translatable("match_ui.craftbound.title"));
@@ -318,13 +323,26 @@ public class MatchScreen extends Screen {
             return;
         }
         int gap = 10;
-        int count = player.board().size();
+        // A mob waiting for its Spawn target (the Enderman) stands at the end of your row until you pick one.
+        boolean pending = side == this.you && this.awaitingTarget != null;
+        int count = player.board().size() + (pending ? 1 : 0);
         int x = centerX - (count * width + (count - 1) * gap) / 2;
         for (MinionView minion : player.board()) {
             Spot spot = new Spot(x, y, width, height, side, minion.mid(), -1);
             this.minionSpots.add(spot);
             drawMinion(g, minion, spot, mouseX, mouseY);
             x += width + gap;
+        }
+        if (pending) {
+            CardDefinition card = Cards.get(this.awaitingTarget.id());
+            MinionView ghost = new MinionView(-2, this.awaitingTarget.id(), this.awaitingTarget.enchanted(),
+                    card.attack(), card.health(), card.health(), false, card.keywords().contains(Keyword.SHIELD),
+                    false, false, false, false);
+            this.pendingSpot = new Spot(x, y, width, height, side, -2, -1);
+            drawMinion(g, ghost, this.pendingSpot, mouseX, mouseY);
+            g.outline(x - 2, y - 2, width + 4, height + 4, GOLD_LIGHT);
+        } else if (side == this.you) {
+            this.pendingSpot = null;
         }
     }
 
@@ -596,9 +614,10 @@ public class MatchScreen extends Screen {
                 hoveredIndex = i;
             }
         }
+        this.hoveredHand = hoveredIndex;
         for (int i = 0; i < count; i++) {
             HandCard card = hand.get(i);
-            if (card == this.draggingCard || i == hoveredIndex) {
+            if (card == this.draggingCard || i == hoveredIndex || card == this.awaitingTarget) {
                 continue;
             }
             float offset = i - (count - 1) / 2.0F;
@@ -642,6 +661,10 @@ public class MatchScreen extends Screen {
         if (this.attacker != null) {
             drawArrow(g, this.attacker.centerX(), this.attacker.centerY(), mouseX, mouseY);
         }
+        // The Enderman, freshly placed, aims at what it will teleport.
+        if (this.awaitingTarget != null && this.pendingSpot != null) {
+            drawArrow(g, this.pendingSpot.centerX(), this.pendingSpot.centerY(), mouseX, mouseY);
+        }
     }
 
     // A dashed red aiming line with a square head, like the prototype's attack arrow.
@@ -658,9 +681,15 @@ public class MatchScreen extends Screen {
         g.fill(toX - 4, toY - 4, toX + 5, toY + 5, RED);
     }
 
-    // Hovering a mob shows the full card beside the board; hovering your hand shows it larger above the hand.
+    // Hovering a card in your hand or a mob on the board shows it big in the middle of the board, always in the
+    // same place: keyword rules on the left and any cards it creates on the right, like the inspect screen.
     private void drawPreview(GuiGraphicsExtractor g, int mouseX, int mouseY) {
-        if (this.draggingCard != null || this.attacker != null) {
+        if (this.draggingCard != null || this.attacker != null || this.awaitingTarget != null) {
+            return;
+        }
+        if (this.hoveredHand >= 0 && this.hoveredHand < me().hand().size()) {
+            HandCard card = me().hand().get(this.hoveredHand);
+            drawInspect(g, card.id(), card.enchanted());
             return;
         }
         for (Spot spot : this.minionSpots) {
@@ -671,12 +700,7 @@ public class MatchScreen extends Screen {
             if (minion == null) {
                 return;
             }
-            float scale = Math.min(1.0F, (this.boardBottom - this.boardTop - 10) / (float) CardRenderer.HEIGHT);
-            int width = Math.round(CardRenderer.WIDTH * scale);
-            int height = Math.round(CardRenderer.HEIGHT * scale);
-            int x = spot.x() + spot.width() + 14 + width < this.boardRight ? spot.x() + spot.width() + 14 : spot.x() - 14 - width;
-            int y = Math.max(this.boardTop, Math.min(spot.centerY() - height / 2, this.boardBottom - height));
-            CardRenderer.draw(g, this.font, CardItem.of(minion.id(), minion.enchanted()), x, y, scale);
+            drawInspect(g, minion.id(), minion.enchanted());
             List<Component> status = new ArrayList<>();
             if (minion.frozen()) status.add(Component.translatable("match_ui.craftbound.status.frozen").withStyle(ChatFormatting.AQUA));
             if (minion.withered()) status.add(Component.translatable("match_ui.craftbound.status.withered").withStyle(ChatFormatting.GRAY));
@@ -689,6 +713,51 @@ public class MatchScreen extends Screen {
                 Tooltips.show(g, this.font, status, mouseX, mouseY);
             }
             return;
+        }
+    }
+
+    private void drawInspect(GuiGraphicsExtractor g, Identifier id, boolean enchanted) {
+        CardDefinition card = Cards.get(id);
+        if (card == null) {
+            return;
+        }
+        float scale = Math.min(1.1F, (this.boardBottom - this.boardTop - 16) / (float) CardRenderer.HEIGHT);
+        int width = Math.round(CardRenderer.WIDTH * scale);
+        int height = Math.round(CardRenderer.HEIGHT * scale);
+        int centerX = (this.boardLeft + this.boardRight) / 2;
+        int x = centerX - width / 2;
+        int y = this.middle - height / 2;
+        CardRenderer.draw(g, this.font, CardItem.of(id, enchanted), x, y, scale);
+
+        // Keyword rules to the left, one box each.
+        int boxWidth = 120;
+        int boxX = x - 10 - boxWidth;
+        int boxY = y + 8;
+        for (var keyword : card.keywords()) {
+            List<FormattedCharSequence> lines = new ArrayList<>();
+            lines.addAll(this.font.split(keyword.displayName().copy().withStyle(ChatFormatting.GOLD), boxWidth - 10));
+            lines.addAll(this.font.split(keyword.description(), boxWidth - 10));
+            int boxHeight = lines.size() * this.font.lineHeight + 10;
+            g.fill(boxX - 1, boxY - 1, boxX + boxWidth + 1, boxY + boxHeight + 1, 0xFF000000);
+            g.fill(boxX, boxY, boxX + boxWidth, boxY + boxHeight, 0xF014110D);
+            g.outline(boxX, boxY, boxWidth, boxHeight, GOLD_DARK);
+            int textY = boxY + 5;
+            for (FormattedCharSequence line : lines) {
+                g.text(this.font, line, boxX + 5, textY, TEXT);
+                textY += this.font.lineHeight;
+            }
+            boxY += boxHeight + 6;
+        }
+
+        // Cards it creates to the right, smaller, each with a "Creates" label.
+        float relatedScale = scale * 0.6F;
+        int relatedHeight = Math.round(CardRenderer.HEIGHT * relatedScale);
+        int relatedX = x + width + 12;
+        int relatedY = y + 14;
+        for (var related : card.related()) {
+            g.text(this.font, Component.translatable("card_ui.craftbound.creates"), relatedX, relatedY - 10, GOLD_LIGHT);
+            CardRenderer.draw(g, this.font, CardItem.of(related.card()), relatedX, relatedY, relatedScale);
+            relatedY += relatedHeight + 16;
         }
     }
 
@@ -758,20 +827,19 @@ public class MatchScreen extends Screen {
         if (!this.myTurn) {
             return true;
         }
-        // Waiting for the Enderman's target: left-click picks it, right-click plays it without one.
+        // The Enderman is on the board waiting for a target: left-click an enemy mob to pick it. Clicking anything
+        // else, or right-clicking, cancels and the card goes back to your hand (nothing was played yet).
         if (this.awaitingTarget != null) {
-            if (event.button() == InputConstants.MOUSE_BUTTON_RIGHT) {
-                send(MatchActionPayload.PLAY, this.awaitingTarget.index(), null);
-                this.awaitingTarget = null;
-                return true;
-            }
-            for (Spot spot : this.minionSpots) {
-                if (spot.contains(mouseX, mouseY) && isValidTarget(spot)) {
-                    send(MatchActionPayload.PLAY, this.awaitingTarget.index(), spot);
-                    this.awaitingTarget = null;
-                    return true;
+            if (event.button() == InputConstants.MOUSE_BUTTON_LEFT) {
+                for (Spot spot : this.minionSpots) {
+                    if (spot.contains(mouseX, mouseY) && isValidTarget(spot)) {
+                        send(MatchActionPayload.PLAY, this.awaitingTarget.index(), spot);
+                        this.awaitingTarget = null;
+                        return true;
+                    }
                 }
             }
+            this.awaitingTarget = null;
             return true;
         }
         if (event.button() != InputConstants.MOUSE_BUTTON_LEFT) {

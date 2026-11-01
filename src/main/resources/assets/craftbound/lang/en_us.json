@@ -129,7 +129,7 @@
   "match_ui.craftbound.title": "Card Match",
   "match_ui.craftbound.your_turn": "YOUR TURN · %2$s",
   "match_ui.craftbound.their_turn": "%1$s'S TURN · %2$s",
-  "match_ui.craftbound.pick_target": "Pick a target (right-click to skip)",
+  "match_ui.craftbound.pick_target": "Pick a target · right-click to cancel",
   "match_ui.craftbound.xp": "XP %s/%s",
   "match_ui.craftbound.deck": "Deck %s",
   "match_ui.craftbound.log": "BATTLE LOG",

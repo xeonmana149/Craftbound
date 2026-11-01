@@ -1,6 +1,8 @@
 package craftbound.network;
 
 import craftbound.binder.BinderContents;
+import craftbound.card.CardClass;
+import craftbound.deck.DeckBuilding;
 import craftbound.component.ModComponents;
 import craftbound.item.BinderItem;
 import craftbound.item.CardItem;
@@ -22,6 +24,29 @@ public class ModNetworking {
         PayloadTypeRegistry.serverboundPlay().register(TakeFromBinderPayload.TYPE, TakeFromBinderPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(FileAllCardsPayload.TYPE, FileAllCardsPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(PackOpenedPayload.TYPE, PackOpenedPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(DeckEditPayload.TYPE, DeckEditPayload.CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(DeckClassPayload.TYPE, DeckClassPayload.CODEC);
+
+        ServerPlayNetworking.registerGlobalReceiver(DeckEditPayload.TYPE, (payload, context) -> {
+            ServerPlayer player = context.player();
+            ItemStack deckCase = player.getItemInHand(payload.mainHand() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND);
+            if (!deckCase.is(ModItems.DECK_CASE)) {
+                return;
+            }
+            if (payload.add()) {
+                DeckBuilding.add(player, deckCase, payload.card(), payload.enchanted());
+            } else {
+                DeckBuilding.remove(player, deckCase, payload.card(), payload.enchanted());
+            }
+        });
+
+        ServerPlayNetworking.registerGlobalReceiver(DeckClassPayload.TYPE, (payload, context) -> {
+            ItemStack deckCase = context.player().getItemInHand(payload.mainHand() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND);
+            if (!deckCase.is(ModItems.DECK_CASE) || payload.deckClass() < 0 || payload.deckClass() >= CardClass.values().length) {
+                return;
+            }
+            DeckBuilding.setClass(deckCase, CardClass.values()[payload.deckClass()]);
+        });
 
         ServerPlayNetworking.registerGlobalReceiver(TakeFromBinderPayload.TYPE, (payload, context) -> {
             ServerPlayer player = context.player();

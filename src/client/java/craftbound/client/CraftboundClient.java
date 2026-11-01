@@ -4,6 +4,7 @@ import craftbound.client.binder.BinderScreen;
 import craftbound.client.card.CardInspectScreen;
 import craftbound.client.card.PackOpeningScreen;
 import craftbound.client.card.SleevePreviewScreen;
+import craftbound.client.deck.DeckCaseScreen;
 import craftbound.component.ModComponents;
 import craftbound.item.ModItems;
 import craftbound.network.PackOpenedPayload;
@@ -34,6 +35,8 @@ public class CraftboundClient implements ClientModInitializer {
 				screen = new CardInspectScreen(stack);
 			} else if (stack.is(ModItems.BINDER)) {
 				screen = new BinderScreen(hand);
+			} else if (stack.is(ModItems.DECK_CASE)) {
+				screen = new DeckCaseScreen(hand);
 			} else if (stack.is(ModItems.SLEEVE)) {
 				screen = new SleevePreviewScreen(stack);
 			}

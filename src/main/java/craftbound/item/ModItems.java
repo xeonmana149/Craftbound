@@ -3,6 +3,7 @@ package craftbound.item;
 import craftbound.Craftbound;
 import craftbound.binder.BinderContents;
 import craftbound.component.ModComponents;
+import craftbound.deck.DeckContents;
 import java.util.function.Function;
 import net.minecraft.core.Registry;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -17,6 +18,9 @@ public class ModItems {
             .stacksTo(1)
             .component(ModComponents.BINDER_CONTENTS, BinderContents.EMPTY));
     public static final Item SLEEVE = register("sleeve", SleeveItem::new, new Item.Properties().stacksTo(1));
+    public static final Item DECK_CASE = register("deck_case", DeckCaseItem::new, new Item.Properties()
+            .stacksTo(1)
+            .component(ModComponents.DECK_CONTENTS, DeckContents.EMPTY));
 
     public static Item register(String name, Function<Item.Properties, Item> factory, Item.Properties properties) {
         ResourceKey<Item> key = ResourceKey.create(Registries.ITEM, Craftbound.id(name));

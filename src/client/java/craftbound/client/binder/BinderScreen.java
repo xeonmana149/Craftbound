@@ -1,7 +1,6 @@
 package craftbound.client.binder;
 
 import craftbound.binder.BinderContents;
-import craftbound.card.CardDefinition;
 import craftbound.card.Cards;
 import craftbound.client.card.CardInspectScreen;
 import craftbound.client.card.CardRenderer;
@@ -40,9 +39,6 @@ public class BinderScreen extends Screen {
     private static final int PAGE = 0xFFF2E3C2;
     private static final int POCKET = 0xFFE3D0A8;
     private static final int POCKET_EDGE = 0xFFB8A27A;
-    private static final int CARD_FRAME = 0xFF7A4434;
-    private static final int CARD_SKY = 0xFF5BC8E0;
-    private static final int ENCHANTED_EDGE = 0xFFB070FF;
 
     private final InteractionHand hand;
     private int spread = 0;
@@ -147,22 +143,10 @@ public class BinderScreen extends Screen {
         }
     }
 
-    // A miniature card: frame, sky, the card's placeholder art, a rarity gem and how many you own.
-    // If you own an Enchanted copy, that's the one on show: purple edge and a shimmer sweeping across it.
+    // If you own an Enchanted copy, that's the one on show.
     private void drawFilledPocket(GuiGraphicsExtractor g, int x, int y, Identifier id, BinderContents contents) {
-        CardDefinition card = Cards.get(id);
-        boolean hasEnchanted = contents.count(id, true) > 0;
-        g.fill(x + 3, y + 3, x + POCKET_WIDTH - 3, y + POCKET_HEIGHT - 3, CARD_FRAME);
-        g.fill(x + 6, y + 6, x + POCKET_WIDTH - 6, y + 30, card.isMob() ? CARD_SKY : 0xFF6A7FC0);
-        g.fill(x + 6, y + 33, x + 10, y + 37, 0xFF000000 | card.rarity().rgb());
-        g.item(CardRenderer.placeholderArt(id, card), x + POCKET_WIDTH / 2 - 8, y + 10);
-        if (hasEnchanted) {
-            CardRenderer.drawDiagonalShimmer(g, x + 3, y + 3, POCKET_WIDTH - 6, POCKET_HEIGHT - 6, 8, 0x60);
-            g.outline(x + 2, y + 2, POCKET_WIDTH - 4, POCKET_HEIGHT - 4, ENCHANTED_EDGE);
-        }
         int total = contents.count(id, false) + contents.count(id, true);
-        String count = "x" + total;
-        g.text(this.font, count, x + POCKET_WIDTH - 5 - this.font.width(count), y + POCKET_HEIGHT - 13, 0xFFFFFFFF);
+        CardRenderer.drawMini(g, this.font, id, x, y, total, contents.count(id, true) > 0);
     }
 
     private List<Component> pocketTooltip(Identifier id, BinderContents contents) {

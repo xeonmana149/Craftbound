@@ -24,6 +24,7 @@ public class ModCreativeTabs {
             .displayItems((params, output) -> {
                 output.accept(ModItems.BOOSTER_PACK);
                 output.accept(ModItems.BINDER);
+                output.accept(ModItems.DECK_CASE);
                 for (Identifier sleeve : Sleeves.ids()) {
                     output.accept(SleeveItem.of(sleeve));
                 }

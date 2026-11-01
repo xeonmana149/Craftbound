@@ -4,6 +4,9 @@ import craftbound.Craftbound;
 import craftbound.binder.BinderContents;
 import craftbound.card.CardDefinition;
 import craftbound.card.Cards;
+import craftbound.card.DeckRules;
+import craftbound.deck.DeckContents;
+import craftbound.sleeve.Sleeves;
 import net.fabricmc.fabric.api.item.v1.ItemComponentTooltipProviderRegistry;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.Registry;
@@ -54,6 +57,16 @@ public class ModComponents {
                     .build()
     );
 
+    // The deck inside a Deck Case: its class and its cards.
+    public static final DataComponentType<DeckContents> DECK_CONTENTS = Registry.register(
+            BuiltInRegistries.DATA_COMPONENT_TYPE,
+            Craftbound.id("deck_contents"),
+            DataComponentType.<DeckContents>builder()
+                    .persistent(DeckContents.CODEC)
+                    .networkSynchronized(DeckContents.STREAM_CODEC)
+                    .build()
+    );
+
     public static void initialize() {
         // Unknown IDs (e.g. a typo in /give) get an empty tooltip instead of crashing.
         ItemComponentTooltipProviderRegistry.addFirst(CARD_ID, id -> {
@@ -74,7 +87,19 @@ public class ModComponents {
             tooltip.accept(Component.translatable("binder_ui.craftbound.how_to").withStyle(ChatFormatting.DARK_GRAY));
         });
 
-        ItemComponentTooltipProviderRegistry.addFirst(SLEEVE_ID, id -> (context, tooltip, flag, components) ->
-                tooltip.accept(Component.translatable("sleeve_ui.craftbound.desc").withStyle(ChatFormatting.GRAY)));
+        ItemComponentTooltipProviderRegistry.addFirst(DECK_CONTENTS, deck -> (context, tooltip, flag, components) -> {
+            tooltip.accept(Component.translatable("deck_ui.craftbound.size", deck.size(), DeckRules.DECK_SIZE).withStyle(ChatFormatting.GOLD));
+            tooltip.accept(Component.translatable("deck_ui.craftbound.class", deck.deckClass().displayName()).withStyle(ChatFormatting.GRAY));
+            Identifier sleeve = components.get(SLEEVE_ID);
+            tooltip.accept(Sleeves.name(sleeve == null ? Sleeves.CLASSIC : sleeve).copy().withStyle(ChatFormatting.GRAY));
+            tooltip.accept(Component.translatable("deck_ui.craftbound.how_to").withStyle(ChatFormatting.DARK_GRAY));
+        });
+
+        // On a Deck Case the sleeve is listed with the deck instead.
+        ItemComponentTooltipProviderRegistry.addFirst(SLEEVE_ID, id -> (context, tooltip, flag, components) -> {
+            if (components.get(DECK_CONTENTS) == null) {
+                tooltip.accept(Component.translatable("sleeve_ui.craftbound.desc").withStyle(ChatFormatting.GRAY));
+            }
+        });
     }
 }

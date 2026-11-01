@@ -260,6 +260,31 @@ public class CardRenderer {
         g.centeredText(font, String.valueOf(value), x + 9, y + 5, WHITE);
     }
 
+    public static final int MINI_WIDTH = 36;
+    public static final int MINI_HEIGHT = 48;
+
+    // A miniature card for binder pockets and the deck builder: frame, art window, the card's placeholder art,
+    // cost, a rarity gem and a count. Enchanted ones get a purple edge and the shimmer.
+    public static void drawMini(GuiGraphicsExtractor g, Font font, Identifier id, int x, int y, int count, boolean enchanted) {
+        CardDefinition card = Cards.get(id);
+        if (card == null) {
+            return;
+        }
+        g.fill(x + 3, y + 3, x + MINI_WIDTH - 3, y + MINI_HEIGHT - 3, FRAME);
+        g.fill(x + 6, y + 6, x + MINI_WIDTH - 6, y + 30, card.isMob() ? SKY : ITEM_BACKDROP);
+        g.fill(x + 6, y + 33, x + 10, y + 37, 0xFF000000 | card.rarity().rgb());
+        g.item(placeholderArt(id, card), x + MINI_WIDTH / 2 - 8, y + 10);
+        if (enchanted) {
+            drawDiagonalShimmer(g, x + 3, y + 3, MINI_WIDTH - 6, MINI_HEIGHT - 6, 8, 0x60);
+            g.outline(x + 2, y + 2, MINI_WIDTH - 4, MINI_HEIGHT - 4, 0xFFB070FF);
+        }
+        String costText = String.valueOf(card.cost());
+        g.fill(x, y, x + font.width(costText) + 4, y + 10, EMERALD);
+        g.text(font, costText, x + 2, y + 1, WHITE);
+        String countText = "x" + count;
+        g.text(font, countText, x + MINI_WIDTH - 5 - font.width(countText), y + MINI_HEIGHT - 13, WHITE);
+    }
+
     // Draws the back of a card in a sleeve's colours: a framed panel with a diamond emblem in the middle.
     public static void drawBack(GuiGraphicsExtractor g, Sleeves.Design design, int x, int y, float scale) {
         g.pose().pushMatrix();

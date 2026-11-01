@@ -35,6 +35,7 @@ public class Cards {
             .keywords(Keyword.DROP).art("creeper_spawn_egg"));
     // A collectible item, and also what the Evoker drops, so it's registered before the Evoker.
     public static final Identifier TOTEM_OF_UNDYING = register("totem_of_undying", CardDefinition.item(CardRarity.EPIC, 3));
+    public static final Identifier ENCHANTED_GOLDEN_APPLE = register("enchanted_golden_apple", CardDefinition.item(CardRarity.EPIC, 3));
     public static final Identifier EVOKER = register("evoker", CardDefinition.mob(CardRarity.EPIC, 5, 3, 4)
             .type(MobType.ILLAGER).keywords(Keyword.SPAWN, Keyword.DROP)
             .creates(Keyword.SPAWN, VEX).creates(Keyword.DROP, TOTEM_OF_UNDYING));

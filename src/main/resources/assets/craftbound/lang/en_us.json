@@ -24,6 +24,8 @@
   "card.craftbound.shulker.text": "%s. %s. Mobs it hits levitate and can't attack on their next turn.",
   "card.craftbound.wither_skeleton": "Wither Skeleton",
   "card.craftbound.wither_skeleton.text": "Mobs it damages are withered: they take 1 damage at the start of each of their owner's turns.",
+  "card.craftbound.enchanted_golden_apple": "Enchanted Golden Apple",
+  "card.craftbound.enchanted_golden_apple.text": "Give a friendly mob invulnerability: it takes no damage until your next turn.",
   "card.craftbound.vex": "Vex",
   "card.craftbound.vex.text": "%s.",
   "card.craftbound.totem_of_undying": "Totem of Undying",

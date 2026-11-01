@@ -6,7 +6,6 @@ import craftbound.card.CardDefinition;
 import craftbound.card.Cards;
 import craftbound.card.DeckRules;
 import craftbound.client.Tooltips;
-import craftbound.client.card.CardInspectScreen;
 import craftbound.client.card.CardRenderer;
 import craftbound.component.ModComponents;
 import craftbound.deck.DeckBuilding;
@@ -28,9 +27,11 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
@@ -69,6 +70,16 @@ public class DeckCaseScreen extends Screen {
     private int page = 0;
     private int scroll = 0;
     private EditBox search;
+
+    // A card being pressed or dragged, and the card zoomed in by right-click (null when none).
+    private Identifier pressedCard;
+    private boolean pressedEnchanted;
+    private boolean pressedFromDeck;
+    private double pressX;
+    private double pressY;
+    private boolean dragging;
+    private Identifier zoomed;
+    private boolean zoomedEnchanted;
 
     // Layout, worked out from the screen size.
     private int panelX, panelY, panelWidth, panelHeight;
@@ -260,7 +271,11 @@ public class DeckCaseScreen extends Screen {
             CardRenderer.draw(g, this.font, CardItem.of(hoveredRow, deck.cards().count(hoveredRow, true) > 0), previewX, previewY, previewScale);
             tooltip = rowTooltip(hoveredRow, deck);
         }
-        if (tooltip != null) {
+        if (this.dragging) {
+            drawDrag(g, mouseX, mouseY);
+        } else if (this.zoomed != null) {
+            drawZoom(g);
+        } else if (tooltip != null) {
             Tooltips.show(g, this.font, tooltip, mouseX, mouseY);
         }
     }
@@ -412,7 +427,7 @@ public class DeckCaseScreen extends Screen {
         for (int i = 0; i < sleeves.size() && i < COLUMNS * ROWS; i++) {
             Identifier sleeve = sleeves.get(i);
             int x = startX + (i % COLUMNS) * (cardWidth + CARD_GAP);
-            int y = this.filterY + (i / COLUMNS) * (cardHeight + LABEL_HEIGHT + CARD_GAP);
+            int y = this.filterY + (i / COLUMNS) * (cardHeight + LABEL_HEIGHT + 4 + CARD_GAP);
             CardRenderer.drawBack(g, Sleeves.get(sleeve), x, y, scale);
             boolean owned = ownsSleeve(sleeve);
             boolean equipped = sleeve.equals(currentSleeve());
@@ -425,7 +440,8 @@ public class DeckCaseScreen extends Screen {
             }
             Component status = Component.translatable(equipped ? "deck_ui.craftbound.equipped"
                     : owned ? "deck_ui.craftbound.click_to_use" : "deck_ui.craftbound.not_owned");
-            g.centeredText(this.font, Sleeves.name(sleeve), x + cardWidth / 2, y + cardHeight + 2, 0xFFFFFFFF);
+            // Below the gold outline, so the name never sits on top of it.
+            g.centeredText(this.font, Sleeves.name(sleeve), x + cardWidth / 2, y + cardHeight + 6, 0xFFFFFFFF);
             Spot spot = new Spot(x, y, cardWidth, cardHeight, sleeve);
             this.sleeveSpots.add(spot);
             if (spot.contains(mouseX, mouseY)) {
@@ -533,6 +549,11 @@ public class DeckCaseScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        // While a card is zoomed in, any click just closes it.
+        if (this.zoomed != null) {
+            this.zoomed = null;
+            return true;
+        }
         // Let the search bar take the click first, so you can type in it.
         if (super.mouseClicked(event, doubleClick)) {
             return true;
@@ -596,13 +617,14 @@ public class DeckCaseScreen extends Screen {
             }
             int[] counts = available.getOrDefault(card.id(), new int[2]);
             if (event.button() == 1) {
-                this.minecraft.gui.setScreen(new CardInspectScreen(CardItem.of(card.id(), counts[0] == 0 && counts[1] > 0), this));
+                zoom(card.id(), counts[0] == 0 && counts[1] > 0);
                 return true;
             }
-            // Ctrl adds an Enchanted copy. Otherwise a normal one, or Enchanted if that's all you have.
+            // Ctrl takes an Enchanted copy. Otherwise a normal one, or Enchanted if that's all you have.
+            // Nothing moves yet: it's added when you let go (a click), or when you drop it on the deck list.
             boolean enchanted = event.hasControlDown() || counts[0] == 0;
             if (counts[enchanted ? 1 : 0] > 0) {
-                ClientPlayNetworking.send(new DeckEditPayload(mainHand, card.id(), enchanted, true));
+                startPress(card.id(), enchanted, false, mouseX, mouseY);
             }
             return true;
         }
@@ -611,16 +633,147 @@ public class DeckCaseScreen extends Screen {
                 continue;
             }
             if (event.button() == 1) {
-                this.minecraft.gui.setScreen(new CardInspectScreen(CardItem.of(row.id(), deck.cards().count(row.id(), true) > 0), this));
+                zoom(row.id(), deck.cards().count(row.id(), true) > 0);
                 return true;
             }
             boolean enchanted = event.hasControlDown() || deck.cards().count(row.id(), false) == 0;
             if (deck.cards().count(row.id(), enchanted) > 0) {
-                ClientPlayNetworking.send(new DeckEditPayload(mainHand, row.id(), enchanted, false));
+                startPress(row.id(), enchanted, true, mouseX, mouseY);
             }
             return true;
         }
         return true;
+    }
+
+    // --- Dragging ---------------------------------------------------------------------------------------
+    // Press on a card, then either let go (a click) or drag it. Cards dropped on the deck list are added;
+    // deck rows dragged out of the list are put back in a binder.
+
+    private void startPress(Identifier card, boolean enchanted, boolean fromDeck, double mouseX, double mouseY) {
+        this.pressedCard = card;
+        this.pressedEnchanted = enchanted;
+        this.pressedFromDeck = fromDeck;
+        this.pressX = mouseX;
+        this.pressY = mouseY;
+        this.dragging = false;
+    }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        if (this.pressedCard != null) {
+            double distance = Math.abs(event.x() - this.pressX) + Math.abs(event.y() - this.pressY);
+            if (distance > 4) {
+                this.dragging = true;
+            }
+            return true;
+        }
+        return super.mouseDragged(event, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (this.pressedCard == null) {
+            return super.mouseReleased(event);
+        }
+        boolean overList = inside(this.listArea, event.x(), event.y());
+        boolean mainHand = this.hand == InteractionHand.MAIN_HAND;
+        if (this.pressedFromDeck) {
+            if (!this.dragging || !overList) {
+                ClientPlayNetworking.send(new DeckEditPayload(mainHand, this.pressedCard, this.pressedEnchanted, false));
+            }
+        } else if (!this.dragging || overList) {
+            ClientPlayNetworking.send(new DeckEditPayload(mainHand, this.pressedCard, this.pressedEnchanted, true));
+        }
+        this.pressedCard = null;
+        this.dragging = false;
+        return true;
+    }
+
+    // The card under the cursor while dragging, and a green outline on the deck list when it would be added.
+    private void drawDrag(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        if (this.pressedCard == null || !this.dragging) {
+            return;
+        }
+        if (!this.pressedFromDeck) {
+            int[] list = this.listArea;
+            g.outline(list[0] - 2, list[1] - 2, list[2] + 4, list[3] + 4, 0xFF7DFF5A);
+            g.outline(list[0] - 3, list[1] - 3, list[2] + 6, list[3] + 6, 0xFF7DFF5A);
+        }
+        float scale = 0.5F;
+        int width = Math.round(CardRenderer.WIDTH * scale);
+        int height = Math.round(CardRenderer.HEIGHT * scale);
+        CardRenderer.draw(g, this.font, CardItem.of(this.pressedCard, this.pressedEnchanted),
+                mouseX - width / 2, mouseY - height / 2, scale);
+    }
+
+    // --- Zoom -------------------------------------------------------------------------------------------
+    // Right-clicking a card shows it big in the middle of the screen, with its keywords explained beside it
+    // and any cards it creates on the other side, like Hearthstone. Click anywhere or press Esc to close.
+
+    private void zoom(Identifier card, boolean enchanted) {
+        this.zoomed = card;
+        this.zoomedEnchanted = enchanted;
+    }
+
+    private void drawZoom(GuiGraphicsExtractor g) {
+        if (this.zoomed == null) {
+            return;
+        }
+        CardDefinition card = Cards.get(this.zoomed);
+        g.fill(0, 0, this.width, this.height, 0xC8000000);
+        float scale = Math.min(2.0F, (this.height - 30) / (float) CardRenderer.HEIGHT);
+        int cardWidth = Math.round(CardRenderer.WIDTH * scale);
+        int cardHeight = Math.round(CardRenderer.HEIGHT * scale);
+        int cardX = (this.width - cardWidth) / 2;
+        int cardY = (this.height - cardHeight) / 2;
+        CardRenderer.draw(g, this.font, CardItem.of(this.zoomed, this.zoomedEnchanted), cardX, cardY, scale);
+
+        // Keyword rules to the right, one box each.
+        int boxX = cardX + cardWidth + 12;
+        int boxWidth = Math.min(150, this.width - boxX - 8);
+        int boxY = cardY + 10;
+        if (boxWidth > 60) {
+            for (var keyword : card.keywords()) {
+                List<FormattedCharSequence> lines = new ArrayList<>();
+                lines.addAll(this.font.split(keyword.displayName().copy().withStyle(ChatFormatting.GOLD), boxWidth - 10));
+                lines.addAll(this.font.split(keyword.description(), boxWidth - 10));
+                int boxHeight = lines.size() * this.font.lineHeight + 10;
+                g.fill(boxX, boxY, boxX + boxWidth, boxY + boxHeight, 0xF0100010);
+                g.outline(boxX, boxY, boxWidth, boxHeight, 0xFF5000A0);
+                int textY = boxY + 5;
+                for (var line : lines) {
+                    g.text(this.font, line, boxX + 5, textY, 0xFFFFFFFF);
+                    textY += this.font.lineHeight;
+                }
+                boxY += boxHeight + 6;
+            }
+        }
+
+        // Cards it creates to the left.
+        float relatedScale = Math.min(1.0F, scale * 0.6F);
+        int relatedWidth = Math.round(CardRenderer.WIDTH * relatedScale);
+        int relatedHeight = Math.round(CardRenderer.HEIGHT * relatedScale);
+        int relatedX = cardX - 12 - relatedWidth;
+        int relatedY = cardY + 10;
+        if (relatedX > 4) {
+            for (var related : card.related()) {
+                if (relatedY + relatedHeight > this.height) {
+                    break;
+                }
+                g.text(this.font, Component.translatable("card_ui.craftbound.creates"), relatedX, relatedY - 10, 0xFFFFFFFF);
+                CardRenderer.draw(g, this.font, CardItem.of(related.card()), relatedX, relatedY, relatedScale);
+                relatedY += relatedHeight + 16;
+            }
+        }
+    }
+
+    @Override
+    public boolean keyPressed(KeyEvent event) {
+        if (this.zoomed != null && event.isEscape()) {
+            this.zoomed = null;
+            return true;
+        }
+        return super.keyPressed(event);
     }
 
     @Override

@@ -182,7 +182,7 @@ final class BlockUtilityChecks {
         ok(team.act(team.player(side).playerId,MatchActionPayload.CHOOSE_CARD,0,side^1,Target.NONE)==null,"Team input resolves deck choice");
 
         var seats=new ArrayList<MatchPlayer>();var leaders=new HashMap<UUID,net.minecraft.resources.Identifier>();
-        var deck=Cards.collectible().stream().filter(id->DeckRules.allowed(id,CardClass.FIGHTER)).limit(20).map(id->new CardRef(id,false)).toList();
+        var deck=Cards.collectible().stream().filter(id->DeckRules.allowed(id,CardClass.FIGHTER)).limit(CommanderMatch.DECK_SIZE).map(id->new CardRef(id,false)).toList();
         var leader=deck.stream().filter(c->CommanderMatch.eligible(c.id())).findFirst().orElseThrow().id();
         for(int i=0;i<4;i++){
             var p=new MatchPlayer("Seat "+i,UUID.randomUUID(),CardClass.FIGHTER,null,deck);

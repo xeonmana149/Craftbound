@@ -97,6 +97,7 @@ public class TableScreen extends Screen {
 
     public boolean commanderTable() { return tableMode == 2; }
     public int tableMode() { return tableMode; }
+    public craftbound.deck.DeckFormat deckFormat() { return craftbound.deck.DeckFormat.table(tableMode); }
     public BlockPos table() {
         return this.table;
     }
@@ -166,12 +167,10 @@ public class TableScreen extends Screen {
             if (stack.is(ModItems.BINDER)) {
                 if (firstBinder<0) firstBinder=slot;
                 for(var entry:craftbound.deck.BinderDecks.get(stack).entries()) {
+                    if (entry.deck().format()!=deckFormat()) continue;
                     var view=entry.asStack();
-                    next.add(new DeckEntry(slot,entry.id(),view,entry.deck(),view.getHoverName(),tableIssue(inventory,view)));
+                    next.add(new DeckEntry(slot,entry.id(),view,entry.deck(),DeckBuilding.name(view),tableIssue(inventory,view)));
                 }
-            } else if(stack.is(ModItems.DECK_CASE)) {
-                next.add(new DeckEntry(slot,"",stack,stack.getOrDefault(ModComponents.DECK_CONTENTS,DeckContents.EMPTY),
-                        stack.getHoverName(),tableIssue(inventory,stack)));
             }
         }
         binderSlot = firstBinder;
@@ -187,15 +186,11 @@ public class TableScreen extends Screen {
     }
 
     private String tableIssue(Inventory inventory,ItemStack stack) {
-        String ownership=DeckBuilding.whyCantPlay(inventory,stack);
-        if(ownership!=null || !commanderTable())return ownership;
         var deck=stack.getOrDefault(ModComponents.DECK_CONTENTS,DeckContents.EMPTY);
-        if(deck.size()!=craftbound.game.CommanderMatch.DECK_SIZE)return "Commander requires exactly 20 different cards.";
-        var refs=new ArrayList<craftbound.game.CardRef>();
-        for(var id:Cards.collectible())for(boolean enchanted:new boolean[]{false,true})
-            for(int i=0;i<deck.cards().count(id,enchanted);i++)refs.add(new craftbound.game.CardRef(id,enchanted));
-        var leader=refs.stream().map(craftbound.game.CardRef::id).filter(craftbound.game.CommanderMatch::eligible).findFirst().orElse(null);
-        return craftbound.game.CommanderMatch.problem(deck.deckClass(),refs,leader);
+        String issue=DeckBuilding.whyCantPlay(inventory,stack);
+        if ("match_ui.craftbound.commander_size".equals(issue) && deck.size()<deck.format().size())
+            return "Add "+(deck.format().size()-deck.size())+" more distinct cards to reach 40.";
+        return issue;
     }
     private void cacheDetails() {
         detailRows = chosen() == null ? List.of() : rows(chosen());
@@ -259,7 +254,7 @@ public class TableScreen extends Screen {
         var entry=chosen();
         duel.selected=tableMode!=0 || lastMode==TableActionPayload.PLAYER; if(solo!=null)solo.selected=!duel.selected;
         collection.active=collectionSlot()>=0;
-        create.active=collection.active && craftbound.deck.BinderDecks.get(minecraft.player.getInventory().getItem(collectionSlot())).entries().size()<craftbound.deck.SavedDecks.LIMIT;
+        create.active=collection.active && craftbound.deck.BinderDecks.get(minecraft.player.getInventory().getItem(collectionSlot())).count(deckFormat())<craftbound.deck.SavedDecks.LIMIT;
         edit.active=entry!=null && !entry.deckId().isEmpty(); edit.visible=entry!=null;
         ready.active=entry!=null && entry.problem()==null && !sent;
         ready.selected=ready.active; ready.setMessage(Component.literal(sent?"Joining...":"Ready"));
@@ -268,7 +263,7 @@ public class TableScreen extends Screen {
         drawDetails(g,mx,my);
         String hint=lastMode==TableActionPayload.PLAYER?"Ready up with another player at this table.":"Challenge the Card Master at this table.";
         if(tableMode==1)hint="Choose a deck. Sit beside your partner, opposite the other team.";
-        if(tableMode==2)hint="Bring 20 different cards; choose a mob as your commander.";
+        if(tableMode==2)hint="Bring 40 different cards, including your legendary commander.";
         if(entry==null)hint=tableMode==0?"The Trials lets you draft a deck at the table.":"Create a deck in your binder, or choose a saved deck.";
         if(entry!=null && entry.problem()!=null)hint=deckIssue();
         if(!waiting.isEmpty())hint=tableMode!=0?waiting+"  |  Ready to join.":waiting+" is looking for a duel.";
@@ -282,7 +277,7 @@ public class TableScreen extends Screen {
         int x=listLeft,w=listWidth;
         g.fill(x,bodyTop,x+w,bodyBottom,BinderTheme.WOOD_DARK);
         g.outline(x,bodyTop,w,bodyBottom-bodyTop,0xFF996E47);
-        g.text(font,"My Decks",x+5,bodyTop+5,BinderTheme.GOLD,false);
+        CardRenderer.fitText(g,font,Component.literal("My "+deckFormat().title+" Decks"),x+5,bodyTop+5,w-10,BinderTheme.GOLD,false,false);
         int y=bodyTop+18,last=bodyBottom-24;
         deckListArea=new int[]{x,y,w,last-y};
         if(decks.isEmpty()){
@@ -321,18 +316,27 @@ public class TableScreen extends Screen {
         if(e==null) {
             g.item(new ItemStack(collectionSlot()<0?Items.BOOK:ModItems.BINDER),tx,y+8);
             g.text(font,Component.literal("Your first deck").withStyle(ChatFormatting.BOLD),tx+21,y+12,INK,false);
-            int next=paragraph(g,Component.literal(collectionSlot()<0?"Bring a Card Binder to browse your collection and save decks here.":"Choose New Deck, pick a class, then add cards from your collection."),tx,y+34,usable,bodyBottom-5,MUTED);
+            int next=paragraph(g,Component.literal(collectionSlot()<0?"Bring a Card Binder to browse your collection and save decks here.":(commanderTable()?"Choose New Deck, pick a legendary commander, then add cards from your collection.":"Choose New Deck, pick a class, then add cards from your collection.")),tx,y+34,usable,bodyBottom-5,MUTED);
             paragraph(g,Component.literal(tableMode==0?"To play solo with borrowed cards, choose The Trials.":"Use New Deck to prepare a deck before joining this table."),tx,next+8,usable,bodyBottom-5,MUTED);
             return;
         }
         CardRenderer.fitText(g,font,e.name().copy().withStyle(ChatFormatting.BOLD),tx,y+8,usable-59,INK,false,false);
         var cardClass=e.deck().deckClass();
         var power=HeroPowers.of(cardClass);
-        String line=cardClass.displayName().getString()+"  /  "+e.deck().size()+" of "+DeckRules.DECK_SIZE+" cards";
+        String line=cardClass.displayName().getString()+"  /  "+e.deck().size()+" of "+e.deck().format().size()+" cards";
         CardRenderer.fitText(g,font,Component.literal(line),tx,y+23,usable,MUTED,false,false);
         int cursor=y+37;
+        if (commanderTable() && e.deck().commander().isPresent() && bodyBottom-cursor>=29) {
+            var leader=e.deck().commander().get();
+            g.fill(tx,cursor,x+w-8,cursor+23,0xFF453427);
+            g.outline(tx,cursor,usable,23,0xFFD9AD5A);
+            CardRenderer.fitText(g,font,Component.literal("Commander"),tx+4,cursor+2,usable-8,0xFFFFD27A,false,false);
+            CardRenderer.fitText(g,font,Cards.name(leader),tx+4,cursor+12,usable-8,0xFFFFF1D7,false,false);
+            cardSpots.add(new CardSpot(tx,cursor,usable,23,leader,e.deck().cards().count(leader,true)>0));
+            cursor+=28;
+        }
         boolean tall=bodyBottom-bodyTop>=156;
-        if(power!=HeroPowers.Power.NONE && bodyBottom-bodyTop>=103) {
+        if(power!=HeroPowers.Power.NONE && bodyBottom-cursor>=36) {
             g.item(new ItemStack(BuiltInRegistries.ITEM.getValue(power.icon())),tx,cursor-3);
             CardRenderer.fitText(g,font,power.displayName(),tx+20,cursor,usable-20,INK,false,false);
             cursor+=15;
@@ -350,6 +354,7 @@ public class TableScreen extends Screen {
             }
             cursor+=barHeight+14;
         }
+        if (commanderTable()) rows=rows.stream().filter(row->!e.deck().leads(row.id())).toList();
         g.fill(tx,cursor-3,x+w-7,cursor-2,LINE);
         int columns=w>=245?2:1,rowHeight=13,visible=Math.max(0,(bodyBottom-cursor-3)/rowHeight);
         cardListArea=new int[]{tx,cursor,usable,Math.max(0,bodyBottom-cursor-3)};

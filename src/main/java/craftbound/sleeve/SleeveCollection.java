@@ -49,8 +49,6 @@ public final class SleeveCollection {
     public static void unlockEquipped(ServerPlayer player) {
         for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
             ItemStack stack = player.getInventory().getItem(i);
-            Identifier sleeve = stack.get(ModComponents.SLEEVE_ID);
-            if (stack.is(ModItems.DECK_CASE) && sleeve != null) unlock(player, sleeve);
             if (stack.is(ModItems.BINDER)) {
                 for (var entry : craftbound.deck.BinderDecks.get(stack).entries()) unlock(player, entry.sleeve());
             }

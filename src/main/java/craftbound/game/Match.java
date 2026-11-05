@@ -60,7 +60,7 @@ public class Match {
         if(!timed() || over || phase!=Phase.PLAYING || !pendingChoices.isEmpty())return false;
         if(--turnTicksRemaining>0)return false;
         turnTicksRemaining=0;
-        log(player(current).name+" ran out of time.");
+        publicNotice(player(current).name+" ran out of time.");
         endTurn(current);
         return true;
     }
@@ -161,6 +161,9 @@ public class Match {
         this.over = true;
         this.winner = -1;
     }
+
+    /** Explicitly public match announcements. Other log lines can contain private hand information. */
+    void publicNotice(String line) { log(line); }
 
     void log(String line) {
         log(line, (Identifier) null);
@@ -895,9 +898,7 @@ public class Match {
             return false;
         }
         // The Piglin Brute's armour takes 1 off every hit.
-        if (CardCatalog.passive(minion.card.id(), CardCatalog.Passive.ARMOR)) {
-            amount = Math.max(0, amount - CardCatalog.passiveAmount(minion.card.id()));
-        }
+        amount = minion.afterArmor(amount);
         if (amount <= 0) {
             event(MatchEvent.Type.DAMAGE, side, minion.id, null, 0, 0, null);
             return false;
@@ -1070,7 +1071,7 @@ public class Match {
         }
         this.players[side].board.remove(minion);
         if (commandUnit(side, minion.id)) {
-            log(name(minion.card) + " returns to command.", minion.card); refreshAuras(); return;
+            publicNotice(player(side).name + "’s " + name(minion.card) + " returned to command."); refreshAuras(); return;
         }
         if (minion.definition().token()) {
             log(this.players[side].name + "'s " + name(minion.card) + " is destroyed.", minion.card);

@@ -11,7 +11,9 @@ import static craftbound.client.match.MultiplayerBoardLayout.*;
 /** Full rows must fit at every GUI scale. Swapping Commander rivals must never move the local board. */
 public final class MultiplayerBoardGeometryChecks {
     public static void run(){
+        checkHandTokenTransfer();
         checkCommanderAttack();
+        checkCommanderLogNavigation();
         for(int[] screen:List.of(new int[]{320,240},new int[]{640,360},new int[]{1280,720},new int[]{960,320})){
             int width=screen[0],height=screen[1],hand=Math.clamp((int)(height*.18),37,84);
             for(boolean teams:new boolean[]{false,true})for(int viewer=0;viewer<4;viewer++){
@@ -51,6 +53,33 @@ public final class MultiplayerBoardGeometryChecks {
             }
         }
     }
+    private static void checkCommanderLogNavigation() {
+        var panel = new CommanderLogPanel();
+        var first = new craftbound.game.CommanderHistory.Entry(1,1,0,craftbound.game.CommanderHistory.Kind.TURN,"One");
+        var second = new craftbound.game.CommanderHistory.Entry(2,5,1,craftbound.game.CommanderHistory.Kind.TURN,"Two");
+        panel.append(0,List.of(first,second));
+        require(panel.round()==2,"Open on current round");
+        panel.stepRound(false);
+        require(panel.round()==1,"Browse previous round");
+        panel.append(0,List.of(first,second)); // reopening the table can replay the same prefix
+        var third = new craftbound.game.CommanderHistory.Entry(3,8,1,craftbound.game.CommanderHistory.Kind.TURN,"Two");
+        panel.append(2,List.of(third));
+        require(panel.round()==1 && panel.latestRound()==3,"Incoming turns must not displace the round being read");
+        panel.stepRound(true); panel.stepRound(true);
+        require(panel.round()==3,"Return to the current round after receiving new history");
+        require(!panel.click(320,240,319,0,true),"An outside click dismisses the panel");
+    }
+    private static void checkHandTokenTransfer() {
+        int[] egg = {160,100,40,60};
+        require(!MatchCardHover.crossingToToken(100,230,100,180,egg,10_000_000),"Moving straight up onto the enlarged source must dismiss it");
+        require(!MatchCardHover.crossingToToken(100,230,130,230,egg,10_000_000),"Sweeping across the hand does not aim at the token");
+        require(!MatchCardHover.crossingToToken(100,230,112,130,egg,10_000_000),"Moving diagonally past the token must release");
+        require(MatchCardHover.crossingToToken(100,230,130,191,egg,10_000_000),"Direct travel to the generated card must survive the gap");
+        require(MatchCardHover.crossingToToken(260,230,234,195,egg,10_000_000),"Transfer also works with the hand at the screen edge");
+        require(!MatchCardHover.crossingToToken(100,230,130,191,egg,310_000_000),"Stopping on the enlarged source cannot latch the preview");
+        require(!MatchCardHover.crossingToToken(100,230,100,230,egg,10_000_000),"A stationary pointer cannot start a transfer");
+    }
+
     private static void checkCommanderAttack() {
         JsonObject before = new JsonObject();
         var players = new JsonArray();

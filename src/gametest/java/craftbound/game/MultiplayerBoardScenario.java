@@ -41,6 +41,7 @@ final class MultiplayerBoardScenario {
         if(hand==null)throw new AssertionError("Fixed local hand missing");
         int own=data.get("you").getAsInt();
         checkHoverFaces(sc, own);
+        checkLinkedHandHover(sc, own);
         int[] ownBefore=sc.targetBounds(own,0);
         sc.mouseScrolled(viewport[0]+viewport[2]/2.0,viewport[1]+viewport[3]/2.0,0,3);
         if(!Arrays.equals(hand,sc.handCardBounds(0)) || !Arrays.equals(ownBefore,sc.targetBounds(own,0)))
@@ -76,6 +77,41 @@ final class MultiplayerBoardScenario {
             }
         }
         countTitle(sc, "", 0, 0);
+    }
+
+    private static void checkLinkedHandHover(MultiplayerBoardScreen sc, int viewer) {
+        var original = sc.snapshot();
+        var linked = Cards.collectible().stream().filter(id -> !craftbound.client.card.CardInspectScreen.associations(id).isEmpty())
+                .findFirst().orElseThrow();
+        var other = Cards.collectible().stream().filter(id -> craftbound.client.card.CardInspectScreen.associations(id).isEmpty())
+                .findFirst().orElseThrow();
+        var sample = original.deepCopy();
+        var hand = new com.google.gson.JsonArray();
+        for (var id : List.of(other,linked,other)) {
+            var card = new com.google.gson.JsonObject();
+            card.addProperty("id",id.toString()); card.addProperty("ench",false);
+            hand.add(card);
+        }
+        var seat = sample.getAsJsonArray("players").get(viewer).getAsJsonObject();
+        if (sample.has("hand")) sample.add("hand",hand); else seat.add("hand",hand);
+        seat.addProperty("handCount",hand.size());
+        try {
+            sc.update(sample);
+            String parent = Cards.name(linked).getString(), neighbor = Cards.name(other).getString();
+            int normalParent = countTitle(sc,parent,0,0);
+            int normalNeighbor = countTitle(sc,neighbor,0,0);
+            int[] src=sc.handCardBounds(1), dst=sc.handCardBounds(0);
+            int sx=src[0]+src[2]/2, sy=src[1]+src[3]/2;
+            int above=countTitle(sc,parent,sx,src[1]-8);
+            if (countTitle(sc,parent,sx,sy)<=normalParent) throw new AssertionError("Missing linked hand preview");
+            if (countTitle(sc,parent,sx,src[1]-8)!=above) throw new AssertionError("Enlarged source retained hover above the hand");
+            countTitle(sc,parent,sx,sy);
+            if (countTitle(sc,neighbor,dst[0]+dst[2]/2,dst[1]+dst[3]/2)<=normalNeighbor)
+                throw new AssertionError("Linked preview intercepted the next hand slot");
+        } finally {
+            sc.update(original);
+            countTitle(sc,"",0,0);
+        }
     }
 
     private static String name(String id) {

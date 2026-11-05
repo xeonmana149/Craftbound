@@ -46,7 +46,6 @@ public class Craftbound implements ModInitializer {
 		ModLoot.initialize();
 		craftbound.game.DeveloperAccess.initialize();
 		MatchManager.initialize();
-		craftbound.deck.DeckCaseRetirement.initialize();
 	}
 
 	public static Identifier id(String path) {

@@ -2563,11 +2563,12 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
             g.fill(rune, 3, rune + 1, 8, 0xFFE7BFFF);
             g.fill(rune - 2, 5, rune + 3, 6, 0xFFE7BFFF);
         }
+        var toolPreview = EffectPreview.forTarget(this.previewSource, EffectPreview.Subject.tool(s, side.tool.id));
+        drawRoundPreview(g, 0, 0, size, toolPreview);
+        if (toolPreview != null) g.nextStratum();
         int badge = Math.max(10, Math.round(size * 0.42F));
         MatchArt.attack(g, this.font, -badge / 4, size - badge * 3 / 4, badge, side.tool.attack, 0xFFFFFFFF, side.tool.ranged);
         MatchArt.uses(g, this.font, size - badge * 3 / 4, size - badge * 3 / 4, badge, side.tool.uses);
-        drawRoundPreview(g, 0, 0, size,
-                EffectPreview.forTarget(this.previewSource, EffectPreview.Subject.tool(s, side.tool.id)));
         g.pose().popMatrix();
     }
 
@@ -2603,6 +2604,7 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
             MatchArt.octagon(g, 0, 0, size, 0xA0000000);
         }
         g.pose().popMatrix();
+        if (usable) g.nextStratum();
         int gem = Math.max(9, Math.round(size * 0.38F));
         MatchArt.cost(g, this.font, x + (size - gem) / 2, mine ? y + size - gem / 2 : y - gem / 2, gem, this.shown.powerCost);
     }
@@ -3084,6 +3086,12 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
             return;
         }
         hover.prepare(font, width, height, shown);
+        if (hoveredHand >= 0 && hoveredHand < shown.me().hand.size() && hoveredHand < handSpots.size()) {
+            HandCard card = shown.me().hand.get(hoveredHand);
+            hover.hand(g, card.id, card.enchanted, card.training, handSpots.get(hoveredHand).x() + handW / 2,
+                    boardLeft, card.playable && canAct(), mouseX, mouseY);
+            return;
+        }
         if (hover.drawRetained(g, mouseX, mouseY)) return;
         for (int s = 0; s < 2; s++) {
             Side side = shown.sides[s];
@@ -3095,12 +3103,6 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
                 hover.power(g, side.power, side.cardClass, shown.powerCost, side.powerUsed, powerSpots[s], s == shown.you);
                 return;
             }
-        }
-        if (hoveredHand >= 0 && hoveredHand < shown.me().hand.size() && hoveredHand < handSpots.size()) {
-            HandCard card = shown.me().hand.get(hoveredHand);
-            hover.hand(g, card.id, card.enchanted, card.training, handSpots.get(hoveredHand).x() + handW / 2,
-                    boardLeft, card.playable && canAct(), mouseX, mouseY);
-            return;
         }
         for (Spot spot : mobSpots) {
             if (!spot.contains(mouseX, mouseY)) continue;
@@ -3126,6 +3128,11 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
             hover.history(g, spot.line().card(), x, y, boxWidth, scale, lines, mouseX, mouseY);
             return;
         }
+    }
+
+    private boolean overHandSlot(double x, double y) {
+        for (Spot spot : handSpots) if (spot.contains(x,y)) return true;
+        return false;
     }
 
     private boolean associatedPreviewValid() {
@@ -3573,13 +3580,13 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
 
     @Override
     public boolean mouseScrolled(double x, double y, double horizontal, double vertical) {
-        if (associatedPreviewValid() && cardHover().scroll(x, y, vertical)) return true;
+        if (associatedPreviewValid() && !overHandSlot(x,y) && cardHover().scroll(x, y, vertical)) return true;
         return super.mouseScrolled(x, y, horizontal, vertical);
     }
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (associatedPreviewValid() && cardHover().click(event.x(), event.y(),
+        if (associatedPreviewValid() && !overHandSlot(event.x(),event.y()) && cardHover().click(event.x(), event.y(),
                 event.button() == InputConstants.MOUSE_BUTTON_LEFT)) return true;
         cardHover().clear();
         if(this.readOnly) return true;

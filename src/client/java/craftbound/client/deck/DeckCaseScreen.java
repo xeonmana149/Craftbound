@@ -24,12 +24,9 @@ import craftbound.client.card.CardDragMotion;
 import craftbound.component.ModComponents;
 import craftbound.deck.DeckBuilding;
 import craftbound.deck.DeckContents;
+import craftbound.deck.DeckFormat;
 import craftbound.item.CardItem;
 import craftbound.item.ModItems;
-import craftbound.network.DeckClassPayload;
-import craftbound.network.DeckEditPayload;
-import craftbound.network.DeckRenamePayload;
-import craftbound.network.DeckSleevePayload;
 import craftbound.sleeve.Sleeves;
 import craftbound.sleeve.SleeveCollection;
 import java.util.ArrayList;
@@ -182,7 +179,16 @@ public class DeckCaseScreen extends Screen {
     private int[] masteryButton;
     private int[] rulesButton;
     private int[] clearDeckButton;
-    private boolean choosingClass;
+    private boolean choosingClass, choosingLeader, leaderFoil;
+    private Identifier pendingLeader;
+    private int leaderPage, leaderPages;
+    private int[] leaderPrevious, leaderNext, leaderBand, copyButton;
+    private boolean choosingSource;
+    private int sourcePage;
+    private final List<int[]> sourceButtons=new ArrayList<>();
+    private List<craftbound.deck.SavedDecks.Entry> sources=List.of();
+    private record LeaderSpot(int[] bounds, Identifier id, boolean foil, boolean owned) {}
+    private final List<LeaderSpot> leaderSpots = new ArrayList<>();
 
     public DeckCaseScreen(InteractionHand hand) { this(hand, null); }
 
@@ -193,7 +199,8 @@ public class DeckCaseScreen extends Screen {
     public static DeckCaseScreen fromTable(craftbound.client.match.TableScreen table, int slot, String deckId, boolean create) {
         var screen = new DeckCaseScreen(InteractionHand.MAIN_HAND, deckId,
                 craftbound.deck.BinderDecks.locationForSlot(slot), table);
-        screen.choosingClass = create;
+        screen.choosingLeader = create && table.commanderTable();
+        screen.choosingClass = create && !screen.choosingLeader;
         return screen;
     }
 
@@ -213,25 +220,17 @@ public class DeckCaseScreen extends Screen {
         return minecraft.player == null ? ItemStack.EMPTY : craftbound.deck.BinderDecks.holder(minecraft.player, holderLocation);
     }
 
-    private boolean commanderEditing() { return tableMenu != null && tableMenu.commanderTable(); }
-    private int deckTarget() { return commanderEditing() ? craftbound.game.CommanderMatch.DECK_SIZE : DeckRules.DECK_SIZE; }
-    private int copyLimit(Identifier id) { return commanderEditing() ? 1 : DeckRules.maxCopies(Cards.get(id).rarity()); }
-    private String cannotAdd(DeckContents deck, Identifier id) {
-        if (commanderEditing()) {
-            if (deck.copies(id) >= 1) return "Commander allows one copy of each card, including Enchanted.";
-            if (deck.size() >= deckTarget()) return "This Commander deck already has 20 cards.";
-        }
-        return DeckBuilding.whyNot(deck, id);
+    private DeckFormat format() {
+        if (tableMenu != null) return tableMenu.deckFormat();
+        var entry = savedDeckId==null ? null : craftbound.deck.BinderDecks.get(holder()).find(savedDeckId);
+        return entry==null ? DeckFormat.DUEL : entry.deck().format();
     }
-    private static boolean commanderReady(DeckContents deck) {
-        return deck.deckClass() != craftbound.card.CardClass.NEUTRAL
-                && deck.size() == craftbound.game.CommanderMatch.DECK_SIZE
-                && Cards.collectible().stream().filter(id -> deck.copies(id) == 1 && DeckRules.allowed(id, deck.deckClass())).count() == deck.size()
-                && Cards.collectible().stream().anyMatch(id -> deck.copies(id) > 0 && craftbound.game.CommanderMatch.eligible(id));
-    }
+    private int deckTarget() { return format().size(); }
+    private int copyLimit(Identifier id) { return format()==DeckFormat.COMMANDER ? 1 : DeckRules.maxCopies(Cards.get(id).rarity()); }
+    private String cannotAdd(DeckContents deck, Identifier id) { return DeckBuilding.whyNot(deck,id); }
 
     private boolean overview() { return holder().is(ModItems.BINDER) && this.savedDeckId == null; }
-    private boolean validHolder() { return holder().is(ModItems.BINDER) || holder().is(ModItems.DECK_CASE); }
+    private boolean validHolder() { return holder().is(ModItems.BINDER); }
 
     private void savedAction(int action, String value, boolean enchanted) {
         ClientPlayNetworking.send(new craftbound.network.BinderDeckPayload(
@@ -239,6 +238,9 @@ public class DeckCaseScreen extends Screen {
     }
 
     @Override public void onClose() {
+        if (choosingSource) { choosingSource=false; return; }
+        if (choosingLeader) { choosingLeader=false; pendingLeader=null; return; }
+        if (choosingClass && pendingLeader!=null && overview()) { choosingClass=false; choosingLeader=true; return; }
         if (this.choosingClass && overview()) { this.choosingClass = false; return; }
         if (tableMenu != null) {
             saveName();
@@ -305,8 +307,8 @@ public class DeckCaseScreen extends Screen {
                 Component.translatable("deck_ui.craftbound.rename_hint"));
         this.nameBox.setBordered(false);
         this.nameBox.setTextColor(GOLD);
-        this.nameBox.setMaxLength(DeckRenamePayload.MAX_LENGTH);
-        this.nameBox.setValue(previousName != null ? previousName : deckCase().getHoverName().getString());
+        this.nameBox.setMaxLength(DeckBuilding.MAX_NAME_LENGTH);
+        this.nameBox.setValue(previousName != null ? previousName : DeckBuilding.name(deckCase()).getString());
         if (this.savedName == null) {
             this.savedName = this.nameBox.getValue();
         }
@@ -326,7 +328,6 @@ public class DeckCaseScreen extends Screen {
         if (!value.equals(this.savedName)) {
             this.savedName = value;
             if (this.savedDeckId != null) savedAction(craftbound.network.BinderDeckPayload.RENAME, value, false);
-            else ClientPlayNetworking.send(new DeckRenamePayload(this.hand == InteractionHand.MAIN_HAND, value));
         }
     }
 
@@ -370,7 +371,7 @@ public class DeckCaseScreen extends Screen {
         Inventory inventory = this.minecraft.player.getInventory();
         for (int i = 0; i < inventory.getContainerSize(); i++) {
             ItemStack stack = inventory.getItem(i);
-            if (!stack.is(ModItems.BINDER) || (overview() && stack != holder())) {
+            if (!stack.is(ModItems.BINDER) || (overview() && !choosingLeader && stack != holder())) {
                 continue;
             }
             BinderContents contents = stack.getOrDefault(ModComponents.BINDER_CONTENTS, BinderContents.EMPTY);
@@ -453,7 +454,7 @@ public class DeckCaseScreen extends Screen {
         }
         layout();
         DeckContents deck = deck();
-        boolean pickingClass = this.choosingClass || (!overview() && deck.deckClass() == CardClass.NEUTRAL);
+        boolean pickingClass = choosingSource || choosingLeader || this.choosingClass || (!overview() && deck.deckClass() == CardClass.NEUTRAL);
         this.search.visible = !pickingClass && !cosmetics();
         if (!search.visible && search.isFocused()) setFocused(null);
         this.nameBox.visible = !pickingClass && !overview();
@@ -461,7 +462,7 @@ public class DeckCaseScreen extends Screen {
         if (deck.deckClass() != this.nameClass) {
             this.nameClass = deck.deckClass();
             if (!this.nameBox.isFocused() && DeckBuilding.customName(deckCase()).isEmpty()) {
-                this.nameBox.setValue(deckCase().getHoverName().getString());
+                this.nameBox.setValue(DeckBuilding.name(deckCase()).getString());
                 this.savedName = this.nameBox.getValue();
             }
         }
@@ -486,6 +487,7 @@ public class DeckCaseScreen extends Screen {
         this.previousButton = null;
         this.nextButton = null;
         this.changeClassButton = null;
+        leaderBand = copyButton = null;
         this.clearDeckButton = null;
         this.masteryButton = null;
         this.rulesButton = null; this.filtersButton = null;
@@ -496,7 +498,9 @@ public class DeckCaseScreen extends Screen {
 
         rulesButton = drawSmallButton(g, Component.literal("Rules"), listX + listWidth - RULES_WIDTH, tabsY + 1, RULES_WIDTH, mouseX, mouseY);
         if (pickingClass) {
-            drawClassPicker(g, mouseX, mouseY);
+            if (choosingSource) drawSources(g,mouseX,mouseY);
+            else if (choosingLeader) drawLeaderPicker(g,mouseX,mouseY);
+            else drawClassPicker(g, mouseX, mouseY);
             this.doneButton = drawSmallButton(g, Component.translatable("pack_ui.craftbound.done"),
                     this.listX + listWidth - 32, this.footerY, 32, mouseX, mouseY);
             return;
@@ -569,6 +573,89 @@ public class DeckCaseScreen extends Screen {
         }
     }
 
+    private List<craftbound.deck.SavedDecks.Entry> copySources() {
+        return craftbound.deck.BinderDecks.get(holder()).entries().stream()
+                .filter(e->!e.id().equals(savedDeckId) && e.deck().size()>0).toList();
+    }
+    private void drawSources(GuiGraphicsExtractor g,int mx,int my) {
+        sourceButtons.clear();
+        int cx=panelX+panelWidth/2, w=Math.min(230,panelWidth-20);
+        g.centeredText(font,"Copy cards from a saved deck",cx,panelY+13,GOLD);
+        CardRenderer.fitText(g,font,Component.literal("Copies owned cards that fit this deck’s class and limits."),
+                cx,panelY+29,panelWidth-20,0xFFFFE8CA,true);
+        sources=copySources();
+        int rows=Math.max(1,(panelHeight-80)/24), pages=Math.max(1,(sources.size()+rows-1)/rows);
+        sourcePage=Math.clamp(sourcePage,0,pages-1);
+        for(int i=sourcePage*rows;i<Math.min(sources.size(),(sourcePage+1)*rows);i++){
+            var src=sources.get(i);
+            Component title=Component.literal(src.deck().format().title+" · ").append(DeckBuilding.name(src.asStack()));
+            sourceButtons.add(drawButton(g,title,cx-w/2,panelY+48+(i%rows)*24,w,18,mx,my));
+        }
+        leaderPrevious=sourcePage>0?drawSmallButton(g,Component.literal("<"),cx-44,footerY,20,mx,my):null;
+        leaderNext=sourcePage+1<pages?drawSmallButton(g,Component.literal(">"),cx+24,footerY,20,mx,my):null;
+    }
+    private void drawLeaderPicker(GuiGraphicsExtractor g,int mx,int my) {
+        leaderSpots.clear(); leaderPrevious=leaderNext=null;
+        int cx=panelX+panelWidth/2;
+        g.centeredText(font,"Choose your commander",cx,panelY+12,GOLD);
+        CardRenderer.fitText(g,font,Component.literal("Pick a legendary mob you own. It starts in your command zone."),
+                cx,panelY+30,panelWidth-24,0xFFFFF1D7,true);
+        var cards = new ArrayList<craftbound.game.CardRef>();
+        var counts = available();
+        CardClass cls = overview()?null:deck().deckClass();
+        for (Identifier id : Cards.collectible()) {
+            if (!craftbound.game.CommanderMatch.eligible(id) || cls!=null && !DeckRules.allowed(id,cls)) continue;
+            int[] copies=counts.getOrDefault(id,new int[2]);
+            if(copies[0]>0 || copies[1]==0) cards.add(new craftbound.game.CardRef(id,false));
+            if(copies[1]>0) cards.add(new craftbound.game.CardRef(id,true));
+        }
+        cards.sort(Comparator.comparing((craftbound.game.CardRef c)->counts.getOrDefault(c.id(),new int[2])[c.enchanted()?1:0]==0)
+                .thenComparing(c->Cards.name(c.id()).getString()));
+        int columns=Math.clamp((panelWidth-16)/94,1,5);
+        float scale=Math.min((panelHeight-93f)/CardRenderer.HEIGHT,Math.min(.9F,((panelWidth-20f)/columns-7)/CardRenderer.WIDTH));
+        int w=Math.round(CardRenderer.WIDTH*scale),h=Math.round(CardRenderer.HEIGHT*scale);
+        leaderPages=Math.max(1,(cards.size()+columns-1)/columns);
+        leaderPage=Math.clamp(leaderPage,0,leaderPages-1);
+        int count=Math.min(columns,Math.max(0,cards.size()-columns*leaderPage));
+        int left=cx-(count*(w+7)-7)/2, y=panelY+46;
+        for(int i=0;i<count;i++){
+            var c=cards.get(leaderPage*columns+i);int x=left+i*(w+7);
+            boolean owned=counts.getOrDefault(c.id(),new int[2])[c.enchanted()?1:0]>0;
+            int[] bounds={x,y,w,h};
+            leaderSpots.add(new LeaderSpot(bounds,c.id(),c.enchanted(),owned));
+            CardRenderer.draw(g,font,CardItem.of(c.id(),c.enchanted()),x,y,scale);
+            if(!owned)g.fill(x,y,x+w,y+h,0x99000000);
+            if(owned && inside(bounds,mx,my))g.outline(x-1,y-1,w+2,h+2,GOLD);
+            String label=owned?(c.enchanted()?"Enchanted · ":"")+Cards.get(c.id()).cardClass().displayName().getString():"Not collected";
+            CardRenderer.fitText(g,font,Component.literal(label),x+w/2,y+h+3,w,owned?GOLD:0xFFCCCCCC,true);
+        }
+        if(cards.isEmpty()) CardRenderer.fitText(g,font,Component.literal("No eligible legendary mobs in this catalogue."),
+                cx,y+12,panelWidth-20,0xFFFFF1D7,true);
+        if(leaderPages>1){
+            if(leaderPage>0)leaderPrevious=drawSmallButton(g,Component.literal("<"),cx-45,footerY,20,mx,my);
+            if(leaderPage+1<leaderPages)leaderNext=drawSmallButton(g,Component.literal(">"),cx+25,footerY,20,mx,my);
+            g.centeredText(font,(leaderPage+1)+"/"+leaderPages,cx,footerY+4,GOLD);
+        }
+    }
+    private void createDeck(CardClass cls) {
+        String id=java.util.UUID.randomUUID().toString();
+        String value=craftbound.deck.BinderDecks.creation(format(),cls,pendingLeader);
+        ClientPlayNetworking.send(new craftbound.network.BinderDeckPayload(holderLocation,id,
+                craftbound.network.BinderDeckPayload.CREATE,value,leaderFoil));
+        minecraft.gui.setScreen(pageFor(id));
+    }
+    private void pickLeader(LeaderSpot choice) {
+        choosingLeader=false;
+        if(!overview()){
+            savedAction(craftbound.network.BinderDeckPayload.CHOOSE_COMMANDER,choice.id().toString(),choice.foil());
+            return;
+        }
+        pendingLeader=choice.id();leaderFoil=choice.foil();
+        CardClass cls=Cards.get(choice.id()).cardClass();
+        if(cls==CardClass.NEUTRAL)choosingClass=true;
+        else createDeck(cls);
+    }
+
     // A new deck: pick one of the real classes. Neutral isn't a choice; Neutral cards go in every deck.
     private void drawClassPicker(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         int centerX = this.panelX + this.panelWidth / 2;
@@ -578,7 +665,8 @@ public class DeckCaseScreen extends Screen {
                 this.panelX + 12, this.panelY + 44, this.panelWidth - 24, 0xFFE8D6B0, false);
         List<CardClass> classes = new ArrayList<>();
         for (CardClass cardClass : CardClass.values()) {
-            if (cardClass != CardClass.NEUTRAL) classes.add(cardClass);
+            if (cardClass != CardClass.NEUTRAL && (overview() || !craftbound.game.CommanderMatch.eligible(deck().commander().orElse(null))
+                    || DeckRules.allowed(deck().commander().get(),cardClass))) classes.add(cardClass);
         }
         int boxWidth = 120;
         int gap = 16;
@@ -798,7 +886,8 @@ public class DeckCaseScreen extends Screen {
 
     private Identifier drawSavedDecks(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         var saved = craftbound.deck.BinderDecks.get(holder());
-        String count = saved.entries().size() + "/" + craftbound.deck.SavedDecks.LIMIT;
+        var entries=tableMenu==null?saved.entries():saved.entries().stream().filter(e->e.deck().format()==format()).toList();
+        String count=tableMenu==null?Integer.toString(entries.size()):entries.size()+"/"+craftbound.deck.SavedDecks.LIMIT;
         Component heading = Component.literal("My Decks · " + count);
         int headingWidth = headingWidth();
         boolean stacked = font.width(heading) > headingWidth;
@@ -810,9 +899,9 @@ public class DeckCaseScreen extends Screen {
         this.listArea = new int[]{this.listX, top, listWidth, height};
         g.fill(this.listX, top, this.listX + listWidth, top + height, WOOD_DARK);
         int rows = Math.max(1, height / 34);
-        this.hubScroll = Math.max(0, Math.min(this.hubScroll, saved.entries().size() - rows));
-        for (int i = 0; i < rows && i + this.hubScroll < saved.entries().size(); i++) {
-            var entry = saved.entries().get(i + this.hubScroll);
+        this.hubScroll = Math.max(0, Math.min(this.hubScroll, entries.size() - rows));
+        for (int i = 0; i < rows && i + this.hubScroll < entries.size(); i++) {
+            var entry = entries.get(i + this.hubScroll);
             int y = top + i * 34;
             int[] spot = {this.listX + 1, y + 1, listWidth - 2, 30};
             this.hubDeckSpots.add(spot);
@@ -820,25 +909,25 @@ public class DeckCaseScreen extends Screen {
             ItemStack stack = entry.asStack();
             g.fill(spot[0], spot[1], spot[0]+spot[2], spot[1]+spot[3], inside(spot, mouseX, mouseY) ? 0xFF805635 : 0xFF684127);
             g.outline(spot[0], spot[1], spot[2], spot[3], 0xFFB58B54);
-            CardRenderer.fitText(g, this.font, stack.getHoverName(), this.listX + 5, y + 5, listWidth - 10, GOLD, false);
+            CardRenderer.fitText(g, this.font, DeckBuilding.name(stack), this.listX + 5, y + 5, listWidth - 10, GOLD, false);
             String problem = DeckBuilding.whyCantPlay(this.minecraft.player.getInventory(), stack);
-            Component detail = Component.literal(entry.deck().size() + (commanderReady(entry.deck()) ? "/20 · Commander · " : "/" + deckTarget() + " · "));
+            Component detail = Component.literal(entry.deck().format().title+" · "+entry.deck().size()+"/"+entry.deck().format().size()+" · ");
             detail = detail.copy().append(problem != null && problem.equals("match_ui.craftbound.deck_missing")
                     ? Component.literal("Missing cards").withStyle(ChatFormatting.RED) : entry.deck().deckClass().displayName());
             CardRenderer.fitText(g, this.font, detail, this.listX + 5, y + 18, listWidth - 10, 0xFFE8D6B0, false);
         }
-        if (saved.entries().isEmpty()) {
+        if (entries.isEmpty()) {
             int y = top + 6;
             for (var line : this.font.split(Component.literal("Create a deck, choose its class, then add cards from your collection."), listWidth - 12)) {
                 g.text(this.font, line, this.listX + 6, y, 0xFFE8D6B0); y += 11;
             }
         }
-        if (saved.entries().size() > rows) {
-            int bar = Math.max(8, height * rows / saved.entries().size());
-            int y = top + (height - bar) * this.hubScroll / Math.max(1, saved.entries().size() - rows);
+        if (entries.size() > rows) {
+            int bar = Math.max(8, height * rows / entries.size());
+            int y = top + (height - bar) * this.hubScroll / Math.max(1, entries.size() - rows);
             g.fill(this.listX + listWidth - 2, y, this.listX + listWidth, y + bar, GOLD);
         }
-        this.newDeckButton = saved.entries().size() < craftbound.deck.SavedDecks.LIMIT
+        this.newDeckButton = saved.count(format()) < craftbound.deck.SavedDecks.LIMIT
                 ? drawSmallButton(g, Component.literal("New Deck"), this.listX, this.footerY, listWidth - 35, mouseX, mouseY) : null;
         this.doneButton = drawSmallButton(g, Component.literal("Done"), this.listX + listWidth - 32, this.footerY, 32, mouseX, mouseY);
         return null;
@@ -1119,7 +1208,8 @@ public class DeckCaseScreen extends Screen {
         Component count = missingTotal > 0
                 ? Component.translatable("deck_ui.craftbound.cards_missing", deck.size(), deckTarget(), missingTotal)
                 : Component.translatable("deck_ui.craftbound.cards_count", deck.size(), deckTarget());
-        boolean commanderReady = missingTotal == 0 && commanderReady(deck);
+        boolean commanderReady = deck.format()==DeckFormat.COMMANDER && deck.size()==deckTarget() && missingTotal==0
+                && DeckBuilding.whyCantPlay(deck,(id,foil)->Integer.MAX_VALUE)==null;
         if (commanderReady) count=Component.literal(deck.size() + " cards · Commander ready");
         CardRenderer.fitText(g,this.font,count,this.listX + listWidth / 2,barY+3,listWidth-4,missingTotal>0?0xFFFF8A7A:0xFFFFFFFF,true);
 
@@ -1137,19 +1227,31 @@ public class DeckCaseScreen extends Screen {
         if (this.savedDeckId != null) this.deleteDeckButton = drawButton(g, Component.literal(this.confirmDelete ? "Delete?" : "Delete"),
                 this.listX + listWidth - 32, this.filterY + 31, 32, mouseX, mouseY);
         int listTop = this.filterY + 53;
+        if (deck.format()==DeckFormat.COMMANDER) {
+            var leader=deck.commander().orElse(null);
+            leaderBand=new int[]{listX,listTop,listWidth,25};
+            g.fill(listX,listTop,listX+listWidth,listTop+25,0xFF493322);
+            g.outline(listX,listTop,listWidth,25,inside(leaderBand,mouseX,mouseY)?0xFFFFFFFF:0xFFE1AE52);
+            CardRenderer.fitText(g,font,Component.literal("Commander"),listX+4,listTop+3,listWidth-8,GOLD,false,false);
+            Component name=leader!=null && craftbound.game.CommanderMatch.eligible(leader)?Cards.name(leader):Component.literal("Choose legendary");
+            CardRenderer.fitText(g,font,name,listX+4,listTop+14,listWidth-8,0xFFFFF2D5,false,false);
+            listTop+=28;
+        }
         int listHeight = Math.max(16, this.footerY - 6 - listTop);
         this.listArea = new int[]{this.listX, listTop, listWidth, listHeight};
         g.fill(this.listX, listTop, this.listX + listWidth, listTop + listHeight, PAGE);
 
         List<Identifier> inDeck = new ArrayList<>();
         for (Identifier id : Cards.collectible()) {
-            if (deck.copies(id) > 0) inDeck.add(id);
+            if (deck.copies(id) > 0 && !deck.leads(id)) inDeck.add(id);
         }
         inDeck.sort(Comparator.<Identifier>comparingInt(id -> Cards.get(id).cost())
                 .thenComparing(id -> Cards.name(id).getString()));
         int visibleRows = Math.max(1, (listHeight - 4) / ROW_HEIGHT);
         this.scroll = Math.max(0, Math.min(this.scroll, inDeck.size() - visibleRows));
-        if (inDeck.isEmpty()) {
+        if (inDeck.isEmpty() && savedDeckId!=null && !copySources().isEmpty()) {
+            copyButton=drawSmallButton(g,Component.literal("Copy cards…"),listX+3,listTop+3,listWidth-6,mouseX,mouseY);
+        } else if (inDeck.isEmpty()) {
             int lineY = listTop + 4;
             for (var line : this.font.split(Component.translatable("deck_ui.craftbound.empty"), listWidth - 8)) {
                 g.text(this.font, line, this.listX + 4, lineY, 0xFF8A7458, false);
@@ -1288,7 +1390,9 @@ public class DeckCaseScreen extends Screen {
                 return true;
             }
             if (inside(this.newDeckButton, mouseX, mouseY)) {
-                this.choosingClass = true;
+                pendingLeader=null; leaderPage=0;
+                choosingLeader=format()==DeckFormat.COMMANDER;
+                choosingClass=!choosingLeader;
                 return true;
             }
             if (inside(this.fileCardsButton, mouseX, mouseY)) {
@@ -1315,6 +1419,37 @@ public class DeckCaseScreen extends Screen {
             this.search.setValue(""); this.page = 0;
             return true;
         }
+        if (choosingSource) {
+            if(event.button()==InputConstants.MOUSE_BUTTON_LEFT) {
+                if(inside(doneButton,mouseX,mouseY))onClose();
+                else if(inside(leaderNext,mouseX,mouseY))sourcePage++;
+                else if(inside(leaderPrevious,mouseX,mouseY))sourcePage--;
+                else for(int i=0;i<sourceButtons.size();i++) if(inside(sourceButtons.get(i),mouseX,mouseY)) {
+                    int rows=Math.max(1,(panelHeight-80)/24);
+                    savedAction(craftbound.network.BinderDeckPayload.COPY_CARDS,sources.get(sourcePage*rows+i).id(),false);
+                    choosingSource=false;break;
+                }
+            }
+            return true;
+        }
+        if (inside(copyButton,mouseX,mouseY) && event.button()==InputConstants.MOUSE_BUTTON_LEFT) {
+            sourcePage=0; choosingSource=true; return true;
+        }
+        if (choosingLeader && event.button()==InputConstants.MOUSE_BUTTON_LEFT) {
+            if(inside(leaderPrevious,mouseX,mouseY))leaderPage--;
+            else if(inside(leaderNext,mouseX,mouseY))leaderPage++;
+            else if(inside(doneButton,mouseX,mouseY))onClose();
+            else for(var choice:leaderSpots)if(choice.owned() && inside(choice.bounds(),mouseX,mouseY)){pickLeader(choice);break;}
+            return true;
+        }
+        if (inside(leaderBand,mouseX,mouseY)) {
+            if(event.button()==InputConstants.MOUSE_BUTTON_LEFT){choosingLeader=true;leaderPage=0;}
+            else if(event.button()==InputConstants.MOUSE_BUTTON_RIGHT && deck.commander().isPresent()){
+                var id=deck.commander().get();
+                if(Cards.get(id)!=null) zoom(id,deck.cards().count(id,true)>0);
+            }
+            return true;
+        }
         if (inside(this.doneButton, mouseX, mouseY)) {
             this.onClose();
             return true;
@@ -1322,13 +1457,9 @@ public class DeckCaseScreen extends Screen {
         for (int[] choice : this.classChoices) {
             if (inside(choice, mouseX, mouseY)) {
                 if (overview()) {
-                    String id = java.util.UUID.randomUUID().toString();
-                    ClientPlayNetworking.send(new craftbound.network.BinderDeckPayload(holderLocation, id,
-                            craftbound.network.BinderDeckPayload.CREATE, CardClass.values()[choice[4]].name(), false));
-                    this.minecraft.gui.setScreen(pageFor(id));
+                    createDeck(CardClass.values()[choice[4]]);
                     return true;
                 } else if (this.savedDeckId != null) savedAction(craftbound.network.BinderDeckPayload.CLASS, CardClass.values()[choice[4]].name(), false);
-                else ClientPlayNetworking.send(new DeckClassPayload(mainHand, choice[4]));
                 this.choosingClass = false;
                 this.page = 0;
                 this.scroll = 0;
@@ -1350,7 +1481,6 @@ public class DeckCaseScreen extends Screen {
         this.confirmDelete = false;
         if (inside(this.clearDeckButton, mouseX, mouseY)) {
             if (this.savedDeckId != null) savedAction(craftbound.network.BinderDeckPayload.CLEAR, "", false);
-            else ClientPlayNetworking.send(new craftbound.network.ClearDeckPayload(mainHand));
             this.scroll = 0;
             return true;
         }
@@ -1410,7 +1540,6 @@ public class DeckCaseScreen extends Screen {
                 }
                 if (ownsSleeve(sleeve.id())) {
                     if (this.savedDeckId != null) savedAction(craftbound.network.BinderDeckPayload.SLEEVE, sleeve.id().toString(), false);
-                    else if (!overview()) ClientPlayNetworking.send(new DeckSleevePayload(mainHand, sleeve.id()));
                 }
                 return true;
             }
@@ -1499,10 +1628,8 @@ public class DeckCaseScreen extends Screen {
         // A click (no movement) always moves the card; a drag only counts if it ends in the right place.
         if (this.pressedCanMove && this.pressedFromDeck && (!this.dragging || !overList)) {
             if (this.savedDeckId != null) savedAction(craftbound.network.BinderDeckPayload.REMOVE, this.pressedCard.toString(), this.pressedEnchanted);
-            else ClientPlayNetworking.send(new DeckEditPayload(mainHand, this.pressedCard, this.pressedEnchanted, false));
         } else if (this.pressedCanMove && !this.pressedFromDeck && (!this.dragging || overList)) {
             if (this.savedDeckId != null) savedAction(craftbound.network.BinderDeckPayload.ADD, this.pressedCard.toString(), this.pressedEnchanted);
-            else ClientPlayNetworking.send(new DeckEditPayload(mainHand, this.pressedCard, this.pressedEnchanted, true));
         }
         this.pressedCard = null;
         this.dragging = false;
@@ -1646,6 +1773,10 @@ public class DeckCaseScreen extends Screen {
             return true;
         }
         if (this.openFilter != 0) return true;
+        if (choosingLeader) {
+            if(scrollY!=0)leaderPage=Math.clamp(leaderPage-(int)Math.signum(scrollY),0,Math.max(0,leaderPages-1));
+            return true;
+        }
         if (inside(this.listArea, mouseX, mouseY)) {
             if (overview()) this.hubScroll -= (int) Math.signum(scrollY);
             else this.scroll -= (int) Math.signum(scrollY);

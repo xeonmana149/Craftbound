@@ -28,7 +28,7 @@ public final class RelayTableScenario {
             CommanderTableScenario.place(ms.overworld(),pos,ModBlocks.TEAM_TABLE);
             var chairs=TableSeats.ensure(ms.overworld(),pos,net.minecraft.core.Direction.NORTH);
             if(!real.startRiding(chairs.get(0),true,false))throw new AssertionError("Player cannot take the near-side chair");
-            CommanderTableScenario.equip(real);real.inventoryMenu.broadcastChanges();TableLobby.open(real,pos);
+            CommanderTableScenario.equip(real,craftbound.deck.DeckFormat.DUOS);real.inventoryMenu.broadcastChanges();TableLobby.open(real,pos);
         });
         ctx.waitTicks(6);
         ctx.runOnClient(mc->{button(mc.gui.screen(),"Ready");button(mc.gui.screen(),"Take my seat");});
@@ -48,7 +48,7 @@ public final class RelayTableScenario {
                 var chair=TableSeats.ensure(level,pos,net.minecraft.core.Direction.NORTH).get(seat);
                 fake.setPos(chair.getX(),chair.getY(),chair.getZ());
                 if(!fake.startRiding(chair,true,false))throw new AssertionError("Fixture cannot sit in seat "+seat);
-                CommanderTableScenario.equip(fake);RelayTables.join(fake,new RelayJoinPayload(pos,0,CommanderTableScenario.DECK,i==0?1:0));
+                CommanderTableScenario.equip(fake,craftbound.deck.DeckFormat.DUOS);RelayTables.join(fake,new RelayJoinPayload(pos,0,CommanderTableScenario.DECK,i==0?1:0));
                 if(i<2 && RelayTables.matchAt(level,pos)!=null)throw new AssertionError("Relay started without four players");
             }
             var m=RelayTables.matchAt(level,pos);if(m==null)throw new AssertionError("Four Relay seats failed to start");

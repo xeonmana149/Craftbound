@@ -56,6 +56,17 @@ public final class VendorChecks {
         for(int bad:new int[]{-2,6,Integer.MAX_VALUE})ok(!CardVendor.canBuy(bad,10,10,0,1000,one,"",false),"Reject invalid slot");
         ok(CardVendor.canBuy(-1,9,10,63,5,one,"",false),"Pack independent of single stock/day");
         ok(!CardVendor.canBuy(-1,10,10,0,4,one,"",false),"Pack costs five");
+        var packs=new VendorPurchases();var buyer=UUID.randomUUID();packs.mark(buyer,10,2);
+        for(int i=0;i<CardVendor.PACK_LIMIT;i++){
+            ok(CardVendor.canBuy(-1,10,10,packs.bought(buyer,10),5,one,"",false),"Pack "+(i+1)+" of the daily limit");
+            packs.markPack(buyer,10);
+        }
+        ok(CardVendor.packsBought(packs.bought(buyer,10))==CardVendor.PACK_LIMIT&&(packs.bought(buyer,10)&(1<<2))!=0,"Pack count and single marks share the record");
+        ok(!CardVendor.canBuy(-1,10,10,packs.bought(buyer,10),1000,one,"",false),"Packs sell out per player per day");
+        var reloaded=new VendorPurchases();reloaded.load(10,packs.snapshot(10));
+        ok(CardVendor.packsLeft(reloaded.bought(buyer,10))==0,"Pack count survives saving");
+        ok(CardVendor.packsLeft(reloaded.bought(buyer,11))==CardVendor.PACK_LIMIT,"Packs restock the next day");
+        ok(CardVendor.packsLeft(reloaded.bought(UUID.randomUUID(),10))==CardVendor.PACK_LIMIT,"Another player's stock is untouched");
         var ledger=new VendorPurchases();var a=UUID.randomUUID();var b=UUID.randomUUID();
         ledger.mark(a,10,0);ledger.mark(a,10,5);
         ok(ledger.bought(a,10)==33&&ledger.bought(b,10)==0,"Purchases are per-player and per-slot");

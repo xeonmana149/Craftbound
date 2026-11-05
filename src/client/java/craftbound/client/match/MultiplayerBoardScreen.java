@@ -36,6 +36,7 @@ public abstract class MultiplayerBoardScreen extends Screen implements LocalLayo
     private static final int TEXT=0xFFF1E8D4, QUIET=0xFFC3C9BF, GOLD=0xFFFFD56B, INK=0xFF1C211E;
     private static final int CARD_W=CARD_WIDTH,CARD_H=CARD_HEIGHT,HERO=48,SOCKET=36;
     private static final int EMBER=0xFFE79D89, TIDE=0xFF9FC9E0, IMPACT=0xFFF59B83;
+    private final CommanderLogPanel commanderLog = new CommanderLogPanel();
     private final boolean teams;
     protected JsonObject data;
     protected Screen previewReturn;
@@ -135,6 +136,11 @@ public abstract class MultiplayerBoardScreen extends Screen implements LocalLayo
                 var path=next.getAsJsonObject("publicAttack");
                 queueAttack(BoardAttack.read(old, path), flashAt);
             }
+        }
+        if (!teams && flag(next,"layoutPreview") && next.has("players") && commanderLog.latestRound()==0) {
+            int owner = num(next,"current");
+            commanderLog.preview(new CommanderHistory.Entry(num(next,"round"),num(next,"turn"),owner,
+                    CommanderHistory.Kind.TURN,str(next.getAsJsonArray("players").get(owner).getAsJsonObject(),"name")));
         }
         data=next;received=System.currentTimeMillis();clockHeld=flag(next,"clockHeld")||next.has("choice");
         choiceState=MatchState.choiceView(next);
@@ -264,7 +270,10 @@ public abstract class MultiplayerBoardScreen extends Screen implements LocalLayo
             addRenderableWidget(new TableBookButton(width-84, 2, 80, 14, Component.literal("Preview attack"),
                     this::previewRemoteAttack));
         }
-        button(6,height-20,Math.min(78,width/5),"Battle log",()->showLog=!showLog);
+        button(6,height-20,Math.min(78,width/5),"Battle log",()->{
+            if (!showLog && !teams) reset();
+            showLog=!showLog;
+        });
         endButton=button(width-Math.min(96,width/4)-5,height-21,Math.min(96,width/4),teams?"Ready":"End Turn",()->{
             if(me()<0||flag(data,"over")||previewReturn!=null){onClose();return;}
             send(MatchActionPayload.END_TURN,0,-1,0);
@@ -287,6 +296,13 @@ public abstract class MultiplayerBoardScreen extends Screen implements LocalLayo
         next.addProperty("turn", num(data,"turn") + 1);
         next.addProperty("current", from);
         next.addProperty("stateRevision", stateRevision(data) + 1);
+        int round = Math.max(1,num(data,"round")) + (from <= num(data,"current") ? 1 : 0);
+        next.addProperty("round",round);
+        int turn = num(next,"turn");
+        commanderLog.preview(new CommanderHistory.Entry(round,turn,from,CommanderHistory.Kind.TURN,str(seat(from),"name")));
+        commanderLog.preview(new CommanderHistory.Entry(round,turn,from,CommanderHistory.Kind.DETAIL,
+                str(seat(from),"name")+" has "+num(seat(from),"xp")+"/"+num(seat(from),"maxXp")+" XP."));
+        commanderLog.preview(new CommanderHistory.Entry(round,turn,from,CommanderHistory.Kind.ACTION,BoardAttack.read(data,path).caption()+"."));
         update(next);
     }
 
@@ -353,13 +369,13 @@ public abstract class MultiplayerBoardScreen extends Screen implements LocalLayo
     private void drawMatchHover(GuiGraphicsExtractor g, int mx, int my) {
         cardHover.prepare(font, width, height, data);
         g.nextStratum();
-        if (cardHover.drawRetained(g, mx, my)) return;
         if (hoverHand >= 0 && hoverHand < hand().size()) {
             JsonObject card = hand().get(hoverHand).getAsJsonObject();
             cardHover.hand(g, Identifier.parse(str(card, "id")), flag(card, "ench"), MatchState.readTraining(card),
                     (int) Math.round(handPose(hoverHand).cx()), 4, playable(hoverHand), mx, my);
             return;
         }
+        if (cardHover.drawRetained(g, mx, my)) return;
         Hit hit = hit(mx, my);
         if (hit == null) return;
         JsonObject owner = seat(hit.side);
@@ -637,24 +653,29 @@ public abstract class MultiplayerBoardScreen extends Screen implements LocalLayo
         JsonObject tool=p.getAsJsonObject("tool");String art=power||tool==null?"":str(tool,"id");
         var heroPower=HeroPowers.of(cardClass(p));
         boolean ready=power&&s==me()&&canAct()&&flag(p.getAsJsonObject("power"),"usable")&&hasMove("power");
-        Hit hit=add(new Rect(x-2,y-2,SOCKET+4,SOCKET+7),s,-1,power?"power":"tool",art,
+        int top = power && !rig.near() ? y-8 : y-2;
+        int bottom = power && rig.near() ? y+SOCKET+8 : y+SOCKET+(tool!=null && !power ? 6 : 2);
+        int pad = !power && tool!=null ? 4 : 2;
+        Hit hit=add(new Rect(x-pad,top,SOCKET+2*pad,bottom-top),s,-1,power?"power":"tool",art,
                 tool!=null&&flag(tool,"ench"),power?heroPower.displayName().getString()+": "+heroPower.description().getString():
                 tool==null?"No tool equipped":"Tool - "+cardName(art)+" - "+num(tool,"atk")+" Attack / "+num(tool,"uses")+" Durability");
         MatchArt.octagon(g,x-2,y-2,SOCKET+4,0xFF0F1511);
         MatchArt.octagon(g,x,y,SOCKET,power?MatchArt.GOLD:tool==null?0xFF2A2B2F:flag(tool,"ench")?0xFFBD83EF:MatchArt.GOLD_DARK);
         MatchArt.octagon(g,x+3,y+3,SOCKET-6,0xFF323735);
+        boolean hover = hovered(hit);
+        if (hover || ready) MatchArt.octagonOutline(g,x,y,SOCKET,hover?0xFFFFFFFF:MatchArt.GLOW,hover?1:2);
         if(power){
             drawItem(g,icon(heroPower.icon().toString()),(int)at.x(),(int)at.y(),29);
             if(flag(p.getAsJsonObject("power"),"used"))MatchArt.octagon(g,x+2,y+2,SOCKET-4,0x99414942);
-            MatchArt.cost(g,font,x+SOCKET/2-8,rig.near()?y+SOCKET-8:y-8,16,2);
-            if(ready)MatchArt.octagonOutline(g,x-4,y-4,SOCKET+8,MatchArt.GLOW,2);
+            if (hover || ready) g.nextStratum();
+            MatchArt.cost(g,font,x+SOCKET/2-8,rig.near()?y+SOCKET-8:y-8,16,Match.POWER_COST);
         }else if(tool!=null){
             CardVisual v=visual(art,flag(tool,"ench"));
             if(v!=null)drawItem(g,v.icon,(int)at.x(),(int)at.y(),29);
+            if (hover) g.nextStratum();
             MatchArt.attack(g,font,x-4,y+SOCKET-12,18,num(tool,"atk"),0xFFFFFFFF);
             MatchArt.uses(g,font,x+SOCKET-14,y+SOCKET-12,18,num(tool,"uses"));
         }
-        if(hovered(hit))MatchArt.octagonOutline(g,x-3,y-3,SOCKET+6,0xFFFFFFFF,1);
     }
     private void drawCommander(GuiGraphicsExtractor g,Seat rig){
         var p=seat(rig.owner());String id=str(p,"leader");CardVisual v=visual(id,flag(p,"leaderEnch"));if(v==null)return;
@@ -788,7 +809,7 @@ public abstract class MultiplayerBoardScreen extends Screen implements LocalLayo
             return winner<0?"Draw":teams?"Team "+RelayMatch.teamName(winner)+" wins!":str(seat(winner),"name")+" wins!";
         }
         if(teams)return "Turn "+num(data,"turn")+" - "+RelayMatch.teamName(num(data,"activeTeam"))+" acts";
-        return "Turn "+num(data,"turn")+" - "+str(seat(num(data,"current")),"name");
+        return "Round "+Math.max(1,num(data,"round"))+" · Turn "+num(data,"turn")+" - "+str(seat(num(data,"current")),"name");
     }
     private void header(GuiGraphicsExtractor g){
         g.fill(0,0,width,teams?20:44,0xFF232B27);
@@ -869,7 +890,11 @@ public abstract class MultiplayerBoardScreen extends Screen implements LocalLayo
         if(!hint.isEmpty())label(g,hint,width/2,height-12,Math.max(30,width-2*bank-10),QUIET);
     }
     private List<String> publicLog(){return publicLines;}
+    public final void receiveHistory(CommanderHistoryPayload packet) {
+        if (!teams && packet.session().equals(str(data,"session"))) commanderLog.append(packet.offset(),packet.entries());
+    }
     private void drawLog(GuiGraphicsExtractor g){
+        if (!teams) { commanderLog.draw(g,font,width,height); return; }
         int w=Math.min(220,width-30),x=6,bottom=height-24,y=Math.max(24,bottom-132);
         g.nextStratum();g.fill(x,y,x+w,bottom,0xF0232B25);g.outline(x,y,w,bottom-y,0xFFAC8755);
         g.text(font,"Battle log",x+7,y+7,GOLD,false);
@@ -1029,8 +1054,12 @@ public abstract class MultiplayerBoardScreen extends Screen implements LocalLayo
         }
         if(!inspected.isEmpty())return inspectClick(event);
         if(menu)return menuClick(event);
+        if (showLog && !teams) {
+            showLog = commanderLog.click(width,height,event.x(),event.y(),event.button()==InputConstants.MOUSE_BUTTON_LEFT);
+            return true;
+        }
         if (canHover() && cardHover.valid(data, width, height)
-                && cardHover.click(event.x(), event.y(), event.button() == InputConstants.MOUSE_BUTTON_LEFT)) return true;
+                && handAt(event.x(),event.y()) < 0 && cardHover.click(event.x(), event.y(), event.button() == InputConstants.MOUSE_BUTTON_LEFT)) return true;
         cardHover.clear();
         if(super.mouseClicked(event,twice))return true;
         int tab=rivalAt(event.x(),event.y());
@@ -1083,11 +1112,20 @@ public abstract class MultiplayerBoardScreen extends Screen implements LocalLayo
             if(vertical!=0&&inspectedPages>1)inspectedPage=Math.clamp(inspectedPage+(vertical<0?1:-1),0,inspectedPages-1);
             return true;
         }
-        if (canHover() && cardHover.valid(data, width, height) && cardHover.scroll(x, y, vertical)) return true;
+        if (showLog && !teams) { commanderLog.scroll(width,height,vertical); return true; }
+        if (canHover() && cardHover.valid(data, width, height) && handAt(x,y) < 0 && cardHover.scroll(x, y, vertical)) return true;
         if(menu||mat.viewport().contains(x,y))return true;
         return super.mouseScrolled(x,y,horizontal,vertical);
     }
     @Override public boolean keyPressed(KeyEvent event){
+        if (showLog && !teams) {
+            if (event.isEscape()) showLog=false;
+            else if (event.key()==InputConstants.KEY_LEFT) commanderLog.stepRound(false);
+            else if (event.key()==InputConstants.KEY_RIGHT) commanderLog.stepRound(true);
+            else if (event.key()==InputConstants.KEY_UP) commanderLog.scroll(width,height,1);
+            else if (event.key()==InputConstants.KEY_DOWN) commanderLog.scroll(width,height,-1);
+            return true;
+        }
         if(choosing()){if(event.isEscape())onClose();return true;}
         if(!inspected.isEmpty()){
             if(event.isEscape())closeInspect();

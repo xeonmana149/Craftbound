@@ -26,29 +26,16 @@ public class ModNetworking {
         PayloadTypeRegistry.serverboundPlay().register(BinderDeckPayload.TYPE, BinderDeckPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(BinderDeckPayload.TYPE,
                 (payload, context) -> craftbound.deck.BinderDecks.handle(context.player(), payload));
-        PayloadTypeRegistry.serverboundPlay().register(ClearDeckPayload.TYPE, ClearDeckPayload.CODEC);
-        ServerPlayNetworking.registerGlobalReceiver(ClearDeckPayload.TYPE, (payload, context) -> {
-            ServerPlayer player = context.player();
-            ItemStack stack = player.getItemInHand(payload.mainHand() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND);
-            if (!stack.is(ModItems.DECK_CASE)) return;
-            DeckBuilding.migrate(player, stack);
-            var deck = stack.getOrDefault(ModComponents.DECK_CONTENTS, craftbound.deck.DeckContents.EMPTY);
-            stack.set(ModComponents.DECK_CONTENTS, new craftbound.deck.DeckContents(deck.deckClass(), BinderContents.EMPTY, true));
-        });
         PayloadTypeRegistry.serverboundPlay().register(TakeFromBinderPayload.TYPE, TakeFromBinderPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(FileAllCardsPayload.TYPE, FileAllCardsPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(PackOpenedPayload.TYPE, PackOpenedPayload.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(DeckEditPayload.TYPE, DeckEditPayload.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(DeckClassPayload.TYPE, DeckClassPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(SelectBoardPayload.TYPE, SelectBoardPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(SelectBoardPayload.TYPE, (payload, context) -> {
             var player = context.player();
             if (player.getInventory().contains(stack -> stack.is(ModItems.BINDER)))
                 craftbound.board.BoardCollection.select(player, payload.design());
         });
-        PayloadTypeRegistry.serverboundPlay().register(DeckSleevePayload.TYPE, DeckSleevePayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(DisenchantExtrasPayload.TYPE, DisenchantExtrasPayload.CODEC);
-        PayloadTypeRegistry.serverboundPlay().register(DeckRenamePayload.TYPE, DeckRenamePayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(CardSeenPayload.TYPE, CardSeenPayload.CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(DisenchantExtrasPayload.TYPE, (payload, context) -> {
@@ -66,43 +53,6 @@ public class ModNetworking {
             player.giveExperiencePoints(result.xp());
             player.level().playSound(null, player.getX(), player.getY(), player.getZ(),
                     SoundEvents.GRINDSTONE_USE, SoundSource.PLAYERS, 0.8F, 1.0F);
-        });
-
-        ServerPlayNetworking.registerGlobalReceiver(DeckSleevePayload.TYPE, (payload, context) -> {
-            ItemStack deckCase = context.player().getItemInHand(payload.mainHand() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND);
-            if (deckCase.is(ModItems.DECK_CASE)) {
-                DeckBuilding.setSleeve(context.player(), deckCase, payload.sleeve());
-            }
-        });
-
-        ServerPlayNetworking.registerGlobalReceiver(DeckEditPayload.TYPE, (payload, context) -> {
-            ServerPlayer player = context.player();
-            ItemStack deckCase = player.getItemInHand(payload.mainHand() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND);
-            if (!deckCase.is(ModItems.DECK_CASE)) {
-                return;
-            }
-            DeckBuilding.migrate(player, deckCase);
-            if (payload.add()) {
-                DeckBuilding.add(player, deckCase, payload.card(), payload.enchanted());
-            } else {
-                DeckBuilding.remove(deckCase, payload.card(), payload.enchanted());
-            }
-        });
-
-        ServerPlayNetworking.registerGlobalReceiver(DeckClassPayload.TYPE, (payload, context) -> {
-            ItemStack deckCase = context.player().getItemInHand(payload.mainHand() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND);
-            if (!deckCase.is(ModItems.DECK_CASE) || payload.deckClass() < 0 || payload.deckClass() >= CardClass.values().length) {
-                return;
-            }
-            DeckBuilding.migrate(context.player(), deckCase);
-            DeckBuilding.setClass(deckCase, CardClass.values()[payload.deckClass()]);
-        });
-
-        ServerPlayNetworking.registerGlobalReceiver(DeckRenamePayload.TYPE, (payload, context) -> {
-            ItemStack deckCase = context.player().getItemInHand(payload.mainHand() ? InteractionHand.MAIN_HAND : InteractionHand.OFF_HAND);
-            if (deckCase.is(ModItems.DECK_CASE)) {
-                DeckBuilding.rename(deckCase, payload.name());
-            }
         });
 
         // A new card has been looked at: it stops being new in every binder you're carrying.

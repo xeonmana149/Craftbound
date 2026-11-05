@@ -26,6 +26,7 @@ public final class CommanderTables {
         final LinkedHashMap<UUID,Pick> ready=new LinkedHashMap<>();
         final Set<UUID> watchers=new HashSet<>();
         final int[] absent=new int[4];
+        final Map<UUID,Integer> historySent = new HashMap<>();
         CommanderMatch match;
         MultiplayerSeats furniture;
         final Location location;
@@ -42,6 +43,7 @@ public final class CommanderTables {
         PayloadTypeRegistry.serverboundPlay().register(CommanderJoinPayload.TYPE,CommanderJoinPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(CommanderInputPayload.TYPE,CommanderInputPayload.CODEC);
         PayloadTypeRegistry.clientboundPlay().register(CommanderViewPayload.TYPE,CommanderViewPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(CommanderHistoryPayload.TYPE,CommanderHistoryPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(CommanderJoinPayload.TYPE,(p,c)->join(c.player(),p));
         ServerPlayNetworking.registerGlobalReceiver(CommanderInputPayload.TYPE,(p,c)->input(c.player(),p));
         ServerTickEvents.END_SERVER_TICK.register(CommanderTables::tick);
@@ -65,8 +67,11 @@ public final class CommanderTables {
         return pod!=null && pod.match==null?"Commander: "+pod.ready.size()+"/4":"";
     }
     private static String validate(ServerPlayer p, Pick pick) {
-        String issue=MatchManager.whyCantPlay(p,pick.slot,pick.deck);
+        String issue=MatchManager.whyCantPlay(p,pick.slot,pick.deck,craftbound.deck.DeckFormat.COMMANDER);
         if(issue!=null) return Component.translatable(issue,MatchManager.PRACTICE_MIN_DECK).getString();
+        var prepared=craftbound.deck.BinderDecks.resolve(p.getInventory(),pick.slot,pick.deck)
+                .getOrDefault(craftbound.component.ModComponents.DECK_CONTENTS,craftbound.deck.DeckContents.EMPTY);
+        if (!prepared.leads(pick.leader)) return "Ready with the commander saved in this deck.";
         var choice=MatchManager.deckIn(p,pick.slot,pick.deck);
         return CommanderMatch.problem(choice.deckClass(),choice.cards(),pick.leader);
     }
@@ -221,6 +226,17 @@ public final class CommanderTables {
         if(notice!=null)out.addProperty("notice",notice);
         out.addProperty("session",pod.id);out.addProperty("revision",pod.revision);
         ServerPlayNetworking.send(p,new CommanderViewPayload(out.toString(),open));
+        if (pod.match != null) {
+            var history = pod.match.history;
+            UUID id = p.getUUID();
+            int start = open ? 0 : pod.historySent.getOrDefault(id,0);
+            while (start < history.size()) {
+                int end = Math.min(history.size(), start + CommanderHistoryPayload.PAGE_SIZE);
+                ServerPlayNetworking.send(p,new CommanderHistoryPayload(pod.id,start,history.slice(start,end)));
+                start = end;
+            }
+            pod.historySent.put(id,start);
+        }
     }
     static String publicBoard(CommanderMatch match) {
         var board=JsonParser.parseString(MatchView.publicBoard(match,false)).getAsJsonObject();
@@ -230,6 +246,7 @@ public final class CommanderTables {
     }
     public static JsonObject view(CommanderMatch m,int viewer) {
         JsonObject out=JsonParser.parseString(MatchView.build(m,viewer,m.events.size())).getAsJsonObject();
+        out.addProperty("round",m.history.round());
         out.remove("log"); out.remove("events"); // This screen uses public resolved state, never historic hand events.
         for(int s=0;s<4;s++) {
             var seat=out.getAsJsonArray("players").get(s).getAsJsonObject();

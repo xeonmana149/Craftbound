@@ -24,14 +24,16 @@ import net.minecraft.server.level.ServerPlayer;
 /** One actual network client and three fixture players ready separate owned binders in the same world. */
 public final class CommanderTableScenario {
     static final String DECK="c72d002c-4268-4694-97aa-128c4ea8ee10";
-    static Identifier equip(ServerPlayer p) {
+    static Identifier equip(ServerPlayer p) { return equip(p, craftbound.deck.DeckFormat.COMMANDER); }
+    static Identifier equip(ServerPlayer p, craftbound.deck.DeckFormat format) {
         Map<Identifier,Integer> singles=new LinkedHashMap<>();
-        Cards.collectible().stream().filter(id->DeckRules.allowed(id,CardClass.FIGHTER)).limit(20).forEach(id->singles.put(id,1));
+        Cards.collectible().stream().filter(id->DeckRules.allowed(id,CardClass.FIGHTER)).limit(format.size()).forEach(id->singles.put(id,1));
+        var leader=singles.keySet().stream().filter(CommanderMatch::eligible).findFirst().orElseThrow();
         var contents=new BinderContents(singles,Map.of(),Set.of(),Set.of());
         var binder=BinderItem.creativeBinder();
-        binder.set(ModComponents.SAVED_DECKS,new SavedDecks(List.of(new SavedDecks.Entry(DECK,"Raid party",new DeckContents(CardClass.FIGHTER,contents,true),Sleeves.CLASSIC))));
+        binder.set(ModComponents.SAVED_DECKS,new SavedDecks(List.of(new SavedDecks.Entry(DECK,"Raid party",new DeckContents(CardClass.FIGHTER,contents,true,format,format==craftbound.deck.DeckFormat.COMMANDER?Optional.of(leader):Optional.empty()),Sleeves.CLASSIC))));
         p.getInventory().setItem(0,binder);
-        return singles.keySet().stream().filter(CommanderMatch::eligible).findFirst().orElseThrow();
+        return leader;
     }
     static void click(Screen s,int x,int y){
         var e=new MouseButtonEvent(x,y,new MouseButtonInfo(InputConstants.MOUSE_BUTTON_LEFT,0));s.mouseClicked(e,false);s.mouseReleased(e);

@@ -9,10 +9,9 @@ import java.util.Comparator;
 import java.util.List;
 
 // The Card Master's brain. It takes one action at a time so you can watch it play:
-// 1. Play the most expensive card it can afford (skipping ones that would be wasted).
+// 1. Take a winning board attack first. Otherwise play the highest-priority card it can afford (skipping ones that would be wasted).
 // 2. Use its class power if it has the XP.
-// 3. Attack with each ready mob, then its hero: kill an enemy mob if it can do it and survive, otherwise
-//    go for your hero.
+// 3. Trade out of visible lethal, including sacrifices and combined attacks. Outside danger, prefer favorable trades.
 // 4. End its turn.
 public class MatchAI {
     // Swaps out cards that cost 4 or more: they'd sit in hand for the first few turns.
@@ -42,7 +41,8 @@ public class MatchAI {
 
     // Does one thing. Returns false when it has nothing left to do and has ended its turn.
     public static boolean step(Match match, int side) {
-        if (playBestCard(match, side) || usePower(match, side) || attackWithAMob(match, side) || attackWithHero(match, side)) {
+        if (CombatTactics.takeLethal(match,side) || playBestCard(match, side) || usePower(match, side)
+                || CombatTactics.defend(match,side) || attackWithAMob(match, side) || attackWithHero(match, side)) {
             return true;
         }
         match.endTurn(side);

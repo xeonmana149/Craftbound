@@ -66,6 +66,11 @@ public class Minion {
         return this.health <= 0;
     }
 
+    int afterArmor(int amount) {
+        return craftbound.card.CardCatalog.passive(card.id(), craftbound.card.CardCatalog.Passive.ARMOR)
+                ? Math.max(0,amount-craftbound.card.CardCatalog.passiveAmount(card.id())) : amount;
+    }
+
     public boolean canAttack() {
         // Callers check Match.attackOf, which also includes auras and attack penalties.
         return this.ready && !this.frozen && !isDead() && !has(Keyword.BLOCK);

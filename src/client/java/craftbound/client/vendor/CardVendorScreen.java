@@ -54,10 +54,12 @@ public final class CardVendorScreen extends Screen {
         g.item(new ItemStack(ModItems.BOOSTER_PACK),0,0);g.pose().popMatrix();
         price(g,14,top+61,state.packPrice(),money,packWidth-4);
         pack=new Spot(14,top+85,packWidth-4,20,-1);
-        boolean afford=money>=state.packPrice()&&!pending;
+        int packsLeft=craftbound.vendor.CardVendor.packsLeft(state.bought());
+        boolean afford=money>=state.packPrice()&&packsLeft>0&&!pending;
         g.fill(pack.x,pack.y,pack.x+pack.w,pack.y+pack.h,afford?0xFF3C7150:0xFF454A46);
         g.outline(pack.x,pack.y,pack.w,pack.h,afford?0xFFADCEA9:0xFF68716C);
-        CardRenderer.fitText(g,font,Component.literal("Buy"),pack.x+pack.w/2,pack.y+6,pack.w-8,0xFFFFFFFF,true,true);
+        CardRenderer.fitText(g,font,Component.literal(packsLeft>0?"Buy":"SOLD OUT"),pack.x+pack.w/2,pack.y+6,pack.w-8,packsLeft>0?0xFFFFFFFF:0xFFFFD080,true,true);
+        CardRenderer.fitText(g,font,Component.literal(packsLeft>0?packsLeft+" left today":"Restocks tomorrow"),pack.x+pack.w/2,pack.y+pack.h+4,pack.w,0xFFB5D7C0,true,false);
         int gap=8,label=21,cellWidth=(gridWidth-gap*2)/3;
         float scale=Math.max(0.1F,Math.min(cellWidth/(float)CardRenderer.WIDTH,(available-label*2-gap)/(2F*CardRenderer.HEIGHT)));
         int cw=Math.round(CardRenderer.WIDTH*scale),ch=Math.round(CardRenderer.HEIGHT*scale);
@@ -101,7 +103,8 @@ public final class CardVendorScreen extends Screen {
         if(event.button()!=InputConstants.MOUSE_BUTTON_LEFT)return super.mouseClicked(event,doubleClick);
         if(pending)return true;
         int slot=-2;
-        if(pack!=null&&pack.contains(event.x(),event.y()))slot=-1;
+        if(pack!=null&&pack.contains(event.x(),event.y()))slot=craftbound.vendor.CardVendor.packsLeft(state.bought())>0?-1:-3;
+        if(slot==-3)return true;
         for(var spot:spots)if(spot.contains(event.x(),event.y()))slot=spot.slot;
         if(slot==-2)return super.mouseClicked(event,doubleClick);
         var offer=slot<0?null:state.offers().get(slot);

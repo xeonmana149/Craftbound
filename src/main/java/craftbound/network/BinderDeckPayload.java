@@ -10,7 +10,7 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 public record BinderDeckPayload(int location, String deckId, int action, String value, boolean enchanted)
         implements CustomPacketPayload {
     public BinderDeckPayload(boolean mainHand, String deckId, int action, String value, boolean enchanted) { this(mainHand ? 1 : 0, deckId, action, value, enchanted); }
-    public static final int CREATE=0, ADD=1, REMOVE=2, RENAME=3, CLASS=4, SLEEVE=5, CLEAR=6, DELETE=7, IMPORT=8;
+    public static final int CREATE=0, ADD=1, REMOVE=2, RENAME=3, CLASS=4, SLEEVE=5, CLEAR=6, DELETE=7, IMPORT=8, CHOOSE_COMMANDER=9, COPY_CARDS=10;
     public static final Type<BinderDeckPayload> TYPE = new Type<>(Craftbound.id("binder_deck"));
     public static final StreamCodec<RegistryFriendlyByteBuf, BinderDeckPayload> CODEC = StreamCodec.composite(
             ByteBufCodecs.VAR_INT, BinderDeckPayload::location,

@@ -467,3 +467,42 @@ The binder reserves recessed pockets on collection, card back and board design p
 - Team Duos shows Ember and Tide's shared Health at the center of the corresponding portrait bands. The felt has a light team tint and sage corner marks indicate the active half. Shorter player labels and a reserved central space keep the hearts clear of resource panels and a full hand.
 - Commander distinguishes the active player with a pulsing sage edge and the viewed rival with a gold underline. Public attacks show a named caption and a directional trail. Hidden participants are marked on their rival tabs. The developer Commander preview includes a local Preview attack button.
 - Offline checkCards, checkCardFaces, compileGametestJava and jar passed. The headless checks cover mirrored team badges, clearance for a ten-card hand, nameplates and XP panels at four sizes, and attack anchors for visible and hidden rivals. The live multiplayer client was not run. Build log: build/team-hearts-commander-combat.log.
+
+## 2026-11-06 — Deck Cases removed, practice rewards, vendor model (Claude)
+
+- **Deck Cases are gone.** Removed the `deck_case` item, `DeckCaseItem`, `DeckCaseRetirement` (the old-case converter) and its checks, the item model and lang entry. Also removed the five held-case network messages: `ClearDeck`, `DeckEdit`, `DeckClass`, `DeckSleeve` and `DeckRename` payloads. Any Deck Case still in a world now disappears on load.
+  - Saved decks are now carried by `DeckBuilding.deckStack()`, a temporary stack that is never given to a player. `DeckBuilding.whyCantPlay` now checks that the stack has `DECK_CONTENTS` instead of checking for a Deck Case.
+  - Deck names come from `DeckBuilding.name(stack)`. `MAX_NAME_LENGTH` (32) moved there.
+  - The `BinderDeckPayload.IMPORT` action is no longer handled. `BinderDecks.resolve` with an empty id returns empty.
+  - The deck editor is still called `DeckCaseScreen`; I didn't rename it.
+  - Lang: a deck with no class is now "New Deck", and the no-deck, too-small and equipped messages no longer mention Deck Cases. The full_deck advancement icon is now the binder.
+  - Sleeves are kept: they're still an item and a collection.
+- **Practice rewards.**
+  - Practice is any duel with an AI seat. It pays reduced Class Mastery only: 10 for a win, 4 for a loss.
+  - PvP keeps 25 and 10. The constants and `matchPoints` are in `MasteryProgress`.
+  - Practice wins no longer award a card back. Card backs now come from The Trials, and later from village Card Masters. `SleeveCollection.awardVictory` is kept for that.
+  - The rulebook's Mastery and card-back pages are updated, plus a new check that practice pays less.
+- **Card vendor model.** Both halves' thin front panels now have explicit texture coordinates within 0–16. Before, the upper half failed to load ("Cannot compute translucency out of bounds"). The hidden back faces were dropped.
+- **Checks:** run in a copy of the tree, because `MultiplayerBoardScreen` didn't compile at 09:30. Codex's Commander log there uses `org.lwjgl.glfw.GLFW.GLFW_KEY_*`, which isn't on the 26.3 classpath; use `InputConstants.KEY_*`. With only that patched in the copy, compile including gametests, `checkCards` (124,940) and `checkCardFaces` all pass. Not playtested.
+- **Vendor pack stock (owner's call):** each player can buy 3 booster packs per vendor per day, restocking at dawn with the singles (`CardVendor.PACK_LIMIT`).
+  - The count lives in bits 8–11 of the existing per-player daily record. Bits 0–5 still mark the singles, so old saves and the `VendorStatePayload` are unchanged.
+  - The vendor screen shows "N left today" under the pack, and "SOLD OUT" / "Restocks tomorrow" once the player has bought all three.
+  - New checks are in `VendorChecks`; `checkVendor` passes (40,043).
+  - At 09:37, `checkCards` stopped at `BlockUtilityChecks.multiplayer`, then at `CommanderChecks`. Codex's in-progress change of `CommanderMatch.DECK_SIZE` from 20 to 40 doesn't match all its checks yet. That's not caused by this work.
+
+## 2026-11-06 — Commander deck preparation and battle history
+
+- The 1v1, Team Duos and Commander tables filter saved binder lists by their persistent format. Untagged older lists default to 1v1. Copy cards in a fresh deck copies compatible, owned cards from another list in the same binder under the destination format’s rules.
+- Commander creation starts by selecting an owned collectible legendary mob. A Neutral leader allows a choice of class. Class-specific leaders select their own class. The command zone has a fixed, gold-edged row above the scrolling deck. Forty different cards include the commander. Server joining checks the saved leader, ownership and format. Incomplete lists can be saved.
+- Commander’s public journal records actions and outcomes as they happen. It groups a full history into rounds and seat turns, including after elimination, and streams bounded batches to players and spectators. The round arrows and Details toggle give access to prior plays, targets, damage, healing, statuses and commander damage. Hidden hand identities stay private.
+- Tool and power socket outlines render under the badges. The full offline Gradle check, client game-test compilation and JAR build passed. Coverage includes legacy saves, format and leader persistence, deck copying and limits, round rollover, private events and journal packet round-trips. The changes were not playtested in a running client. Log: build/commander-decks-and-journal-final.log.
+
+## 2026-11-06 — Hand hover on linked cards
+
+- Duels, Team Duos and Commander resolve the actual hand slot first. Enlarged hand art no longer holds a linked preview open. A brief directional handoff lets the pointer reach the generated card and its paging controls.
+- The offline checks and JAR build passed. The client regression scenario for moving from a linked card to a neighboring slot compiled but was not run in Minecraft. Log: build/linked-hand-hover-check.log.
+
+## 2026-11-06 — Card Master trades to survive
+
+- Before attacking, the AI checks for a win with its ready attackers. When the opposing board threatens lethal next turn, it can sacrifice a mob, combine attackers against one threat, or clear several threats. The estimate uses visible mobs, tools, Shields, armor, Freeze and Wither.
+- Match-engine checks cover defensive trades, multiple kills, Shield bypass, and taking immediate lethal. The offline Gradle checks, game-test compilation and JAR build passed. Build log: build/ai-board-lethal-check.log.

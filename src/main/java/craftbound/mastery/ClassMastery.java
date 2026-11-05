@@ -23,10 +23,12 @@ public final class ClassMastery {
     public static MasteryProgress get(Player player) {
         return ((AttachmentTarget) player).getAttachedOrElse(PROGRESS, MasteryProgress.EMPTY);
     }
-    public static void award(ServerPlayer player, CardClass cls, boolean won) {
+    public static void award(ServerPlayer player, CardClass cls, boolean won) { award(player, cls, won, false); }
+
+    public static void award(ServerPlayer player, CardClass cls, boolean won, boolean practice) {
         if (cls == CardClass.NEUTRAL) return;
         var before = get(player);
-        var after = before.earn(cls, won ? 25 : 10);
+        var after = before.earn(cls, MasteryProgress.matchPoints(won, practice));
         int gained = after.points(cls) - before.points(cls);
         if (gained == 0) return;
         ((AttachmentTarget) player).setAttached(PROGRESS, after);

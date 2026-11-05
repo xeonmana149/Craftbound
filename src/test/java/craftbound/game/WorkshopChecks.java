@@ -24,7 +24,7 @@ public class WorkshopChecks {
  static int hand(Match m,String name){return (int)m.player(0).hand.stream().filter(c->c.id().equals(id(name))).count();}
  static void validation() {
   var base=craftbound.test.TestCatalogue.full();
-  ok(base.entries().size()==101,"catalogue size");ok(Cards.collectible().size()==80,"collectible size");
+  ok(base.entries().size()==115,"catalogue size");ok(Cards.collectible().size()==94,"collectible size");
   ok(CardCatalog.parse(base.json()).entries().equals(base.entries()),"catalogue round trip");
   ok(!CardCatalog.description(CardCatalog.entry(id("sharpness"))).contains("Play:"),"Item/Enchantment text omits redundant Play");
   ok(CardCatalog.description(CardCatalog.entry(id("iron_hoe"))).contains("After your hero attacks: Summon Wheat"),"Tool text identifies the hero and uses singular card name");
@@ -218,6 +218,7 @@ public class WorkshopChecks {
   FoundationResetChecks.run();
   HeroPowerChecks.run();
   craftbound.test.TestCatalogue.install();
+  CombatTacticsChecks.run();
   EffectSequenceChecks.run();
   IgnoreShieldChecks.run();
   CompoundBuffChecks.run();
@@ -241,7 +242,6 @@ public class WorkshopChecks {
   excavateAndLiveTools();
   aiHealingFreezeAndIcons();
   feedReleaseAndTotemAI();
-  retiredDeckCases();
   savedBinderDecks();
   foundationFollowup();
   alchemistAndThorns();
@@ -481,6 +481,7 @@ public class WorkshopChecks {
   progress=progress.earn(CardClass.FARMER,100);
   ok(progress.level(CardClass.FARMER)==2&&progress.level(CardClass.FIGHTER)==1,"Mastery isolated per class");
   ok(progress.earn(CardClass.FARMER,-1).equals(progress),"Negative Mastery ignored");
+  ok(craftbound.mastery.MasteryProgress.matchPoints(true,true)<craftbound.mastery.MasteryProgress.matchPoints(true,false)&&craftbound.mastery.MasteryProgress.matchPoints(false,true)<craftbound.mastery.MasteryProgress.matchPoints(false,false)&&craftbound.mastery.MasteryProgress.matchPoints(false,true)>0,"Practice pays less Mastery than a duel");
   ok(progress.earn(CardClass.FARMER,Integer.MAX_VALUE).level(CardClass.FARMER)==30,"Mastery level cap");
   var encoded=craftbound.mastery.MasteryProgress.CODEC.encodeStart(com.mojang.serialization.JsonOps.INSTANCE,progress).getOrThrow();
   ok(craftbound.mastery.MasteryProgress.CODEC.parse(com.mojang.serialization.JsonOps.INSTANCE,encoded).getOrThrow().equals(progress),"Persistent Mastery codec round trip");
@@ -781,29 +782,6 @@ public class WorkshopChecks {
   ok(new craftbound.network.TableActionPayload(net.minecraft.core.BlockPos.ZERO,0,5).deckId().isEmpty(),"Legacy table selection stays supported");
   var mixed=new DeckContents(CardClass.FIGHTER,BinderContents.EMPTY,true).add(id("zombie"),false,1).add(id("zombie"),true,1);
   ok("deck_ui.craftbound.max_copies".equals(DeckBuilding.whyNot(mixed,id("zombie"))),"Normal and enchanted still share deck copy limit");
- }
-
- static void retiredDeckCases(){
-  ok(!DeckCaseRetirement.meaningful(DeckContents.EMPTY,""),"Empty obsolete cases can be removed");
-  ok(DeckCaseRetirement.meaningful(DeckContents.EMPTY,"Named deck"),"Named empty deck preserved");
-  var cards=BinderContents.EMPTY.add(id("zombie"),false,2).add(id("zombie"),true,1);
-  var legacy=new DeckContents(CardClass.FIGHTER,cards,false);
-  ok(DeckCaseRetirement.meaningful(legacy,""),"Old physical deck preserved");
-  ok(DeckCaseRetirement.physicalContents(legacy).equals(cards),"Standalone conversion preserves exact legacy card variants");
-  ok(DeckCaseRetirement.physicalContents(legacy.asList()).equals(BinderContents.EMPTY),"List conversion cannot mint physical cards");
-  var a=new SavedDecks.Entry(UUID.randomUUID().toString(),"Existing",legacy.asList(),id("emerald"));
-  var duplicate=new SavedDecks.Entry(UUID.randomUUID().toString(),"Existing",legacy.asList(),id("emerald"));
-  var saved=SavedDecks.EMPTY.put(a);
-  ok(DeckCaseRetirement.sameDeck(a,duplicate),"Import matching ignores only generated ID");
-  ok(DeckCaseRetirement.preserve(saved,duplicate).equals(saved),"Retirement doesn't duplicate previously imported list");
-  var differentSleeve=new SavedDecks.Entry(UUID.randomUUID().toString(),"Existing",legacy.asList(),id("classic"));
-  ok(!DeckCaseRetirement.sameDeck(a,differentSleeve),"Distinct sleeves are preserved as distinct decks");
-  saved=DeckCaseRetirement.preserve(saved,differentSleeve);
-  ok(saved.entries().size()==2,"Both different deck versions retained");
-  for(int i=saved.entries().size();i<SavedDecks.LIMIT;i++) saved=saved.put(new SavedDecks.Entry(UUID.randomUUID().toString(),"Deck "+i,legacy.asList(),id("classic")));
-  ok(DeckCaseRetirement.accepts(saved,duplicate),"Full binder can deduplicate an already imported case");
-  var overflow=new SavedDecks.Entry(UUID.randomUUID().toString(),"Overflow",legacy.asList(),id("classic"));
-  ok(!DeckCaseRetirement.accepts(saved,overflow),"Full binder requires a replacement binder instead of losing deck");
  }
 
  static void feedReleaseAndTotemAI() throws Exception {

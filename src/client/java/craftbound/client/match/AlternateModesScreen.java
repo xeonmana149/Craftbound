@@ -28,7 +28,7 @@ public final class AlternateModesScreen extends Screen {
         int rowHeight = (bookHeight-65-2*gap)/3;
         var modes = List.of(
             new Format("Team Duos", "2 vs 2", "Take turns as a team. Share 30 Health and play your own deck alongside your partner.", Items.SHIELD, () -> table.openRelay(this)),
-            new Format("Commander", "4 players", "Lead a deck of 20 different cards. Be the last hero standing.", Items.OMINOUS_BOTTLE, () -> table.openCommander(this)),
+            new Format("Commander", "4 players", "Lead a deck of 40 different cards including a legendary commander. Be the last hero standing.", Items.OMINOUS_BOTTLE, () -> table.openCommander(this)),
             new Format("The Trials", "Solo PvE", "Draft a deck and chart a route through fights, villages and camps to a final guardian.", Items.TRIAL_KEY, table::openTrials)
         );
         for (var mode : modes) {

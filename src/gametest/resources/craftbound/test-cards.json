@@ -3193,6 +3193,366 @@
           "excludeSelf": false
         }
       ]
+    },
+    {
+      "id": "craftbound:spider",
+      "name": "Spider",
+      "text": "",
+      "autoText": true,
+      "kind": "MOB",
+      "class": "NEUTRAL",
+      "rarity": "COMMON",
+      "cost": 2,
+      "attack": 2,
+      "health": 2,
+      "type": "ARTHROPOD",
+      "keywords": [
+        "SPRINT"
+      ],
+      "token": false,
+      "art": "minecraft:spider",
+      "passive": "NONE",
+      "passiveAmount": 1,
+      "effects": []
+    },
+    {
+      "id": "craftbound:baby_zombie",
+      "name": "Baby Zombie",
+      "text": "",
+      "autoText": true,
+      "kind": "MOB",
+      "class": "NEUTRAL",
+      "rarity": "COMMON",
+      "cost": 1,
+      "attack": 2,
+      "health": 1,
+      "type": "UNDEAD",
+      "keywords": [
+        "SPRINT"
+      ],
+      "token": false,
+      "art": "minecraft:zombie",
+      "passive": "NONE",
+      "passiveAmount": 1,
+      "effects": []
+    },
+    {
+      "id": "craftbound:wood_fence",
+      "name": "Wood Fence",
+      "text": "",
+      "autoText": true,
+      "kind": "MOB",
+      "class": "NEUTRAL",
+      "rarity": "RARE",
+      "cost": 2,
+      "attack": 0,
+      "health": 4,
+      "type": "",
+      "keywords": [
+        "BLOCK"
+      ],
+      "token": false,
+      "art": "minecraft:oak_fence",
+      "passive": "NONE",
+      "passiveAmount": 1,
+      "effects": [],
+      "autoArt": true
+    },
+    {
+      "id": "craftbound:cobblestone_wall_2",
+      "name": "Cobblestone Wall",
+      "text": "",
+      "autoText": true,
+      "kind": "MOB",
+      "class": "NEUTRAL",
+      "rarity": "COMMON",
+      "cost": 5,
+      "attack": 0,
+      "health": 7,
+      "type": "",
+      "keywords": [
+        "BLOCK"
+      ],
+      "token": false,
+      "art": "minecraft:cobblestone_wall",
+      "passive": "NONE",
+      "passiveAmount": 1,
+      "effects": [
+        {
+          "trigger": "START_TURN",
+          "action": "WEAKEN_UNTIL_NEXT_TURN",
+          "target": "ENEMY_MOBS",
+          "boardKind": "MOB",
+          "type": "",
+          "amount": 1,
+          "attack": 0,
+          "health": 1,
+          "card": "",
+          "excludeSelf": false
+        }
+      ],
+      "auraHealth": 1,
+      "autoArt": true
+    },
+    {
+      "id": "craftbound:banner",
+      "name": "Banner",
+      "text": "",
+      "autoText": true,
+      "kind": "MOB",
+      "class": "NEUTRAL",
+      "rarity": "RARE",
+      "cost": 3,
+      "attack": 0,
+      "health": 3,
+      "type": "",
+      "keywords": [
+        "BLOCK"
+      ],
+      "token": false,
+      "art": "minecraft:white_banner",
+      "passive": "AURA_STATS",
+      "passiveAmount": 1,
+      "effects": [],
+      "auraHealth": 1,
+      "autoArt": true
+    },
+    {
+      "id": "craftbound:ender_chest",
+      "name": "Ender Chest",
+      "text": "",
+      "autoText": true,
+      "kind": "MOB",
+      "class": "NEUTRAL",
+      "rarity": "EPIC",
+      "cost": 4,
+      "attack": 0,
+      "health": 4,
+      "type": "",
+      "keywords": [
+        "BLOCK"
+      ],
+      "token": false,
+      "art": "minecraft:ender_chest",
+      "passive": "NONE",
+      "passiveAmount": 1,
+      "effects": [
+        {
+          "trigger": "END_TURN",
+          "action": "GIVE_RANDOM_CLASS",
+          "target": "SELF",
+          "boardKind": "BOTH",
+          "type": "",
+          "amount": 1,
+          "attack": 1,
+          "health": 1,
+          "card": "",
+          "excludeSelf": false
+        }
+      ],
+      "autoArt": true
+    },
+    {
+      "id": "craftbound:iron_golem",
+      "name": "Iron Golem",
+      "text": "",
+      "autoText": true,
+      "kind": "MOB",
+      "class": "NEUTRAL",
+      "rarity": "EPIC",
+      "cost": 5,
+      "attack": 4,
+      "health": 5,
+      "type": "GOLEM",
+      "keywords": [
+        "SHIELD"
+      ],
+      "token": false,
+      "art": "minecraft:iron_golem",
+      "passive": "ARMOR",
+      "passiveAmount": 1,
+      "effects": [],
+      "autoArt": true
+    },
+    {
+      "id": "craftbound:tropical_fish",
+      "name": "Tropical Fish",
+      "text": "",
+      "autoText": true,
+      "kind": "MOB",
+      "class": "NEUTRAL",
+      "rarity": "COMMON",
+      "cost": 3,
+      "attack": 3,
+      "health": 4,
+      "type": "AQUATIC",
+      "keywords": [],
+      "token": false,
+      "art": "minecraft:tropical_fish",
+      "passive": "NONE",
+      "passiveAmount": 1,
+      "effects": [],
+      "autoArt": true
+    },
+    {
+      "id": "craftbound:snow_golem",
+      "name": "Snow Golem",
+      "text": "",
+      "autoText": true,
+      "kind": "MOB",
+      "class": "NEUTRAL",
+      "rarity": "RARE",
+      "cost": 3,
+      "attack": 2,
+      "health": 2,
+      "type": "GOLEM",
+      "keywords": [
+        "RANGED"
+      ],
+      "token": false,
+      "art": "minecraft:snow_golem",
+      "passive": "NONE",
+      "passiveAmount": 1,
+      "effects": [
+        {
+          "trigger": "AFTER_ATTACK",
+          "action": "FREEZE",
+          "target": "EVENT",
+          "boardKind": "BOTH",
+          "type": "",
+          "amount": 1,
+          "attack": 1,
+          "health": 1,
+          "card": "",
+          "excludeSelf": false
+        }
+      ],
+      "autoArt": true
+    },
+    {
+      "id": "craftbound:panda",
+      "name": "Panda",
+      "text": "",
+      "autoText": true,
+      "kind": "MOB",
+      "class": "NEUTRAL",
+      "rarity": "COMMON",
+      "cost": 6,
+      "attack": 6,
+      "health": 7,
+      "type": "",
+      "keywords": [],
+      "token": false,
+      "art": "minecraft:panda",
+      "passive": "NONE",
+      "passiveAmount": 1,
+      "effects": []
+    },
+    {
+      "id": "craftbound:chest",
+      "name": "Chest",
+      "text": "",
+      "autoText": true,
+      "kind": "MOB",
+      "class": "NEUTRAL",
+      "rarity": "COMMON",
+      "cost": 2,
+      "attack": 0,
+      "health": 2,
+      "type": "",
+      "keywords": [
+        "BLOCK"
+      ],
+      "token": false,
+      "art": "minecraft:chest",
+      "passive": "NONE",
+      "passiveAmount": 1,
+      "effects": [
+        {
+          "trigger": "START_TURN",
+          "action": "DRAW",
+          "target": "SELF",
+          "boardKind": "BOTH",
+          "type": "",
+          "amount": 1,
+          "attack": 1,
+          "health": 1,
+          "card": "",
+          "excludeSelf": false
+        }
+      ]
+    },
+    {
+      "id": "craftbound:travelling_merchant",
+      "name": "Travelling Merchant",
+      "text": "",
+      "autoText": true,
+      "kind": "MOB",
+      "class": "NEUTRAL",
+      "rarity": "COMMON",
+      "cost": 5,
+      "attack": 3,
+      "health": 4,
+      "type": "",
+      "keywords": [],
+      "token": false,
+      "art": "minecraft:travellingmerchant",
+      "passive": "NONE",
+      "passiveAmount": 1,
+      "effects": [
+        {
+          "trigger": "PLAY",
+          "action": "DRAW",
+          "target": "SELF",
+          "boardKind": "BOTH",
+          "type": "",
+          "amount": 1,
+          "attack": 1,
+          "health": 1,
+          "card": "",
+          "excludeSelf": false
+        }
+      ]
+    },
+    {
+      "id": "craftbound:hoglin",
+      "name": "Hoglin",
+      "text": "",
+      "autoText": true,
+      "kind": "MOB",
+      "class": "NEUTRAL",
+      "rarity": "COMMON",
+      "cost": 5,
+      "attack": 5,
+      "health": 6,
+      "type": "",
+      "keywords": [],
+      "token": false,
+      "art": "minecraft:hoglin",
+      "passive": "NONE",
+      "passiveAmount": 1,
+      "effects": []
+    },
+    {
+      "id": "craftbound:ancient_turtle",
+      "name": "Ancient Turtle",
+      "text": "",
+      "autoText": true,
+      "kind": "MOB",
+      "class": "NEUTRAL",
+      "rarity": "COMMON",
+      "cost": 6,
+      "attack": 3,
+      "health": 9,
+      "type": "AQUATIC",
+      "keywords": [
+        "SHIELD"
+      ],
+      "token": false,
+      "art": "minecraft:turtle",
+      "passive": "NONE",
+      "passiveAmount": 1,
+      "effects": []
     }
   ]
 }

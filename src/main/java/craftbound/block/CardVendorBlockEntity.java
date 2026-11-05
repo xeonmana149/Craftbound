@@ -18,6 +18,7 @@ public final class CardVendorBlockEntity extends BlockEntity {
         boolean changed=purchases.day()!=day;int mask=purchases.bought(player,day);if(changed)setChanged();return mask;
     }
     public void markBought(UUID player,long day,int slot){purchases.mark(player,day,slot);setChanged();}
+    public void markPackBought(UUID player,long day){purchases.markPack(player,day);setChanged();}
     @Override protected void loadAdditional(ValueInput input){
         super.loadAdditional(input);
         purchases.load(input.getLongOr("day",Long.MIN_VALUE),input.read("purchases",RECORDS).orElse(Map.of()));

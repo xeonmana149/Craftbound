@@ -7,7 +7,8 @@ import net.minecraft.util.RandomSource;
 
 /** One shared battlefield and turn order. Seat IDs never change, including after elimination. */
 public final class CommanderMatch extends Match {
-    public static final int SEATS=4, DECK_SIZE=20, HEALTH=40, LETHAL=21, TAX=2;
+    public static final int SEATS=4, DECK_SIZE=40, HEALTH=40, LETHAL=21, TAX=2;
+    final CommanderHistory history = new CommanderHistory();
     final CardRef[] leaders = new CardRef[SEATS];
     final int[] casts = new int[SEATS], unit = new int[SEATS], focus = new int[SEATS];
     final int[][] strikes = new int[SEATS][SEATS]; // attacking commander -> defending hero
@@ -15,8 +16,9 @@ public final class CommanderMatch extends Match {
     private int casting = -1;
 
     public static boolean eligible(Identifier id) {
+        if (id==null) return false;
         var d=Cards.get(id);
-        return d!=null && !d.token() && !Cards.deleted(id) && d.isMob() && !d.keywords().contains(Keyword.BLOCK);
+        return d!=null && d.rarity()==CardRarity.LEGENDARY && !d.token() && !Cards.deleted(id) && d.isMob() && !d.keywords().contains(Keyword.BLOCK);
     }
     public static String problem(CardClass cls,List<CardRef> deck,Identifier leader) {
         if (cls==CardClass.NEUTRAL || deck.size()!=DECK_SIZE) return "Build a deck of exactly "+DECK_SIZE+" cards, including your commander.";
@@ -25,7 +27,7 @@ public final class CommanderMatch extends Match {
             if (!DeckRules.allowed(c.id(),cls)) return "Use only your class and Neutral cards.";
             if (!seen.add(c.id())) return "Use one copy of each card; Enchanted copies count as the same card.";
         }
-        if (!seen.contains(leader) || !eligible(leader)) return "Choose a collectible mob from this deck to lead it.";
+        if (!seen.contains(leader) || !eligible(leader)) return "Choose a collectible legendary mob from this deck to lead it.";
         return null;
     }
 
@@ -47,6 +49,19 @@ public final class CommanderMatch extends Match {
         }
         log("Commander begins. "+player(0).name+" takes the first turn.");
         startTurn();
+    }
+    @Override void startTurn() {
+        // Start the new section before start-of-turn effects can damage or eliminate anyone.
+        history.begin(current, turn + 1, player(current).name);
+        super.startTurn();
+    }
+    @Override void event(MatchEvent.Type type, int side, int mid, CardRef card, int amount, int extra, Target target) {
+        super.event(type,side,mid,card,amount,extra,target);
+        history.record(this,type,side,mid,card,amount,extra,target);
+    }
+    @Override void publicNotice(String text) {
+        super.publicNotice(text);
+        history.add(CommanderHistory.Kind.ACTION,text);
     }
     public static final int COMMANDER_TURN_TICKS = 120 * 20;
     @Override public int turnLimitTicks() { return COMMANDER_TURN_TICKS; }
@@ -82,11 +97,15 @@ public final class CommanderMatch extends Match {
         try { resolvePlay(s,-1,leaders[s],cost,target); } finally { casting=-1; }
     }
     @Override void combatHit(int s,int mid,int victim,int amount) {
-        if(commandUnit(s,mid)) strikes[s][victim]+=Math.max(0,amount);
+        if (commandUnit(s,mid) && amount > 0) {
+            strikes[s][victim] += amount;
+            history.add(CommanderHistory.Kind.ACTION, name(leaders[s]) + " has dealt " + strikes[s][victim]
+                    + "/" + LETHAL + " commander damage to " + player(victim).name + ".");
+        }
     }
     @Override public void concede(int s) {
         if(over || !inPlay(s)) return;
-        player(s).health=0; log(player(s).name+" concedes."); checkWinner();
+        player(s).health=0; publicNotice(player(s).name+" conceded."); checkWinner();
     }
     @Override void checkWinner() {
         if(over) return;
@@ -97,10 +116,10 @@ public final class CommanderMatch extends Match {
             for(int a=0;a<SEATS;a++) if(strikes[a][s]>=LETHAL) lethal=true;
             if(player(s).health<=0 || lethal) {
                 eliminated[s]=true; player(s).board.clear(); player(s).tool=null;
-                log(player(s).name+(lethal?" falls to commander damage.":" is eliminated."));
+                publicNotice(player(s).name+(lethal?" falls to commander damage.":" is eliminated."));
             } else {left++;last=s;}
         }
-        if(left<=1) {over=true;winner=last;log(last<0?"The table draws.":player(last).name+" wins Commander!");}
+        if(left<=1) {over=true;winner=last;publicNotice(last<0?"The table draws.":player(last).name+" wins Commander!");}
         else if(!inPlay(current)) passTurn();
     }
 }

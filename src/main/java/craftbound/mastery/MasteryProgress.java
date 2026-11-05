@@ -10,6 +10,13 @@ import net.minecraft.network.codec.StreamCodec;
 /** Per-class collection progression. Never changes match stats or card rules. */
 public record MasteryProgress(int fighter, int builder, int farmer, int fisherman, int alchemist, int miner, int chef, int tamer, int redstoner) {
     public static final int POINTS_PER_LEVEL = 100, MAX_LEVEL = 30, MAX_POINTS = 2900;
+    // PvP (and, later, village Card Master duels) pay full Mastery. Practice against the table's Card Master
+    // pays less, so it's for testing decks rather than the fastest way to level.
+    public static final int DUEL_WIN = 25, DUEL_LOSS = 10, PRACTICE_WIN = 10, PRACTICE_LOSS = 4;
+
+    public static int matchPoints(boolean won, boolean practice) {
+        return practice ? (won ? PRACTICE_WIN : PRACTICE_LOSS) : (won ? DUEL_WIN : DUEL_LOSS);
+    }
     public static final MasteryProgress EMPTY = new MasteryProgress(0, 0, 0, 0, 0, 0, 0, 0, 0);
     public static final Codec<MasteryProgress> CODEC = RecordCodecBuilder.create(i -> i.group(
             Codec.intRange(0, MAX_POINTS).optionalFieldOf("fighter", 0).forGetter(MasteryProgress::fighter),

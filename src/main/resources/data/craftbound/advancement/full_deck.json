@@ -6,7 +6,7 @@
     "description": { "translate": "advancements.craftbound.full_deck.description" },
     "frame": "goal",
     "hidden": false,
-    "icon": { "id": "craftbound:deck_case" },
+    "icon": { "id": "craftbound:binder" },
     "show_toast": true,
     "title": { "translate": "advancements.craftbound.full_deck.title" }
   }

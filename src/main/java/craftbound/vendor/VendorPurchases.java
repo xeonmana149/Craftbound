@@ -12,12 +12,17 @@ public final class VendorPurchases {
         if(slot<0||slot>=CardVendor.SLOTS)throw new IllegalArgumentException("Invalid single slot");
         advance(current);records.merge(player,1<<slot,(a,b)->a|b);
     }
+    public void markPack(UUID player,long current){
+        advance(current);int record=records.getOrDefault(player,0);
+        int packs=Math.min(15,CardVendor.packsBought(record)+1);
+        records.put(player,(record&~(0xF<<CardVendor.PACK_SHIFT))|(packs<<CardVendor.PACK_SHIFT));
+    }
     public Map<String,Integer> snapshot(long current){
         advance(current);var out=new HashMap<String,Integer>();records.forEach((id,mask)->out.put(id.toString(),mask));return Map.copyOf(out);
     }
     public void load(long savedDay,Map<String,Integer> saved){
         day=savedDay;records.clear();saved.forEach((id,mask)->{
-            try{records.put(UUID.fromString(id),mask&((1<<CardVendor.SLOTS)-1));}catch(IllegalArgumentException ignored){}
+            try{records.put(UUID.fromString(id),mask&CardVendor.RECORD_BITS);}catch(IllegalArgumentException ignored){}
         });
     }
     public long day(){return day;}

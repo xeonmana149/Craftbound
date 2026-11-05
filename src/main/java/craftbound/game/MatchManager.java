@@ -13,7 +13,6 @@ import craftbound.network.MatchStatePayload;
 import craftbound.board.BoardCollection;
 import craftbound.board.BoardDesign;
 import craftbound.sleeve.Sleeves;
-import craftbound.sleeve.SleeveCollection;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -116,16 +115,20 @@ public class MatchManager {
         }
     }
 
-    // Why the Deck Case in this inventory slot can't be played, as a translation key, or null if it can.
+    // Why the deck in this inventory slot can't be played, as a translation key, or null if it can.
     public static String whyCantPlay(ServerPlayer player, int slot) { return whyCantPlay(player, slot, ""); }
 
     public static String whyCantPlay(ServerPlayer player, int slot, String deckId) {
+        return whyCantPlay(player,slot,deckId,craftbound.deck.DeckFormat.DUEL);
+    }
+    static String whyCantPlay(ServerPlayer player,int slot,String deckId,craftbound.deck.DeckFormat format) {
         Inventory inventory = player.getInventory();
         if (slot < 0 || slot >= inventory.getContainerSize()) {
             return "match_ui.craftbound.no_deck";
         }
         ItemStack stack = craftbound.deck.BinderDecks.resolve(inventory, slot, deckId);
         if (stack.has(ModComponents.DECK_CONTENTS)) {
+            if (stack.get(ModComponents.DECK_CONTENTS).format()!=format) return "match_ui.craftbound.wrong_format";
             DeckBuilding.migrate(player, stack);
         }
         return DeckBuilding.whyCantPlay(inventory, stack);
@@ -373,18 +376,16 @@ public class MatchManager {
         // Trials pay their own reward for clearing the route. An encounter cannot pay normal duel rewards as well.
         boolean trial = match.trialsBattle != null;
         if (wasActive && trial && match.over) TrialsTables.finish(server, match);
-        if (wasActive && !trial && match.over && match.winner >= 0 && !match.player(match.winner).isAi()
-                && match.opponent(match.winner).isAi()) {
-            ServerPlayer winner = server.getPlayerList().getPlayer(match.player(match.winner).playerId);
-            if (winner != null) SleeveCollection.awardVictory(winner);
-        }
         // Award once, after a played match. No farming progress from immediate concessions.
+        // Practice against the table's Card Master pays reduced Mastery and nothing else; card backs are for
+        // village Card Masters and the Trials.
+        boolean practice = match.player(0).isAi() || match.player(1).isAi();
         if (wasActive && !trial && match.over && match.winner >= 0 && match.turn >= 6) {
             for (int side = 0; side < 2; side++) {
                 MatchPlayer participant = match.player(side);
                 if (participant.isAi() || side == match.concededSide) continue;
                 ServerPlayer online = server.getPlayerList().getPlayer(participant.playerId);
-                if (online != null) craftbound.mastery.ClassMastery.award(online, participant.heroClass, side == match.winner);
+                if (online != null) craftbound.mastery.ClassMastery.award(online, participant.heroClass, side == match.winner, practice);
             }
         }
         CardMasterEntity cardMaster = CARD_MASTERS.remove(match);

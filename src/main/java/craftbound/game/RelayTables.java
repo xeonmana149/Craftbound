@@ -117,7 +117,7 @@ public final class RelayTables {
         return best;
     }
     private static String validate(ServerPlayer p,Entry e) {
-        String issue=MatchManager.whyCantPlay(p,e.slot(),e.deckId());
+        String issue=MatchManager.whyCantPlay(p,e.slot(),e.deckId(),craftbound.deck.DeckFormat.DUOS);
         if(issue!=null) return Component.translatable(issue,MatchManager.PRACTICE_MIN_DECK).getString();
         var deck=MatchManager.deckIn(p,e.slot(),e.deckId());
         return RelayMatch.deckProblem(deck.deckClass(),deck.cards());

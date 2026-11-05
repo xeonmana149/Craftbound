@@ -60,6 +60,7 @@ public final class LayoutPreviewData {
             if (mode == Mode.DUOS) duosFields(result, match, viewer);
             if (mode == Mode.COMMANDER) commanderFields(result, match, leaders);
         }
+        if (mode == Mode.COMMANDER) result.addProperty("round", Math.max(1,(match.turn+3)/4));
         result.addProperty("layoutPreview", true);
         result.addProperty("previewMode", mode.name());
         result.addProperty("previewDensity", density.name());
@@ -128,8 +129,8 @@ public final class LayoutPreviewData {
             if (match instanceof CommanderMatch commander) result[s] = commander.leaders[s];
             else if (!mobs.isEmpty()) {
                 CardClass cls = match.player(s).heroClass;
-                var candidates = mobs.stream().filter(id -> DeckRules.allowed(id, cls)).toList();
-                if (candidates.isEmpty()) candidates = mobs;
+                var candidates = mobs.stream().filter(id -> CommanderMatch.eligible(id) && DeckRules.allowed(id, cls)).toList();
+                if (candidates.isEmpty()) continue;
                 result[s] = new CardRef(candidates.get(s % candidates.size()), s % 2 != 0);
             }
         }
@@ -167,7 +168,7 @@ public final class LayoutPreviewData {
                 CardRef ref = sample(tools, s, s % 2 != 0); var d = Cards.get(ref.id());
                 p.tool = new Tool(ref, d.attack(), d.health(), d.keywords().contains(Keyword.RANGED));
             }
-            int remaining = Math.max(0, (mode == Mode.COMMANDER ? 19 : 30) - p.board.size() - p.hand.size() - (p.tool == null ? 0 : 1));
+            int remaining = Math.max(0, (mode == Mode.COMMANDER ? CommanderMatch.DECK_SIZE-1 : DeckRules.DECK_SIZE) - p.board.size() - p.hand.size() - (p.tool == null ? 0 : 1));
             for (int i = 0; i < remaining && !ids.isEmpty(); i++) p.deck.add(sample(ids, s * 7 + i, false));
             if (match instanceof CommanderMatch commander) {
                 commander.casts[s] = density == Density.EMPTY ? 0 : 1;

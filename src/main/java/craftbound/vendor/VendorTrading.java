@@ -63,6 +63,7 @@ public final class VendorTrading {
             int price=slot==-1?CardVendor.PACK_PRICE:offers.get(slot).price();
             if(pay(player.getInventory(),price)){
                 if(slot>=0)vendor.markBought(player.getUUID(),day,slot);
+                else vendor.markPackBought(player.getUUID(),day);
                 player.getInventory().placeItemBackInInventory(item,Prediction.SERVER_ONLY);
                 player.containerMenu.broadcastChanges();
             }else valid=false;

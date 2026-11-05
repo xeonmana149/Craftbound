@@ -31,7 +31,7 @@ public record SavedDecks(List<Entry> entries) {
                 DeckContents.STREAM_CODEC, Entry::deck, Identifier.STREAM_CODEC, Entry::sleeve, Entry::new);
 
         public ItemStack asStack() {
-            ItemStack stack = new ItemStack(ModItems.DECK_CASE);
+            ItemStack stack = DeckBuilding.deckStack();
             stack.set(ModComponents.DECK_CONTENTS, deck.asList());
             stack.set(ModComponents.SLEEVE_ID, sleeve);
             DeckBuilding.rename(stack, name);
@@ -54,13 +54,14 @@ public record SavedDecks(List<Entry> entries) {
         return null;
     }
 
+    public int count(DeckFormat format) { return (int)entries.stream().filter(e->e.deck().format()==format).count(); }
     public SavedDecks put(Entry entry) {
         List<Entry> next = new ArrayList<>(entries);
         for (int i = 0; i < next.size(); i++) if (next.get(i).id.equals(entry.id)) {
             next.set(i, entry);
             return new SavedDecks(next);
         }
-        if (next.size() < LIMIT) next.add(entry);
+        if (count(entry.deck().format()) < LIMIT) next.add(entry);
         return new SavedDecks(next);
     }
 

@@ -38,6 +38,9 @@ public class CraftboundClient implements ClientModInitializer {
             if(current instanceof craftbound.client.match.CommanderScreen screen && screen.same(data)) screen.update(data);
             else if(p.open())client.gui.setScreen(new craftbound.client.match.CommanderScreen(data));
         });
+        ClientPlayNetworking.registerGlobalReceiver(craftbound.network.CommanderHistoryPayload.TYPE,(p,ctx)->{
+            if(ctx.client().gui.screen() instanceof craftbound.client.match.CommanderScreen screen) screen.receiveHistory(p);
+        });
         ClientPlayNetworking.registerGlobalReceiver(craftbound.network.HandConsentPayload.TYPE,(payload,context)->craftbound.client.match.HandConsentOverlay.update(payload));
         ClientPlayNetworking.registerGlobalReceiver(craftbound.network.SpectatorStatePayload.TYPE,(payload,context)->{
             var current=context.client().gui.screen();

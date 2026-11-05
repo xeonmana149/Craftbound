@@ -12,6 +12,11 @@ public final class CardVendor {
     public static final double LEGENDARY_CHANCE=0.10, ENCHANTED_CHANCE=0.05, BUY_RANGE=8;
     public static final long DAY_TICKS=24000;
     public static final int REFRESH_TICKS=20;
+    // Each player can buy PACK_LIMIT packs per machine per day. A player's daily record is one int: bits 0-5 mark
+    // the singles they bought, bits 8-11 count their packs, so old saves load unchanged.
+    public static final int PACK_LIMIT=3, PACK_SHIFT=8, RECORD_BITS=((1<<SLOTS)-1)|(0xF<<PACK_SHIFT);
+    public static int packsBought(int record){return (record>>>PACK_SHIFT)&0xF;}
+    public static int packsLeft(int record){return Math.max(0,PACK_LIMIT-packsBought(record));}
     public record Offer(Identifier card,boolean enchanted,int price) {}
     public record Candidate(Identifier card,CardRarity rarity) {}
     public static long day(long ticks){return Math.floorDiv(ticks,DAY_TICKS);}
@@ -52,7 +57,7 @@ public final class CardVendor {
     }
     public static boolean canBuy(int slot,long requestedDay,long day,int boughtMask,int emeralds,List<Offer> offers,
                                  String expectedCard,boolean expectedEnchanted) {
-        if(slot==-1)return emeralds>=PACK_PRICE;
+        if(slot==-1)return emeralds>=PACK_PRICE&&packsLeft(boughtMask)>0;
         if(slot<0||slot>=offers.size()||slot>=SLOTS||requestedDay!=day||(boughtMask&(1<<slot))!=0)return false;
         var offer=offers.get(slot);
         return emeralds>=offer.price()&&offer.card().toString().equals(expectedCard)&&offer.enchanted()==expectedEnchanted;

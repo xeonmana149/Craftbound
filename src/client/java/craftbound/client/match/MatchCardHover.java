@@ -32,6 +32,10 @@ final class MatchCardHover {
                                int x, int y, int width, float scale,
                                List<FormattedCharSequence> notes, boolean playable) {}
     private CardPreview associatedPreview;
+    private boolean handSource;
+    private int handPointerX, handPointerY;
+    private long handPointerAt;
+    private static final long TOKEN_TRANSFER_NANOS = 300_000_000L;
     private Object associatedState;
     private CardCatalog.State associatedCatalogue;
     private Identifier associatedSource;
@@ -103,6 +107,11 @@ final class MatchCardHover {
 
     void hand(GuiGraphicsExtractor g, Identifier id, boolean enchanted, TrialTraining training,
               int centerX, int leftBound, boolean playable, int mouseX, int mouseY) {
+        clear();
+        handSource = true;
+        handPointerX = mouseX;
+        handPointerY = mouseY;
+        handPointerAt = System.nanoTime();
         float scale = Math.min(1.05F, height * 0.5F / CardRenderer.HEIGHT);
         int w = Math.round(CardRenderer.WIDTH * scale);
         int x = Math.max(leftBound, Math.min(width - w - 90, centerX - w / 2));
@@ -135,6 +144,7 @@ final class MatchCardHover {
     }
 
     void clear() {
+        handSource = false;
         this.associatedPreview = null;
         this.associatedState = null;
         this.createsPane = this.createsPrevious = this.createsNext = null;
@@ -145,6 +155,8 @@ final class MatchCardHover {
         if (inside(this.createsPane, x, y)) return true;
         CardPreview card = this.associatedPreview;
         if (card == null || this.createsPane == null) return false;
+        if (handSource) return crossingToToken(handPointerX, handPointerY, x, y,
+                createsPane, System.nanoTime() - handPointerAt);
         int h = Math.round(CardRenderer.HEIGHT * card.scale());
         // Include the short bridge between the two cards, but not unrelated board rows.
         int left = Math.min(card.x(), this.createsPane[0]);
@@ -153,6 +165,19 @@ final class MatchCardHover {
         int bottom = Math.min(card.y() + h, this.createsPane[1] + this.createsPane[3]);
         return (x >= card.x() && x < card.x() + card.width() && y >= card.y() && y < card.y() + h)
                 || (x >= left && x < right && y >= top && y < bottom);
+    }
+
+    // The enlarged hand card is display-only. Briefly bridge a direct movement from its small
+    // hand slot to its token, so the token can still be read and paged across the intervening gap.
+    static boolean crossingToToken(double startX, double startY, double x, double y, int[] pane, long elapsed) {
+        if (elapsed > TOKEN_TRANSFER_NANOS || pane == null || inside(pane,startX,startY)) return false;
+        double dx = x - startX, dy = y - startY;
+        double gapX = Math.clamp(x,pane[0],pane[0]+pane[2]-1) - x;
+        double gapY = Math.clamp(y,pane[1],pane[1]+pane[3]-1) - y;
+        if (gapX != 0 && gapX * dx <= 0 || gapY != 0 && gapY * dy <= 0) return false;
+        // Follow the pointer's direction to the first possible intersection with the token.
+        double t = Math.max(gapX == 0 ? 0 : gapX/dx, gapY == 0 ? 0 : gapY/dy);
+        return inside(pane,x+t*dx,y+t*dy);
     }
 
     private void drawCardPreview(GuiGraphicsExtractor g, CardPreview preview, int mouseX, int mouseY) {

@@ -36,6 +36,11 @@ public class BoosterPackItem extends Item {
 
     @Override
     public InteractionResult use(Level level, Player player, InteractionHand hand) {
+        if (craftbound.card.Cards.collectible().isEmpty()) {
+            if (player instanceof ServerPlayer serverPlayer) serverPlayer.sendOverlayMessage(net.minecraft.network.chat.Component.literal(
+                    "No collectible cards yet. Packs will work when the Foundation set has cards."));
+            return InteractionResult.FAIL;
+        }
         // Only the server rolls the cards, so every player sees the same result.
         if (!level.isClientSide()) {
             ItemStack pack = player.getItemInHand(hand);
@@ -60,7 +65,9 @@ public class BoosterPackItem extends Item {
                 ModAdvancements.packOpened(serverPlayer, opening, luck > 0 || fortuneLevel > 0);
             }
             level.playSound(null, player.getX(), player.getY(), player.getZ(),
-                    SoundEvents.BOOK_PAGE_TURN, SoundSource.PLAYERS, 1.0F, 1.0F);
+                    SoundEvents.SHEARS_SNIP, SoundSource.PLAYERS, 0.85F, 0.85F);
+            level.playSound(null, player.getX(), player.getY(), player.getZ(),
+                    SoundEvents.BOOK_PAGE_TURN, SoundSource.PLAYERS, 0.65F, 0.8F);
         }
         // Uses up one pack (except in Creative, like other items).
         player.getItemInHand(hand).consume(1, player);

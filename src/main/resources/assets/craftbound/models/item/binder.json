@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "craftbound:item/binder"
+    "layer0": "craftbound:item/card_binder"
   }
 }

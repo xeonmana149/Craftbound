@@ -1,11 +1,13 @@
 package craftbound.client.match;
 
 import com.mojang.blaze3d.platform.InputConstants;
-import craftbound.card.CardClass;
-import craftbound.card.CardDefinition;
+import craftbound.card.CardCatalog;
 import craftbound.card.Cards;
 import craftbound.card.DeckRules;
 import craftbound.client.card.CardRenderer;
+import craftbound.client.binder.BinderTheme;
+import craftbound.client.deck.DeckCaseScreen;
+import net.minecraft.world.item.Items;
 import craftbound.component.ModComponents;
 import craftbound.deck.DeckBuilding;
 import craftbound.deck.DeckContents;
@@ -17,7 +19,6 @@ import craftbound.network.TableActionPayload;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -30,25 +31,34 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
-// The card table's lobby, like Hearthstone's deck picker: the Deck Cases you're carrying on the left, the chosen
-// deck's class, power, cost curve and card list on the right, and at the bottom who to play and READY.
+/** Deck preparation and matchmaking share the binder that the player carries to the table. */
 public class TableScreen extends Screen {
-    // Remembered between visits, so Ready is one click next time.
     private static int lastSlot = -1;
-    private static int lastMode = TableActionPayload.CARD_MASTER;
-
-    private static final int PANEL = 0xF0201C17;
-    private static final int PANEL_EDGE = 0xFF4F3D27;
-    private static final int ROW = 0xFF2B2620;
-    private static final int ROW_SELECTED = 0xFF4A3A22;
+    private static String lastDeckId = "";
+    private static int lastMode = TableActionPayload.PLAYER;
+    private static final int INK = BinderTheme.TEXT_DARK, MUTED = 0xFF70563D, LINE = 0xFFC5A479;
+    private int left, top, bookWidth, bookHeight, listLeft, listWidth, detailsLeft, detailsWidth, bodyTop, bodyBottom;
+    private int preferredSlot = lastSlot;
+    private String preferredId = lastDeckId;
+    private int binderSlot = -1;
+    private int refreshTicks;
+    private CardCatalog.State catalog;
+    private List<ItemStack> inventorySnapshot = List.of();
+    private List<CardRow> detailRows = List.of();
+    private final int[] costBins = new int[8];
+    private int peakCount = 1;
+    private boolean decksInitialized;
+    private TableBookButton duel, solo, ready, edit, collection, create;
 
     private final BlockPos table;
+    private final int tableMode;
     private String waiting;
     private String error;
     private boolean sent;
+    private boolean developerAccess;
     private long sentAt;
 
-    private record DeckEntry(int slot, ItemStack stack, DeckContents deck, Component name, String problem) {
+    private record DeckEntry(int slot, String deckId, ItemStack stack, DeckContents deck, Component name, String problem) {
     }
 
     private record CardRow(Identifier id, boolean enchanted, int count, int missing) {
@@ -62,14 +72,22 @@ public class TableScreen extends Screen {
     private final List<CardSpot> cardSpots = new ArrayList<>();
     private int selected;
     private int cardScroll;
-    private int[] cardMasterButton;
-    private int[] playerButton;
-    private int[] readyButton;
+    private int deckScroll;
+    private int[] deckListArea;
     private int[] cardListArea;
 
     public TableScreen(BlockPos table, String waiting, String error) {
+        this(table, waiting, error, false);
+    }
+
+    public TableScreen(BlockPos table, String waiting, String error, boolean developerAccess) {
+        this(table,waiting,error,developerAccess,0);
+    }
+    public TableScreen(BlockPos table, String waiting, String error, boolean developerAccess,int tableMode) {
         super(Component.translatable("table_ui.craftbound.title"));
         this.table = table;
+        this.tableMode = Math.clamp(tableMode,0,2);
+        this.developerAccess = developerAccess;
         this.waiting = waiting;
         this.error = error;
         if (!waiting.isEmpty()) {
@@ -77,12 +95,19 @@ public class TableScreen extends Screen {
         }
     }
 
+    public boolean commanderTable() { return tableMode == 2; }
+    public int tableMode() { return tableMode; }
     public BlockPos table() {
         return this.table;
     }
 
     // The server's answer: someone's waiting here, or why Ready didn't work.
-    public void update(String waiting, String error) {
+    public boolean developerAccess() { return developerAccess; }
+
+    public void update(String waiting, String error, boolean developerAccess) {
+        boolean changed = this.developerAccess != developerAccess;
+        this.developerAccess = developerAccess;
+        if (changed) rebuildWidgets();
         this.waiting = waiting;
         this.error = error;
         this.sent = false;
@@ -90,187 +115,256 @@ public class TableScreen extends Screen {
 
     @Override
     protected void init() {
-        this.decks.clear();
-        Inventory inventory = this.minecraft.player.getInventory();
-        for (int slot = 0; slot < inventory.getContainerSize(); slot++) {
-            ItemStack stack = inventory.getItem(slot);
-            if (!stack.is(ModItems.DECK_CASE)) {
-                continue;
-            }
-            DeckContents deck = stack.getOrDefault(ModComponents.DECK_CONTENTS, DeckContents.EMPTY);
-            // The name you gave the deck, or its class ("Farmer Deck").
-            Component name = stack.getHoverName();
-            this.decks.add(new DeckEntry(slot, stack, deck, name, DeckBuilding.whyCantPlay(inventory, stack)));
-        }
-        // Pick the deck used last time, otherwise the first one that can be played.
-        this.selected = 0;
-        for (int i = 0; i < this.decks.size(); i++) {
-            if (this.decks.get(i).slot() == lastSlot) {
-                this.selected = i;
-                break;
-            }
-            if (this.decks.get(i).problem() == null && this.decks.get(this.selected).problem() != null) {
-                this.selected = i;
-            }
-        }
-    }
-
-    private DeckEntry chosen() {
-        return this.decks.isEmpty() ? null : this.decks.get(Math.min(this.selected, this.decks.size() - 1));
-    }
-
-    @Override
-    public void extractRenderState(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
-        super.extractRenderState(g, mouseX, mouseY, partialTick);
-        int width = Math.min(this.width - 16, 480);
-        int height = Math.min(this.height - 12, 300);
-        int x0 = (this.width - width) / 2;
-        int y0 = (this.height - height) / 2;
-        g.fill(x0 - 2, y0 - 2, x0 + width + 2, y0 + height + 2, 0xFF000000);
-        g.fill(x0 - 1, y0 - 1, x0 + width + 1, y0 + height + 1, MatchArt.GOLD_DARK);
-        g.fill(x0, y0, x0 + width, y0 + height, PANEL);
-        MatchArt.outlined(g, this.font, this.title, x0 + width / 2.0F, y0 + 7, MatchArt.GOLD_LIGHT, 1.5F, true);
-
-        int listX = x0 + 8;
-        int listWidth = Math.min(160, width / 3);
-        int top = y0 + 26;
-        int bottomBar = y0 + height - 36;
-        drawDeckList(g, listX, top, listWidth, bottomBar - top - 6, mouseX, mouseY);
-        int detailX = listX + listWidth + 10;
-        drawDetails(g, detailX, top, x0 + width - 8 - detailX, bottomBar - top - 6, mouseX, mouseY);
-        drawBottomBar(g, x0 + 8, bottomBar, width - 16, mouseX, mouseY);
-        drawHoveredCard(g, x0, width, mouseX, mouseY);
-    }
-
-    private void drawDeckList(GuiGraphicsExtractor g, int x, int y, int width, int height, int mouseX, int mouseY) {
-        MatchArt.outlined(g, this.font, Component.translatable("table_ui.craftbound.your_decks"), x, y, MatchArt.TEXT_DIM, 1.0F, false);
-        this.deckSpots.clear();
-        int rowY = y + 12;
-        if (this.decks.isEmpty()) {
-            for (var line : this.font.split(Component.translatable("table_ui.craftbound.no_decks"), width)) {
-                g.text(this.font, line, x, rowY, MatchArt.TEXT);
-                rowY += this.font.lineHeight + 1;
-            }
-            return;
-        }
-        int rowHeight = 30;
-        for (int i = 0; i < this.decks.size() && rowY + rowHeight <= y + height; i++) {
-            DeckEntry entry = this.decks.get(i);
-            int[] spot = {x, rowY, width, rowHeight - 3};
-            this.deckSpots.add(spot);
-            boolean hover = inside(spot, mouseX, mouseY);
-            boolean chosen = i == this.selected;
-            g.fill(x - 1, rowY - 1, x + width + 1, rowY + rowHeight - 2, chosen ? MatchArt.GOLD : 0xFF000000);
-            g.fill(x, rowY, x + width, rowY + rowHeight - 3, chosen ? ROW_SELECTED : hover ? 0xFF35302A : ROW);
-            g.fill(x, rowY, x + 3, rowY + rowHeight - 3, classColor(entry.deck().deckClass()));
-            g.item(entry.stack(), x + 6, rowY + 5);
-            CardRenderer.fitText(g, this.font, entry.name().copy().withStyle(ChatFormatting.BOLD), x + 26, rowY + 3, width - 30, MatchArt.TEXT, false);
-            Component detail = entry.problem() != null
-                    ? Component.translatable(entry.problem(), MatchManager.PRACTICE_MIN_DECK).withStyle(ChatFormatting.RED)
-                    : Component.translatable("table_ui.craftbound.deck_line", entry.deck().deckClass().displayName(), entry.deck().size(), DeckRules.DECK_SIZE);
-            CardRenderer.fitText(g, this.font, detail, x + 26, rowY + 14, width - 30, MatchArt.TEXT_DIM, false);
-            rowY += rowHeight;
-        }
-    }
-
-    private void drawDetails(GuiGraphicsExtractor g, int x, int y, int width, int height, int mouseX, int mouseY) {
-        this.cardSpots.clear();
-        DeckEntry entry = chosen();
-        g.fill(x - 1, y - 1, x + width + 1, y + height + 1, PANEL_EDGE);
-        g.fill(x, y, x + width, y + height, 0xFF17140F);
-        if (entry == null) {
-            return;
-        }
-        CardClass cardClass = entry.deck().deckClass();
-        int cursor = y + 5;
-        CardRenderer.fitText(g, this.font, entry.name().copy().withStyle(ChatFormatting.BOLD), x + 6, cursor, width - 70, MatchArt.GOLD_LIGHT, false);
-        Component count = Component.translatable("table_ui.craftbound.card_count", entry.deck().size(), DeckRules.DECK_SIZE);
-        g.text(this.font, count, x + width - 6 - this.font.width(count), cursor, MatchArt.TEXT_DIM);
-        cursor += 12;
-        // The class and its power.
-        String chip = cardClass.displayName().getString().toUpperCase(Locale.ROOT);
-        int chipWidth = this.font.width(chip) + 8;
-        g.fill(x + 6, cursor, x + 6 + chipWidth, cursor + 11, classColor(cardClass));
-        g.text(this.font, chip, x + 10, cursor + 2, 0xFFFFFFFF);
-        HeroPowers.Power power = switch (cardClass) {
-            case FIGHTER -> HeroPowers.Power.CRAFT;
-            case BUILDER -> HeroPowers.Power.BUILD;
-            case FARMER -> HeroPowers.Power.SOW;
-            case NEUTRAL -> HeroPowers.Power.NONE;
-        };
-        if (power != HeroPowers.Power.NONE) {
-            int powerX = x + 12 + chipWidth;
-            g.pose().pushMatrix();
-            g.pose().translate(powerX, cursor - 2);
-            g.pose().scale(0.8F, 0.8F);
-            g.item(new ItemStack(BuiltInRegistries.ITEM.getValue(power.icon())), 0, 0);
-            g.pose().popMatrix();
-            Component name = power == HeroPowers.Power.SOW ? Component.translatable("table_ui.craftbound.sow_reap") : power.displayName();
-            Component text = Component.empty().append(name.copy().withStyle(ChatFormatting.GOLD)).append(": ").append(power.description());
-            int textX = powerX + 16;
-            int lineY = cursor + 1;
-            for (var line : this.font.split(text, x + width - 6 - textX)) {
-                g.text(this.font, line, textX, lineY, MatchArt.TEXT);
-                lineY += this.font.lineHeight;
-            }
-            cursor = Math.max(cursor + 14, lineY + 2);
+        bookWidth = Math.min(width - 10, 540);
+        bookHeight = Math.min(height - 10, 315);
+        left = (width-bookWidth)/2; top = (height-bookHeight)/2;
+        listLeft = left+10;
+        listWidth = Math.min(160,(bookWidth-26)*37/100);
+        detailsLeft = listLeft+listWidth+4;
+        detailsWidth = left+bookWidth-10-detailsLeft;
+        bodyTop = top+55;
+        bodyBottom = top+bookHeight-37;
+        int navWidth = (bookWidth-24)/3;
+        if(tableMode==0) {
+            duel = button(listLeft, top+29, navWidth, 19, "Player Vs Player", ()->chooseMode(TableActionPayload.PLAYER));
+            solo = button(listLeft+navWidth+2,top+29,navWidth,19,"Card Master",()->chooseMode(TableActionPayload.CARD_MASTER));
+            button(listLeft+2*(navWidth+2),top+29,bookWidth-24-2*navWidth,19,"The Trials",this::openTrials);
         } else {
-            cursor += 14;
+            duel=button(listLeft,top+29,bookWidth-20,19,tableMode==1?"Team Duos · two players on each team":"Commander · four players, one survivor",
+                    ()->{});
+            duel.active=false;solo=null;
         }
-        // The cost curve: how many cards cost 0, 1, 2... 7+.
-        List<CardRow> rows = rows(entry);
-        int[] curve = new int[8];
-        for (CardRow row : rows) {
-            curve[Math.min(7, Cards.get(row.id()).cost())] += row.count();
+        if (developerAccess) button(left+bookWidth-170, top+7, 72, 17, "Developer",
+                () -> minecraft.gui.setScreen(new LayoutPreviewSettingsScreen(this)));
+        collection = button(left+bookWidth-94, top+7, 84, 17, "Collection", ()->openBinder(false,false));
+        create = button(listLeft+4,bodyBottom-20,listWidth-8,17,"New Deck",()->openBinder(true,false));
+        edit = button(detailsLeft+detailsWidth-61,bodyTop+4,56,16,"Edit Deck",()->openBinder(false,true));
+        ready = button(left+bookWidth-91,top+bookHeight-28,81,19,"Ready",this::ready);
+        updateDecks(true);
+    }
+
+    private TableBookButton button(int x,int y,int w,int h,String label,Runnable onClick) {
+        return addRenderableWidget(new TableBookButton(x,y,w,h,Component.literal(label),onClick));
+    }
+
+    private void chooseMode(int mode) { lastMode=mode; error=""; }
+    private void updateDecks(boolean force) {
+        Inventory inventory = minecraft.player.getInventory();
+        if (!force && catalog == CardCatalog.current() && inventorySnapshot.size() == inventory.getContainerSize()) {
+            boolean same = true;
+            for (int slot = 0; slot < inventorySnapshot.size(); slot++)
+                if (!ItemStack.matches(inventorySnapshot.get(slot), inventory.getItem(slot))) { same = false; break; }
+            if (same) return;
         }
-        int most = 1;
-        for (int value : curve) {
-            most = Math.max(most, value);
-        }
-        int barWidth = Math.min(16, (width - 20) / 8 - 3);
-        int curveHeight = 26;
-        int curveX = x + 8;
-        for (int i = 0; i < 8; i++) {
-            int bx = curveX + i * (barWidth + 3);
-            int barHeight = Math.round(curveHeight * curve[i] / (float) most);
-            g.fill(bx, cursor + curveHeight - barHeight, bx + barWidth, cursor + curveHeight, 0xFF17A84F);
-            g.fill(bx, cursor + curveHeight, bx + barWidth, cursor + curveHeight + 1, PANEL_EDGE);
-            String label = i == 7 ? "7+" : String.valueOf(i);
-            g.text(this.font, label, bx + barWidth / 2 - this.font.width(label) / 2, cursor + curveHeight + 3, MatchArt.TEXT_DIM);
-        }
-        cursor += curveHeight + 15;
-        // The card list, cheapest first, like a Hearthstone deck list.
-        int listTop = cursor;
-        int listBottom = y + height - 4;
-        int rowHeight = 12;
-        int visible = Math.max(1, (listBottom - listTop) / rowHeight);
-        // Two columns when there's room; the list scrolls when it's longer than that.
-        int columns = width >= 230 ? 2 : 1;
-        int perColumn = Math.max(1, (rows.size() + columns - 1) / columns);
-        int maxScroll = Math.max(0, perColumn - visible);
-        this.cardScroll = Math.max(0, Math.min(this.cardScroll, maxScroll));
-        this.cardListArea = new int[]{x, listTop, width, listBottom - listTop};
-        int columnWidth = (width - 12 - (columns - 1) * 6) / columns;
-        for (int i = 0; i < rows.size(); i++) {
-            int column = i / perColumn;
-            int indexInColumn = i % perColumn - this.cardScroll;
-            if (indexInColumn < 0 || indexInColumn >= visible) {
-                continue;
+        catalog = CardCatalog.current();
+        inventorySnapshot = java.util.stream.IntStream.range(0, inventory.getContainerSize())
+                .mapToObj(slot -> inventory.getItem(slot).copy()).toList();
+        var next = new ArrayList<DeckEntry>();
+        int firstBinder = -1;
+        for (int slot=0; slot<inventory.getContainerSize(); slot++) {
+            ItemStack stack = inventory.getItem(slot);
+            if (stack.is(ModItems.BINDER)) {
+                if (firstBinder<0) firstBinder=slot;
+                for(var entry:craftbound.deck.BinderDecks.get(stack).entries()) {
+                    var view=entry.asStack();
+                    next.add(new DeckEntry(slot,entry.id(),view,entry.deck(),view.getHoverName(),tableIssue(inventory,view)));
+                }
+            } else if(stack.is(ModItems.DECK_CASE)) {
+                next.add(new DeckEntry(slot,"",stack,stack.getOrDefault(ModComponents.DECK_CONTENTS,DeckContents.EMPTY),
+                        stack.getHoverName(),tableIssue(inventory,stack)));
             }
-            CardRow row = rows.get(i);
-            CardDefinition card = Cards.get(row.id());
-            int rx = x + 6 + column * (columnWidth + 6);
-            int ry = listTop + indexInColumn * rowHeight;
-            CardSpot spot = new CardSpot(rx, ry, columnWidth, rowHeight - 1, row.id(), row.enchanted());
-            this.cardSpots.add(spot);
-            boolean hover = mouseX >= rx && mouseX < rx + columnWidth && mouseY >= ry && mouseY < ry + rowHeight - 1;
-            g.fill(rx, ry, rx + columnWidth, ry + rowHeight - 1, hover ? 0xFF3A3328 : ROW);
-            MatchArt.cost(g, this.font, rx + 1, ry + 1, 9, card.cost());
-            Component name = row.enchanted() ? Component.translatable("card.craftbound.enchanted", Cards.name(row.id())) : Cards.name(row.id());
-            int nameColor = 0xFF000000 | card.rarity().rgb();
-            CardRenderer.fitText(g, this.font, name, rx + 14, ry + 2, columnWidth - 34, nameColor, false);
-            String copies = "x" + row.count();
-            g.text(this.font, copies, rx + columnWidth - 4 - this.font.width(copies), ry + 2, row.missing() > 0 ? 0xFFFF5A4A : MatchArt.TEXT_DIM);
+        }
+        binderSlot = firstBinder;
+        decks.clear(); decks.addAll(next); selected=0;
+        for(int i=0;i<decks.size();i++) {
+            DeckEntry entry=decks.get(i);
+            if(entry.slot()==preferredSlot && entry.deckId().equals(preferredId)) { selected=i;break; }
+            if(entry.problem()==null && decks.get(selected).problem()!=null) selected=i;
+        }
+        if(!decksInitialized || force) deckScroll=Math.max(0,selected-visibleDecks()+1);
+        decksInitialized=true;
+        cacheDetails();
+    }
+
+    private String tableIssue(Inventory inventory,ItemStack stack) {
+        String ownership=DeckBuilding.whyCantPlay(inventory,stack);
+        if(ownership!=null || !commanderTable())return ownership;
+        var deck=stack.getOrDefault(ModComponents.DECK_CONTENTS,DeckContents.EMPTY);
+        if(deck.size()!=craftbound.game.CommanderMatch.DECK_SIZE)return "Commander requires exactly 20 different cards.";
+        var refs=new ArrayList<craftbound.game.CardRef>();
+        for(var id:Cards.collectible())for(boolean enchanted:new boolean[]{false,true})
+            for(int i=0;i<deck.cards().count(id,enchanted);i++)refs.add(new craftbound.game.CardRef(id,enchanted));
+        var leader=refs.stream().map(craftbound.game.CardRef::id).filter(craftbound.game.CommanderMatch::eligible).findFirst().orElse(null);
+        return craftbound.game.CommanderMatch.problem(deck.deckClass(),refs,leader);
+    }
+    private void cacheDetails() {
+        detailRows = chosen() == null ? List.of() : rows(chosen());
+        java.util.Arrays.fill(costBins, 0);
+        peakCount = 1;
+        for (var row : detailRows) {
+            int cost = Math.clamp(Cards.get(row.id()).cost(), 0, 7);
+            costBins[cost] += row.count();
+            peakCount = Math.max(peakCount, costBins[cost]);
+        }
+    }
+
+    private int visibleDecks(){return Math.max(1,(bodyBottom-25-(bodyTop+18))/24);}
+    private DeckEntry chosen(){return decks.isEmpty()?null:decks.get(selected);}
+
+    public void returnFromBinder(int slot, String deckId) {
+        if(deckId!=null) { preferredSlot=slot; preferredId=deckId; cardScroll=0; }
+        minecraft.gui.setScreen(this);
+    }
+
+    private int collectionSlot() {
+        var choice=chosen();
+        if(choice!=null && !choice.deckId().isEmpty())return choice.slot();
+        if(preferredSlot>=0 && preferredSlot<minecraft.player.getInventory().getContainerSize()
+                && minecraft.player.getInventory().getItem(preferredSlot).is(ModItems.BINDER))return preferredSlot;
+        return binderSlot;
+    }
+    private void openBinder(boolean newDeck,boolean editDeck) {
+        int slot=collectionSlot(); var choice=chosen();
+        if(slot<0 || editDeck && (choice==null || choice.deckId().isEmpty()))return;
+        minecraft.gui.setScreen(DeckCaseScreen.fromTable(this,slot,editDeck?choice.deckId():null,newDeck));
+    }
+
+    private String deckIssue() {
+        var choice=chosen();
+        return choice==null?"Choose a saved deck at the table first."
+                :choice.problem()==null?"":Component.translatable(choice.problem(),MatchManager.PRACTICE_MIN_DECK).getString();
+    }
+
+    void openCommander(Screen parent) {
+        var e=chosen(); minecraft.gui.setScreen(new CommanderSetupScreen(parent,table,
+                e==null?-1:e.slot(),e==null?"":e.deckId(),e==null?null:e.deck(),deckIssue()));
+    }
+    void openRelay(Screen parent) {
+        var e=chosen(); minecraft.gui.setScreen(new RelaySetupScreen(parent,table,e==null?-1:e.slot(),e==null?"":e.deckId(),deckIssue()));
+    }
+    void openTrials() { ClientPlayNetworking.send(new craftbound.network.TrialsActionPayload(table,"",0,"open",-1)); }
+
+    private void ready() {
+        if(tableMode==1) {openRelay(this);return;}
+        if(tableMode==2) {openCommander(this);return;}
+        var e=chosen();
+        if(e==null||e.problem()!=null||sent)return;
+        lastSlot=e.slot(); lastDeckId=e.deckId(); sent=true; sentAt=System.currentTimeMillis(); error="";
+        ClientPlayNetworking.send(new TableActionPayload(table,lastMode,e.slot(),e.deckId()));
+    }
+
+    @Override public void extractRenderState(GuiGraphicsExtractor g,int mx,int my,float dt) {
+        BinderTheme.cover(g,left,top,bookWidth,bookHeight);
+        g.text(font,Component.literal(tableMode==1?"Team Table":tableMode==2?"Commander":"Card Table").withStyle(ChatFormatting.BOLD),listLeft+1,top+11,BinderTheme.GOLD,false);
+        var entry=chosen();
+        duel.selected=tableMode!=0 || lastMode==TableActionPayload.PLAYER; if(solo!=null)solo.selected=!duel.selected;
+        collection.active=collectionSlot()>=0;
+        create.active=collection.active && craftbound.deck.BinderDecks.get(minecraft.player.getInventory().getItem(collectionSlot())).entries().size()<craftbound.deck.SavedDecks.LIMIT;
+        edit.active=entry!=null && !entry.deckId().isEmpty(); edit.visible=entry!=null;
+        ready.active=entry!=null && entry.problem()==null && !sent;
+        ready.selected=ready.active; ready.setMessage(Component.literal(sent?"Joining...":"Ready"));
+        cardSpots.clear(); deckSpots.clear(); cardListArea=null;
+        drawDeckList(g,mx,my);
+        drawDetails(g,mx,my);
+        String hint=lastMode==TableActionPayload.PLAYER?"Ready up with another player at this table.":"Challenge the Card Master at this table.";
+        if(tableMode==1)hint="Choose a deck. Sit beside your partner, opposite the other team.";
+        if(tableMode==2)hint="Bring 20 different cards; choose a mob as your commander.";
+        if(entry==null)hint=tableMode==0?"The Trials lets you draft a deck at the table.":"Create a deck in your binder, or choose a saved deck.";
+        if(entry!=null && entry.problem()!=null)hint=deckIssue();
+        if(!waiting.isEmpty())hint=tableMode!=0?waiting+"  |  Ready to join.":waiting+" is looking for a duel.";
+        if(!error.isEmpty())hint=Component.translatable(error,MatchManager.PRACTICE_MIN_DECK).getString();
+        CardRenderer.fitText(g,font,Component.literal(hint),listLeft,top+bookHeight-22,bookWidth-111,error.isEmpty()?0xFFFFE7BF:0xFFFFAB97,false,false);
+        super.extractRenderState(g,mx,my,dt);
+        drawHoveredCard(g,left,bookWidth,mx,my);
+    }
+
+    private void drawDeckList(GuiGraphicsExtractor g,int mx,int my) {
+        int x=listLeft,w=listWidth;
+        g.fill(x,bodyTop,x+w,bodyBottom,BinderTheme.WOOD_DARK);
+        g.outline(x,bodyTop,w,bodyBottom-bodyTop,0xFF996E47);
+        g.text(font,"My Decks",x+5,bodyTop+5,BinderTheme.GOLD,false);
+        int y=bodyTop+18,last=bodyBottom-24;
+        deckListArea=new int[]{x,y,w,last-y};
+        if(decks.isEmpty()){
+            paragraph(g,Component.literal("Your saved decks appear here."),x+6,y+4,w-12,last,0xFFE3CDB0); return;
+        }
+        deckScroll=Math.clamp(deckScroll,0,Math.max(0,decks.size()-visibleDecks()));
+        for(int i=deckScroll;i<decks.size()&&y+22<=last;i++,y+=24) {
+            var e=decks.get(i);boolean on=i==selected;int[] hit={x+3,y,w-6,22};deckSpots.add(hit);
+            g.fill(x+3,y,x+w-3,y+22,on?BinderTheme.PAGE:inside(hit,mx,my)?0xFF845633:0xFF5E392B);
+            g.fill(x+3,y,x+6,y+22,e.deck().deckClass().frameColor());
+            CardRenderer.fitText(g,font,e.name(),x+9,y+2,w-16,on?INK:0xFFFFF1D7,false,false);
+            String detail=e.deck().size()+" cards";
+            g.text(font,detail,x+9,y+12,on?MUTED:0xFFE6CEAB,false);
+        }
+        if (decks.size()>visibleDecks()) {
+            int track=last-bodyTop-18,thumb=Math.max(4,track*visibleDecks()/decks.size());
+            int bar=bodyTop+18+(track-thumb)*deckScroll/(decks.size()-visibleDecks());
+            g.fill(x+w-2,bar,x+w-1,bar+thumb,BinderTheme.GOLD);
+        }
+    }
+
+    private int paragraph(GuiGraphicsExtractor g,Component text,int x,int y,int width,int bottom,int color){
+        for(var line:font.split(text,Math.max(1,width))){
+            if(y+font.lineHeight>bottom)break;
+            g.text(font,line,x,y,color,false); y+=font.lineHeight+1;
+        }
+        return y;
+    }
+
+    private void drawDetails(GuiGraphicsExtractor g,int mx,int my) {
+        int x=detailsLeft,w=detailsWidth,y=bodyTop;
+        g.fill(x,y,x+w,bodyBottom,BinderTheme.PAGE);
+        g.fill(x,y,x+3,bodyBottom,LINE);
+        int tx=x+8,usable=w-16;
+        var e=chosen();
+        if(e==null) {
+            g.item(new ItemStack(collectionSlot()<0?Items.BOOK:ModItems.BINDER),tx,y+8);
+            g.text(font,Component.literal("Your first deck").withStyle(ChatFormatting.BOLD),tx+21,y+12,INK,false);
+            int next=paragraph(g,Component.literal(collectionSlot()<0?"Bring a Card Binder to browse your collection and save decks here.":"Choose New Deck, pick a class, then add cards from your collection."),tx,y+34,usable,bodyBottom-5,MUTED);
+            paragraph(g,Component.literal(tableMode==0?"To play solo with borrowed cards, choose The Trials.":"Use New Deck to prepare a deck before joining this table."),tx,next+8,usable,bodyBottom-5,MUTED);
+            return;
+        }
+        CardRenderer.fitText(g,font,e.name().copy().withStyle(ChatFormatting.BOLD),tx,y+8,usable-59,INK,false,false);
+        var cardClass=e.deck().deckClass();
+        var power=HeroPowers.of(cardClass);
+        String line=cardClass.displayName().getString()+"  /  "+e.deck().size()+" of "+DeckRules.DECK_SIZE+" cards";
+        CardRenderer.fitText(g,font,Component.literal(line),tx,y+23,usable,MUTED,false,false);
+        int cursor=y+37;
+        boolean tall=bodyBottom-bodyTop>=156;
+        if(power!=HeroPowers.Power.NONE && bodyBottom-bodyTop>=103) {
+            g.item(new ItemStack(BuiltInRegistries.ITEM.getValue(power.icon())),tx,cursor-3);
+            CardRenderer.fitText(g,font,power.displayName(),tx+20,cursor,usable-20,INK,false,false);
+            cursor+=15;
+            if(tall) cursor=paragraph(g,power.description(),tx,cursor,usable,cursor+21,MUTED)+3;
+        }
+        var rows = detailRows;
+        if(bodyBottom-cursor>=54){
+            int binWidth=usable/8,barHeight=tall?15:8;
+            g.text(font,"XP curve",tx,cursor,MUTED,false);cursor+=11;
+            for(int i=0;i<8;i++){
+                int bx=tx+i*binWidth,h=Math.round(barHeight*costBins[i]/(float)peakCount);
+                g.fill(bx,cursor+barHeight-h,bx+binWidth-3,cursor+barHeight,0xFF527343);
+                g.fill(bx,cursor+barHeight,bx+binWidth-3,cursor+barHeight+1,LINE);
+                g.text(font,i==7?"7+":String.valueOf(i),bx,cursor+barHeight+2,MUTED,false);
+            }
+            cursor+=barHeight+14;
+        }
+        g.fill(tx,cursor-3,x+w-7,cursor-2,LINE);
+        int columns=w>=245?2:1,rowHeight=13,visible=Math.max(0,(bodyBottom-cursor-3)/rowHeight);
+        cardListArea=new int[]{tx,cursor,usable,Math.max(0,bodyBottom-cursor-3)};
+        int totalRows=(rows.size()+columns-1)/columns;
+        cardScroll=Math.clamp(cardScroll,0,Math.max(0,totalRows-visible));
+        if(rows.isEmpty()) paragraph(g,Component.literal("Edit this deck to add cards."),tx,cursor+2,usable,bodyBottom-3,MUTED);
+        for(int r=0;r<visible;r++)for(int col=0;col<columns;col++){
+            int index=(cardScroll+r)*columns+col;if(index>=rows.size())break;
+            var row=rows.get(index);int rx=tx+col*(usable+4)/columns,ry=cursor+r*rowHeight,cw=(usable+4)/columns-4;
+            cardSpots.add(new CardSpot(rx,ry,cw,rowHeight-1,row.id(),row.enchanted()));
+            boolean hover=mx>=rx&&mx<rx+cw&&my>=ry&&my<ry+rowHeight-1;
+            g.fill(rx,ry,rx+cw,ry+rowHeight-1,hover?0xFFDAB786:0xFFE6D3AE);
+            MatchArt.cost(g,font,rx+1,ry+1,9,Cards.get(row.id()).cost());
+            CardRenderer.fitText(g,font,Cards.name(row.id()),rx+13,ry+2,cw-31,row.enchanted()?0xFF623B86:INK,false,false);
+            String count="x"+row.count();g.text(font,count,rx+cw-2-font.width(count),ry+2,row.missing()>0?0xFFA32F21:MUTED,false);
         }
     }
 
@@ -290,48 +384,6 @@ public class TableScreen extends Screen {
         return rows;
     }
 
-    private void drawBottomBar(GuiGraphicsExtractor g, int x, int y, int width, int mouseX, int mouseY) {
-        int buttonWidth = Math.min(110, (width - 110) / 2 - 6);
-        this.cardMasterButton = new int[]{x, y + 8, buttonWidth, 22};
-        this.playerButton = new int[]{x + buttonWidth + 6, y + 8, buttonWidth, 22};
-        this.readyButton = new int[]{x + width - 100, y + 6, 100, 26};
-        drawToggle(g, this.cardMasterButton, Component.translatable("table_ui.craftbound.vs_card_master"), lastMode == TableActionPayload.CARD_MASTER, mouseX, mouseY);
-        drawToggle(g, this.playerButton, Component.translatable("table_ui.craftbound.vs_player"), lastMode == TableActionPayload.PLAYER, mouseX, mouseY);
-        DeckEntry entry = chosen();
-        boolean canReady = entry != null && entry.problem() == null && !this.sent;
-        boolean hover = inside(this.readyButton, mouseX, mouseY);
-        Component ready = Component.translatable(this.sent ? "table_ui.craftbound.readying" : "table_ui.craftbound.ready");
-        if (canReady) {
-            float glow = 0.5F + 0.5F * (float) Math.sin(System.currentTimeMillis() / 300.0);
-            MatchArt.button(g, this.font, ready, this.readyButton[0], this.readyButton[1], 100, 26,
-                    hover ? 0xFF8CF06A : 0xFF6BD34A, 0xFF2E8A1E, 0xFFFFFFFF, glow * 0.6F);
-        } else {
-            MatchArt.button(g, this.font, ready, this.readyButton[0], this.readyButton[1], 100, 26, 0xFF4A4844, 0xFF33312E, 0xFF9E978B, 0);
-        }
-        // A note above the buttons: someone waiting here, or why you can't play.
-        Component note = null;
-        int color = MatchArt.TEXT_DIM;
-        if (!this.error.isEmpty()) {
-            note = Component.translatable(this.error, MatchManager.PRACTICE_MIN_DECK);
-            color = 0xFFFF6A5A;
-        } else if (!this.waiting.isEmpty()) {
-            note = Component.translatable("table_ui.craftbound.someone_waiting", this.waiting);
-            color = MatchArt.GOLD_LIGHT;
-        } else if (lastMode == TableActionPayload.PLAYER) {
-            note = Component.translatable("table_ui.craftbound.player_hint");
-        } else {
-            note = Component.translatable("table_ui.craftbound.card_master_hint");
-        }
-        CardRenderer.fitText(g, this.font, note, x, y - 4, width, color, false);
-    }
-
-    private void drawToggle(GuiGraphicsExtractor g, int[] b, Component text, boolean on, int mouseX, int mouseY) {
-        boolean hover = inside(b, mouseX, mouseY);
-        int topColor = on ? (hover ? 0xFFFFE07A : 0xFFFFD25A) : (hover ? 0xFF5A5650 : 0xFF4A4844);
-        int bottomColor = on ? 0xFFE2A52A : 0xFF33312E;
-        MatchArt.button(g, this.font, text, b[0], b[1], b[2], b[3], topColor, bottomColor, on ? 0xFFFFFFFF : 0xFFCFC6B8, 0);
-    }
-
     // Hovering a card in the list shows it full size beside the panel.
     private void drawHoveredCard(GuiGraphicsExtractor g, int panelX, int panelWidth, int mouseX, int mouseY) {
         for (CardSpot spot : this.cardSpots) {
@@ -349,14 +401,6 @@ public class TableScreen extends Screen {
         }
     }
 
-    private static int classColor(CardClass cardClass) {
-        return switch (cardClass) {
-            case FIGHTER -> 0xFFB23A2E;
-            case BUILDER -> 0xFF3F62B0;
-            case FARMER -> 0xFF4E8A2A;
-            case NEUTRAL -> 0xFF5D5E66;
-        };
-    }
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
@@ -367,38 +411,24 @@ public class TableScreen extends Screen {
         double mouseY = event.y();
         for (int i = 0; i < this.deckSpots.size(); i++) {
             if (inside(this.deckSpots.get(i), mouseX, mouseY)) {
-                this.selected = i;
+                this.selected = this.deckScroll + i;
+                cacheDetails();
+                preferredSlot=chosen().slot(); preferredId=chosen().deckId();
                 this.cardScroll = 0;
                 this.error = "";
                 MatchSounds.play("ui.button.click", 1.2F, 0.4F);
                 return true;
             }
         }
-        if (inside(this.cardMasterButton, mouseX, mouseY)) {
-            lastMode = TableActionPayload.CARD_MASTER;
-            MatchSounds.play("ui.button.click", 1.0F, 0.4F);
-            return true;
-        }
-        if (inside(this.playerButton, mouseX, mouseY)) {
-            lastMode = TableActionPayload.PLAYER;
-            MatchSounds.play("ui.button.click", 1.0F, 0.4F);
-            return true;
-        }
-        DeckEntry entry = chosen();
-        if (inside(this.readyButton, mouseX, mouseY) && entry != null && entry.problem() == null && !this.sent) {
-            lastSlot = entry.slot();
-            this.sent = true;
-            this.sentAt = System.currentTimeMillis();
-            this.error = "";
-            MatchSounds.play("block.note_block.bell", 1.2F, 0.6F);
-            ClientPlayNetworking.send(new TableActionPayload(this.table, lastMode, entry.slot()));
-            return true;
-        }
         return super.mouseClicked(event, doubleClick);
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (inside(this.deckListArea, mouseX, mouseY)) {
+            this.deckScroll -= (int) Math.signum(scrollY);
+            return true;
+        }
         if (inside(this.cardListArea, mouseX, mouseY)) {
             this.cardScroll -= (int) Math.signum(scrollY);
             return true;
@@ -408,7 +438,7 @@ public class TableScreen extends Screen {
 
     @Override
     public void tick() {
-        // If the server never answers, let Ready be pressed again.
+        if (++refreshTicks % 10 == 0) updateDecks(false);
         if (this.sent && System.currentTimeMillis() - this.sentAt > 5000) {
             this.sent = false;
         }

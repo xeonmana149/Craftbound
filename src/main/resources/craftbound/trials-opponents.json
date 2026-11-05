@@ -1,0 +1,502 @@
+[
+  {
+    "id": "meadow_scout",
+    "name": "Meadow Scout",
+    "tier": "REGULAR",
+    "heroClass": "TAMER",
+    "board": "SPRUCE",
+    "style": "Cheap Animals help each other survive the first trades.",
+    "health": 10,
+    "healthStep": 2,
+    "deckSize": 8,
+    "deckStep": 1,
+    "bonusXp": 0,
+    "extraCards": 0,
+    "bounty": 2,
+    "anchors": [
+      "craftbound:chicken",
+      "craftbound:horse",
+      "craftbound:bat",
+      "craftbound:cow",
+      "craftbound:fox",
+      "craftbound:hunting_wolf",
+      "craftbound:training_bone"
+    ],
+    "tribes": [
+      "ANIMAL",
+      "TAMEABLE"
+    ],
+    "tags": [
+      "SPRINT",
+      "BUFF"
+    ],
+    "ability": {
+      "name": "Close Herd",
+      "kind": "MOB_HEALTH",
+      "amount": 1,
+      "every": 1,
+      "card": ""
+    }
+  },
+  {
+    "id": "grave_lookout",
+    "name": "Grave Lookout",
+    "tier": "REGULAR",
+    "heroClass": "ALCHEMIST",
+    "board": "AMETHYST",
+    "style": "Fast Undead fight for the board before its potions finish wounded mobs.",
+    "health": 10,
+    "healthStep": 2,
+    "deckSize": 8,
+    "deckStep": 1,
+    "bonusXp": 0,
+    "extraCards": 0,
+    "bounty": 2,
+    "anchors": [
+      "craftbound:baby_zombie",
+      "craftbound:zombie",
+      "craftbound:skeleton",
+      "craftbound:drowned",
+      "craftbound:splash_potion_of_harming"
+    ],
+    "tribes": [
+      "UNDEAD"
+    ],
+    "tags": [
+      "DAMAGE"
+    ],
+    "ability": {
+      "name": "Grave Company",
+      "kind": "PACK_ATTACK",
+      "amount": 1,
+      "every": 1,
+      "card": ""
+    }
+  },
+  {
+    "id": "tidepool_keeper",
+    "name": "Tidepool Keeper",
+    "tier": "REGULAR",
+    "heroClass": "FISHERMAN",
+    "board": "PRISMARINE",
+    "style": "Aquatic attackers and Freeze fight for early trades.",
+    "health": 10,
+    "healthStep": 2,
+    "deckSize": 8,
+    "deckStep": 1,
+    "bonusXp": 0,
+    "extraCards": 0,
+    "bounty": 2,
+    "anchors": [
+      "craftbound:tropical_fish",
+      "craftbound:snow_golem",
+      "craftbound:dolphin",
+      "craftbound:cod",
+      "craftbound:salmon",
+      "craftbound:ancient_turtle"
+    ],
+    "tribes": [
+      "AQUATIC"
+    ],
+    "tags": [
+      "FREEZE",
+      "RANGED"
+    ],
+    "ability": {
+      "name": "Quick Current",
+      "kind": "MOB_SPRINT",
+      "amount": 1,
+      "every": 1,
+      "card": ""
+    }
+  },
+  {
+    "id": "hearth_tender",
+    "name": "Hearth Tender",
+    "tier": "REGULAR",
+    "heroClass": "CHEF",
+    "board": "SPRUCE",
+    "style": "Villagers defend the cook while injured mobs recover.",
+    "health": 10,
+    "healthStep": 2,
+    "deckSize": 8,
+    "deckStep": 1,
+    "bonusXp": 0,
+    "extraCards": 0,
+    "bounty": 2,
+    "anchors": [
+      "craftbound:villager",
+      "craftbound:village_cook",
+      "craftbound:cow",
+      "craftbound:golden_carrot",
+      "craftbound:hearty_stew",
+      "craftbound:shepherd",
+      "craftbound:iron_golem"
+    ],
+    "tribes": [
+      "VILLAGER"
+    ],
+    "tags": [
+      "HEAL",
+      "SHIELD"
+    ],
+    "ability": {
+      "name": "Hot Soup",
+      "kind": "HEAL_WOUNDED",
+      "amount": 1,
+      "every": 1,
+      "card": ""
+    }
+  },
+  {
+    "id": "stone_mason",
+    "name": "Stone Mason",
+    "tier": "REGULAR",
+    "heroClass": "BUILDER",
+    "board": "CLASSIC",
+    "style": "Blocks support a front row of Golems. Removing the support early pays off.",
+    "health": 10,
+    "healthStep": 2,
+    "deckSize": 8,
+    "deckStep": 1,
+    "bonusXp": 0,
+    "extraCards": 0,
+    "bounty": 2,
+    "anchors": [
+      "craftbound:wood_fence",
+      "craftbound:banner",
+      "craftbound:snow_golem",
+      "craftbound:chest",
+      "craftbound:iron_golem",
+      "craftbound:cobblestone_wall_2",
+      "craftbound:dispenser"
+    ],
+    "tribes": [
+      "GOLEM"
+    ],
+    "tags": [
+      "BLOCK",
+      "BUFF"
+    ],
+    "ability": {
+      "name": "Mortared Joints",
+      "kind": "BLOCK_HEALTH",
+      "amount": 1,
+      "every": 1,
+      "card": ""
+    }
+  },
+  {
+    "id": "orchard_keeper",
+    "name": "Orchard Keeper",
+    "tier": "REGULAR",
+    "heroClass": "FARMER",
+    "board": "SPRUCE",
+    "style": "Crops buy time for larger mobs to take over.",
+    "health": 10,
+    "healthStep": 2,
+    "deckSize": 8,
+    "deckStep": 1,
+    "bonusXp": 0,
+    "extraCards": 0,
+    "bounty": 2,
+    "anchors": [
+      "craftbound:bee",
+      "craftbound:chicken",
+      "craftbound:sweet_berry_bush",
+      "craftbound:horse",
+      "craftbound:composter",
+      "craftbound:sniffer",
+      "craftbound:polar_bear",
+      "craftbound:panda"
+    ],
+    "tribes": [
+      "CROP",
+      "ANIMAL"
+    ],
+    "tags": [
+      "SUMMON",
+      "BUFF"
+    ],
+    "ability": {
+      "name": "Orchard Shelter",
+      "kind": "MOB_HEALTH",
+      "amount": 1,
+      "every": 1,
+      "card": ""
+    }
+  },
+  {
+    "id": "quarry_smith",
+    "name": "Quarry Smith",
+    "tier": "ELITE",
+    "heroClass": "FIGHTER",
+    "board": "AMETHYST",
+    "style": "A Tool, an Anvil and a durable front row turn trades into further upgrades.",
+    "health": 18,
+    "healthStep": 1,
+    "deckSize": 12,
+    "deckStep": 1,
+    "bonusXp": 0,
+    "extraCards": 0,
+    "bounty": 4,
+    "anchors": [
+      "craftbound:stone_sword",
+      "craftbound:iron_sword",
+      "craftbound:anvil",
+      "craftbound:looting",
+      "craftbound:sharpness",
+      "craftbound:illager_swordsman",
+      "craftbound:iron_golem"
+    ],
+    "tribes": [
+      "ILLAGER",
+      "GOLEM"
+    ],
+    "tags": [
+      "TOOL",
+      "ENCHANTMENT"
+    ],
+    "ability": {
+      "name": "Tempered Edge",
+      "kind": "TOOL_DURABILITY",
+      "amount": 1,
+      "every": 1,
+      "card": ""
+    }
+  },
+  {
+    "id": "glacier_sentinel",
+    "name": "Glacier Sentinel",
+    "tier": "ELITE",
+    "heroClass": "FISHERMAN",
+    "board": "PRISMARINE",
+    "style": "Freeze and sturdy Aquatics buy time for its late threats.",
+    "health": 18,
+    "healthStep": 1,
+    "deckSize": 12,
+    "deckStep": 1,
+    "bonusXp": 0,
+    "extraCards": 0,
+    "bounty": 4,
+    "anchors": [
+      "craftbound:snow_golem",
+      "craftbound:tropical_fish",
+      "craftbound:guardian",
+      "craftbound:ancient_turtle",
+      "craftbound:elder_guardian",
+      "craftbound:polar_bear"
+    ],
+    "tribes": [
+      "AQUATIC"
+    ],
+    "tags": [
+      "FREEZE",
+      "SHIELD"
+    ],
+    "ability": {
+      "name": "Glacier Spring",
+      "kind": "HEAL_WOUNDED",
+      "amount": 2,
+      "every": 1,
+      "card": ""
+    }
+  },
+  {
+    "id": "end_archivist",
+    "name": "End Archivist",
+    "tier": "ELITE",
+    "heroClass": "BUILDER",
+    "board": "AMETHYST",
+    "style": "Hides behind Blocks and refills its hand with expensive mobs.",
+    "health": 18,
+    "healthStep": 1,
+    "deckSize": 12,
+    "deckStep": 1,
+    "bonusXp": 0,
+    "extraCards": 0,
+    "bounty": 4,
+    "anchors": [
+      "craftbound:ender_chest",
+      "craftbound:chest",
+      "craftbound:enderman",
+      "craftbound:shulker",
+      "craftbound:iron_golem",
+      "craftbound:ender_dragon"
+    ],
+    "tribes": [
+      "ENDER",
+      "GOLEM"
+    ],
+    "tags": [
+      "BLOCK",
+      "DROP"
+    ],
+    "ability": {
+      "name": "Echo Archive",
+      "kind": "HEAVY_DRAW",
+      "amount": 1,
+      "every": 1,
+      "card": ""
+    }
+  },
+  {
+    "id": "brood_mother",
+    "name": "Brood Mother",
+    "tier": "ELITE",
+    "heroClass": "TAMER",
+    "board": "SPRUCE",
+    "style": "Split bodies and Drop summons refill its front row.",
+    "health": 18,
+    "healthStep": 1,
+    "deckSize": 12,
+    "deckStep": 1,
+    "bonusXp": 0,
+    "extraCards": 0,
+    "bounty": 4,
+    "anchors": [
+      "craftbound:large_slime",
+      "craftbound:magma_cube",
+      "craftbound:polar_bear",
+      "craftbound:evoker",
+      "craftbound:pack_call",
+      "craftbound:tropical_fish"
+    ],
+    "tribes": [
+      "SLIME",
+      "NETHER"
+    ],
+    "tags": [
+      "DROP",
+      "SUMMON"
+    ],
+    "ability": {
+      "name": "Hatchling",
+      "kind": "DEATH_SPLIT",
+      "amount": 1,
+      "every": 1,
+      "card": ""
+    }
+  },
+  {
+    "id": "pillager_lord",
+    "name": "Pillager Lord",
+    "tier": "BOSS",
+    "heroClass": "FIGHTER",
+    "board": "CLASSIC",
+    "style": "Illager buffs and a Tool build a wide raid. Clear its mobs before the war horn.",
+    "health": 30,
+    "healthStep": 0,
+    "deckSize": 22,
+    "deckStep": 0,
+    "bonusXp": 0,
+    "extraCards": 0,
+    "bounty": 7,
+    "anchors": [
+      "craftbound:pillager_scout",
+      "craftbound:raid_drummer",
+      "craftbound:illager_swordsman",
+      "craftbound:raiding_party",
+      "craftbound:ominous_horn",
+      "craftbound:stone_sword",
+      "craftbound:ravager",
+      "craftbound:looting",
+      "craftbound:pillager",
+      "craftbound:vindicator",
+      "craftbound:evoker"
+    ],
+    "tribes": [
+      "ILLAGER"
+    ],
+    "tags": [
+      "TOOL",
+      "BUFF",
+      "SPRINT"
+    ],
+    "ability": {
+      "name": "Raid Horn",
+      "kind": "WAR_HORN",
+      "amount": 2,
+      "every": 3,
+      "card": ""
+    }
+  },
+  {
+    "id": "creeper_king",
+    "name": "Creeper King",
+    "tier": "BOSS",
+    "heroClass": "ALCHEMIST",
+    "board": "AMETHYST",
+    "style": "Explosive Drops and splash damage punish a crowded front row. Trade into its explosives before adding more mobs.",
+    "health": 30,
+    "healthStep": 0,
+    "deckSize": 22,
+    "deckStep": 0,
+    "bonusXp": 0,
+    "extraCards": 0,
+    "bounty": 7,
+    "anchors": [
+      "craftbound:creeper",
+      "craftbound:charged_creeper",
+      "craftbound:tnt",
+      "craftbound:splash_potion_of_harming",
+      "craftbound:witch",
+      "craftbound:large_slime",
+      "craftbound:ender_chest"
+    ],
+    "tribes": [
+      "UNDEAD"
+    ],
+    "tags": [
+      "DROP",
+      "DAMAGE"
+    ],
+    "ability": {
+      "name": "Chain Reaction",
+      "kind": "DEATH_BLAST",
+      "amount": 2,
+      "every": 1,
+      "card": ""
+    }
+  },
+  {
+    "id": "elder_slime",
+    "name": "Elder Slime",
+    "tier": "BOSS",
+    "heroClass": "TAMER",
+    "board": "SPRUCE",
+    "style": "Splitting mobs replenish the brood. Its extra division can happen only once per turn.",
+    "health": 30,
+    "healthStep": 0,
+    "deckSize": 22,
+    "deckStep": 0,
+    "bonusXp": 0,
+    "extraCards": 0,
+    "bounty": 7,
+    "anchors": [
+      "craftbound:large_slime",
+      "craftbound:magma_cube",
+      "craftbound:polar_bear",
+      "craftbound:evoker",
+      "craftbound:pack_call",
+      "craftbound:training_bone",
+      "craftbound:hunting_wolf",
+      "craftbound:horse"
+    ],
+    "tribes": [
+      "SLIME",
+      "NETHER"
+    ],
+    "tags": [
+      "DROP",
+      "SUMMON"
+    ],
+    "ability": {
+      "name": "Mitosis",
+      "kind": "DEATH_SPLIT",
+      "amount": 2,
+      "every": 1,
+      "card": ""
+    }
+  }
+]

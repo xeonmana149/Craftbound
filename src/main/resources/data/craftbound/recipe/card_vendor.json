@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "IGI",
+    "IEI",
+    "IRI"
+  ],
+  "key": {
+    "I": "minecraft:iron_ingot",
+    "G": "minecraft:glass",
+    "E": "minecraft:emerald_block",
+    "R": "minecraft:redstone"
+  },
+  "result": {
+    "id": "craftbound:card_vendor",
+    "count": 1
+  }
+}

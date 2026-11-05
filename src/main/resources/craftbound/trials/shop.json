@@ -1,0 +1,34 @@
+{
+  "title": "Village Outfitter",
+  "description": "Buy cards and charms, train a card or remove a copy.",
+  "items": [
+    {
+      "id": "BUY_CARDS",
+      "title": "Card shelf",
+      "description": "Choose a new card for the expedition deck.",
+      "service": "CARD",
+      "stock": 1
+    },
+    {
+      "id": "BUY_CHARMS",
+      "title": "Charm case",
+      "description": "Equip one of the outfitter's charms.",
+      "service": "CHARM",
+      "stock": 1
+    },
+    {
+      "id": "REMOVE",
+      "title": "Remove a card",
+      "description": "Remove one copy from your expedition deck.",
+      "service": "REMOVE",
+      "stock": 1
+    },
+    {
+      "id": "TRAIN",
+      "title": "Train a card",
+      "description": "Choose one upgrade for one copy.",
+      "service": "TRAIN",
+      "stock": 1
+    }
+  ]
+}

@@ -1,0 +1,283 @@
+{
+  "proposalOnly": true,
+  "date": "2026-11-02",
+  "catalogue": "bundled Foundation prototype; no runtime registration",
+  "decks": [
+    {
+      "id": "iron_patrol",
+      "name": "Iron Patrol",
+      "class": "FIGHTER",
+      "cards": [
+        {
+          "id": "craftbound:iron_sword",
+          "count": 2
+        },
+        {
+          "id": "craftbound:diamond_sword",
+          "count": 2
+        },
+        {
+          "id": "craftbound:potion_of_strength",
+          "count": 2
+        },
+        {
+          "id": "craftbound:vindicator",
+          "count": 2
+        },
+        {
+          "id": "craftbound:sweeping_edge",
+          "count": 2
+        },
+        {
+          "id": "craftbound:sharpness",
+          "count": 2
+        },
+        {
+          "id": "craftbound:pillager",
+          "count": 2
+        },
+        {
+          "id": "craftbound:zombie",
+          "count": 2
+        },
+        {
+          "id": "craftbound:skeleton",
+          "count": 2
+        },
+        {
+          "id": "craftbound:drowned",
+          "count": 2
+        },
+        {
+          "id": "craftbound:villager",
+          "count": 2
+        },
+        {
+          "id": "craftbound:librarian",
+          "count": 2
+        },
+        {
+          "id": "craftbound:piglin_brute",
+          "count": 2
+        },
+        {
+          "id": "craftbound:ravager",
+          "count": 2
+        },
+        {
+          "id": "craftbound:enderman",
+          "count": 2
+        }
+      ],
+      "mulliganGuidance": "Keep Iron Sword and a usable early mob; keep an enchantment only with its tool.",
+      "plan": "Win efficient trades, then threaten with a tool and surviving Illagers. Watch hero Health when trading."
+    },
+    {
+      "id": "village_workshop",
+      "name": "Village Workshop",
+      "class": "BUILDER",
+      "cards": [
+        {
+          "id": "craftbound:furnace",
+          "count": 2
+        },
+        {
+          "id": "craftbound:dispenser",
+          "count": 2
+        },
+        {
+          "id": "craftbound:beacon",
+          "count": 2
+        },
+        {
+          "id": "craftbound:piston",
+          "count": 2
+        },
+        {
+          "id": "craftbound:bow",
+          "count": 2
+        },
+        {
+          "id": "craftbound:iron_pickaxe",
+          "count": 2
+        },
+        {
+          "id": "craftbound:efficiency",
+          "count": 2
+        },
+        {
+          "id": "craftbound:zombie",
+          "count": 2
+        },
+        {
+          "id": "craftbound:skeleton",
+          "count": 2
+        },
+        {
+          "id": "craftbound:drowned",
+          "count": 2
+        },
+        {
+          "id": "craftbound:villager",
+          "count": 2
+        },
+        {
+          "id": "craftbound:librarian",
+          "count": 2
+        },
+        {
+          "id": "craftbound:shulker",
+          "count": 2
+        },
+        {
+          "id": "craftbound:enderman",
+          "count": 2
+        },
+        {
+          "id": "craftbound:ravager",
+          "count": 2
+        }
+      ],
+      "mulliganGuidance": "Keep Furnace or another early body; do not keep a hand of expensive engines and enchantments.",
+      "plan": "Protect one useful engine and keep attackers on the board. A full row of buildings is not a winning plan."
+    },
+    {
+      "id": "harvest_herd",
+      "name": "Harvest Herd",
+      "class": "FARMER",
+      "cards": [
+        {
+          "id": "craftbound:bee",
+          "count": 2
+        },
+        {
+          "id": "craftbound:bone_meal",
+          "count": 2
+        },
+        {
+          "id": "craftbound:sweet_berry_bush",
+          "count": 2
+        },
+        {
+          "id": "craftbound:bountiful_harvest",
+          "count": 2
+        },
+        {
+          "id": "craftbound:composter",
+          "count": 2
+        },
+        {
+          "id": "craftbound:sniffer",
+          "count": 2
+        },
+        {
+          "id": "craftbound:iron_hoe",
+          "count": 2
+        },
+        {
+          "id": "craftbound:unbreaking",
+          "count": 2
+        },
+        {
+          "id": "craftbound:cow",
+          "count": 2
+        },
+        {
+          "id": "craftbound:shepherd",
+          "count": 2
+        },
+        {
+          "id": "craftbound:zombie",
+          "count": 2
+        },
+        {
+          "id": "craftbound:skeleton",
+          "count": 2
+        },
+        {
+          "id": "craftbound:drowned",
+          "count": 2
+        },
+        {
+          "id": "craftbound:villager",
+          "count": 2
+        },
+        {
+          "id": "craftbound:librarian",
+          "count": 2
+        }
+      ],
+      "mulliganGuidance": "Keep an early body and a practical crop/protection play; avoid keeping several conditional buffs.",
+      "plan": "Build a mixed board, protect Animals, then Reap when cards are more useful than the crops' spaces."
+    },
+    {
+      "id": "river_school",
+      "name": "River School",
+      "class": "FISHERMAN",
+      "cards": [
+        {
+          "id": "craftbound:fishing_rod",
+          "count": 2
+        },
+        {
+          "id": "craftbound:cod",
+          "count": 2
+        },
+        {
+          "id": "craftbound:salmon",
+          "count": 2
+        },
+        {
+          "id": "craftbound:turtle",
+          "count": 2
+        },
+        {
+          "id": "craftbound:dolphin",
+          "count": 2
+        },
+        {
+          "id": "craftbound:guardian",
+          "count": 2
+        },
+        {
+          "id": "craftbound:conduit",
+          "count": 2
+        },
+        {
+          "id": "craftbound:school_of_fish",
+          "count": 2
+        },
+        {
+          "id": "craftbound:lure",
+          "count": 2
+        },
+        {
+          "id": "craftbound:zombie",
+          "count": 2
+        },
+        {
+          "id": "craftbound:skeleton",
+          "count": 2
+        },
+        {
+          "id": "craftbound:drowned",
+          "count": 2
+        },
+        {
+          "id": "craftbound:villager",
+          "count": 2
+        },
+        {
+          "id": "craftbound:librarian",
+          "count": 2
+        },
+        {
+          "id": "craftbound:enderman",
+          "count": 2
+        }
+      ],
+      "mulliganGuidance": "Keep cheap Aquatics; keep Dolphin when the rest of the hand can establish a school.",
+      "plan": "Develop several bodies before a payoff. Leave hand space for catches and board space to play them."
+    }
+  ]
+}

@@ -31,7 +31,7 @@ import net.minecraft.world.phys.shapes.VoxelShape;
 // - Sneak and right-click with an empty hand to take the card back.
 public class CardDisplayBlock extends Block implements EntityBlock {
     public static final EnumProperty<Direction> FACING = BlockStateProperties.HORIZONTAL_FACING;
-    private static final VoxelShape SHAPE = Block.box(2, 0, 2, 14, 13, 14);
+    private static final VoxelShape SHAPE = Block.box(2, 0, 2, 14, 15, 14);
 
     // Set by the client so a right-click can open the inspect screen. Does nothing on a server.
     public static Consumer<ItemStack> openInspect = card -> {

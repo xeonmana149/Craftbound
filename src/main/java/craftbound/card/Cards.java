@@ -10,123 +10,68 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
 public class Cards {
-    // LinkedHashMap keeps cards in the order they're registered, so the creative tab lists them in this order.
-    private static final Map<Identifier, CardDefinition> CARDS = new LinkedHashMap<>();
-
-    // Tokens come first, because the cards below point to them.
-    public static final Identifier ROTTEN_FLESH = register("rotten_flesh", CardDefinition.item(CardRarity.COMMON, 0).token());
-    public static final Identifier ARROW = register("arrow", CardDefinition.item(CardRarity.COMMON, 1).token());
-    public static final Identifier NETHER_STAR = register("nether_star", CardDefinition.item(CardRarity.COMMON, 0).token());
-    public static final Identifier DRAGON_EGG = register("dragon_egg", CardDefinition.item(CardRarity.COMMON, 0).token());
-    public static final Identifier VEX = register("vex", CardDefinition.mob(CardRarity.COMMON, 1, 1, 1).token()
-            .keywords(Keyword.SPRINT));
-    // The second player in a match starts with one of these.
-    public static final Identifier EXPERIENCE_BOTTLE = register("experience_bottle", CardDefinition.item(CardRarity.COMMON, 0).token());
-
-    public static final Identifier ZOMBIE = register("zombie", CardDefinition.mob(CardRarity.COMMON, 2, 2, 3)
-            .type(MobType.UNDEAD).keywords(Keyword.DROP).creates(Keyword.DROP, ROTTEN_FLESH));
-    public static final Identifier SKELETON = register("skeleton", CardDefinition.mob(CardRarity.COMMON, 3, 2, 2)
-            .type(MobType.UNDEAD).keywords(Keyword.RANGED, Keyword.DROP).creates(Keyword.DROP, ARROW));
-    public static final Identifier CREEPER = register("creeper", CardDefinition.mob(CardRarity.RARE, 3, 2, 2)
-            .keywords(Keyword.DROP));
-    public static final Identifier ENDERMAN = register("enderman", CardDefinition.mob(CardRarity.EPIC, 5, 4, 4)
-            .type(MobType.ENDER).keywords(Keyword.SPAWN));
-
-    // Epics.
-    public static final Identifier CHARGED_CREEPER = register("charged_creeper", CardDefinition.mob(CardRarity.EPIC, 5, 3, 3)
-            .keywords(Keyword.DROP).art("creeper_spawn_egg"));
-    // A collectible item, and also what the Evoker drops, so it's registered before the Evoker.
-    public static final Identifier TOTEM_OF_UNDYING = register("totem_of_undying", CardDefinition.item(CardRarity.EPIC, 3));
-    public static final Identifier ENCHANTED_GOLDEN_APPLE = register("enchanted_golden_apple", CardDefinition.item(CardRarity.EPIC, 3));
-    public static final Identifier EVOKER = register("evoker", CardDefinition.mob(CardRarity.EPIC, 5, 3, 4)
-            .type(MobType.ILLAGER).keywords(Keyword.SPAWN, Keyword.DROP)
-            .creates(Keyword.SPAWN, VEX).creates(Keyword.DROP, TOTEM_OF_UNDYING));
-    public static final Identifier RAVAGER = register("ravager", CardDefinition.mob(CardRarity.EPIC, 7, 7, 7)
-            .type(MobType.ILLAGER));
-    public static final Identifier PIGLIN_BRUTE = register("piglin_brute", CardDefinition.mob(CardRarity.EPIC, 4, 5, 3)
-            .type(MobType.NETHER).keywords(Keyword.SPRINT));
-    public static final Identifier SHULKER = register("shulker", CardDefinition.mob(CardRarity.EPIC, 4, 2, 5)
-            .type(MobType.ENDER).keywords(Keyword.SHIELD, Keyword.RANGED));
-    public static final Identifier WITHER_SKELETON = register("wither_skeleton", CardDefinition.mob(CardRarity.EPIC, 5, 4, 4)
-            .type(MobType.UNDEAD));
-
-    // Legendaries: the three boss mobs.
-    public static final Identifier WARDEN = register("warden", CardDefinition.mob(CardRarity.LEGENDARY, 8, 7, 9)
-            .keywords(Keyword.SHIELD, Keyword.SPAWN));
-    public static final Identifier WITHER = register("wither", CardDefinition.mob(CardRarity.LEGENDARY, 8, 6, 6)
-            .type(MobType.UNDEAD).keywords(Keyword.SPAWN, Keyword.DROP).creates(Keyword.DROP, NETHER_STAR));
-    public static final Identifier ENDER_DRAGON = register("ender_dragon", CardDefinition.mob(CardRarity.LEGENDARY, 10, 8, 8)
-            .type(MobType.ENDER).keywords(Keyword.SPRINT, Keyword.DROP).creates(Keyword.DROP, DRAGON_EGG));
-
-    // --- Class cards (from the Mobdeck prototype) -------------------------------------------------------
-    // Tokens made by the class powers and cards. They aren't collectible, so they don't change binder numbers.
-    public static final Identifier CRAFTED_SWORD = register("crafted_sword", CardDefinition.tool(CardRarity.COMMON, 0, 1, 1)
-            .cardClass(CardClass.FIGHTER).token().art("wooden_sword"));
-    public static final Identifier COBBLESTONE_WALL = register("cobblestone_wall", CardDefinition.mob(CardRarity.COMMON, 0, 0, 2)
-            .cardClass(CardClass.BUILDER).token().keywords(Keyword.BLOCK, Keyword.SHIELD).art("cobblestone_wall"));
-    public static final Identifier WHEAT = register("wheat", CardDefinition.mob(CardRarity.COMMON, 0, 0, 2)
-            .cardClass(CardClass.FARMER).token().type(MobType.CROP).keywords(Keyword.BLOCK).art("wheat"));
-
-    // Fighter: swords and hard hitters.
-    public static final Identifier IRON_SWORD = register("iron_sword", CardDefinition.tool(CardRarity.RARE, 3, 3, 2)
-            .cardClass(CardClass.FIGHTER));
-    public static final Identifier DIAMOND_SWORD = register("diamond_sword", CardDefinition.tool(CardRarity.EPIC, 5, 5, 2)
-            .cardClass(CardClass.FIGHTER));
-    public static final Identifier POTION_OF_STRENGTH = register("potion_of_strength", CardDefinition.item(CardRarity.COMMON, 1)
-            .cardClass(CardClass.FIGHTER).art("potion"));
-    public static final Identifier VINDICATOR = register("vindicator", CardDefinition.mob(CardRarity.COMMON, 4, 4, 3)
-            .cardClass(CardClass.FIGHTER).type(MobType.ILLAGER).keywords(Keyword.SPRINT));
-    public static final Identifier SWEEPING_EDGE = register("sweeping_edge", CardDefinition.item(CardRarity.RARE, 3)
-            .cardClass(CardClass.FIGHTER).art("enchanted_book"));
-
-    // Builder: blocks that work for you, and a bow.
-    public static final Identifier FURNACE = register("furnace", CardDefinition.mob(CardRarity.COMMON, 2, 0, 3)
-            .cardClass(CardClass.BUILDER).keywords(Keyword.BLOCK).art("furnace"));
-    public static final Identifier DISPENSER = register("dispenser", CardDefinition.mob(CardRarity.RARE, 3, 0, 3)
-            .cardClass(CardClass.BUILDER).keywords(Keyword.BLOCK).art("dispenser"));
-    public static final Identifier BEACON = register("beacon", CardDefinition.mob(CardRarity.EPIC, 5, 0, 5)
-            .cardClass(CardClass.BUILDER).keywords(Keyword.BLOCK).art("beacon"));
-    public static final Identifier PISTON = register("piston", CardDefinition.item(CardRarity.RARE, 2)
-            .cardClass(CardClass.BUILDER));
-    public static final Identifier BOW = register("bow", CardDefinition.tool(CardRarity.COMMON, 2, 2, 2)
-            .cardClass(CardClass.BUILDER).keywords(Keyword.RANGED));
-
-    // Farmer: crops to protect and harvest, and the animals that help them grow.
-    public static final Identifier BEE = register("bee", CardDefinition.mob(CardRarity.COMMON, 2, 1, 1)
-            .cardClass(CardClass.FARMER).type(MobType.ARTHROPOD).keywords(Keyword.SPRINT, Keyword.SPAWN).creates(Keyword.SPAWN, WHEAT));
-    public static final Identifier BONE_MEAL = register("bone_meal", CardDefinition.item(CardRarity.COMMON, 1)
-            .cardClass(CardClass.FARMER));
-    public static final Identifier SWEET_BERRY_BUSH = register("sweet_berry_bush", CardDefinition.mob(CardRarity.COMMON, 2, 0, 3)
-            .cardClass(CardClass.FARMER).type(MobType.CROP).keywords(Keyword.BLOCK, Keyword.SHIELD).art("sweet_berries"));
-    public static final Identifier BOUNTIFUL_HARVEST = register("bountiful_harvest", CardDefinition.item(CardRarity.RARE, 3)
-            .cardClass(CardClass.FARMER).art("hay_block"));
-    public static final Identifier COMPOSTER = register("composter", CardDefinition.mob(CardRarity.RARE, 2, 0, 3)
-            .cardClass(CardClass.FARMER).keywords(Keyword.BLOCK).art("composter"));
-    public static final Identifier SNIFFER = register("sniffer", CardDefinition.mob(CardRarity.EPIC, 6, 5, 6)
-            .cardClass(CardClass.FARMER).type(MobType.ANIMAL).keywords(Keyword.SPAWN).creates(Keyword.SPAWN, WHEAT));
-
-    // Neutral answer to tools: any deck can melt the other hero's sword.
-    public static final Identifier LAVA_BUCKET = register("lava_bucket", CardDefinition.item(CardRarity.COMMON, 1));
-
-    private static Identifier register(String name, CardDefinition.Builder card) {
-        Identifier id = Craftbound.id(name);
-        CARDS.put(id, card.build());
-        return id;
-    }
+    private static final java.util.regex.Pattern RULE_WORDS = java.util.regex.Pattern.compile("\\b((?:After|When|At the end of|At the start of)[^.:\\n]+(?=:)|At the end of your turn|After your hero attacks|After your hero deals attack damage|After your tool kills a mob or block|After this destroys a mob or block|After this kills a mob or block|After this deals damage|After attacking|When attacked|Your tool gains|After attack|End turn|Death|Activate|Play|Ignore Shield|Shield|Sprint|Ranged|Spawn|Drop|Cleanse|(?i:Bad Omen|Wither(?:ed)?)|Harvest|On kill|Card added|Action played|Mined|Healed|Well Fed)\\b");
+    public static final Identifier EXCAVATED_PICKAXE = Identifier.parse("craftbound:excavated_pickaxe");
+    public static final Identifier WOLF_PUP = Identifier.parse("craftbound:wolf_pup");
+    public static final Identifier COAL_SEAM = Identifier.parse("craftbound:coal_seam");
+    public static final Identifier MINOR_HARMING_POTION = Identifier.parse("craftbound:minor_harming_potion");
+    public static final Identifier CAUGHT_COD = Identifier.parse("craftbound:caught_cod");
+    public static final Identifier ROTTEN_FLESH = Identifier.parse("craftbound:rotten_flesh");
+    public static final Identifier ARROW = Identifier.parse("craftbound:arrow");
+    public static final Identifier NETHER_STAR = Identifier.parse("craftbound:nether_star");
+    public static final Identifier DRAGON_EGG = Identifier.parse("craftbound:dragon_egg");
+    public static final Identifier VEX = Identifier.parse("craftbound:vex");
+    public static final Identifier EXPERIENCE_BOTTLE = Identifier.parse("craftbound:experience_bottle");
+    public static final Identifier ZOMBIE = Identifier.parse("craftbound:zombie");
+    public static final Identifier SKELETON = Identifier.parse("craftbound:skeleton");
+    public static final Identifier CREEPER = Identifier.parse("craftbound:creeper");
+    public static final Identifier ENDERMAN = Identifier.parse("craftbound:enderman");
+    public static final Identifier CHARGED_CREEPER = Identifier.parse("craftbound:charged_creeper");
+    public static final Identifier TOTEM_OF_UNDYING = Identifier.parse("craftbound:totem_of_undying");
+    public static final Identifier ENCHANTED_GOLDEN_APPLE = Identifier.parse("craftbound:enchanted_golden_apple");
+    public static final Identifier EVOKER = Identifier.parse("craftbound:evoker");
+    public static final Identifier RAVAGER = Identifier.parse("craftbound:ravager");
+    public static final Identifier PIGLIN_BRUTE = Identifier.parse("craftbound:piglin_brute");
+    public static final Identifier SHULKER = Identifier.parse("craftbound:shulker");
+    public static final Identifier WITHER_SKELETON = Identifier.parse("craftbound:wither_skeleton");
+    public static final Identifier WARDEN = Identifier.parse("craftbound:warden");
+    public static final Identifier WITHER = Identifier.parse("craftbound:wither");
+    public static final Identifier ENDER_DRAGON = Identifier.parse("craftbound:ender_dragon");
+    public static final Identifier CRAFTED_SWORD = Identifier.parse("craftbound:crafted_sword");
+    public static final Identifier COBBLESTONE_WALL = Identifier.parse("craftbound:cobblestone_wall");
+    public static final Identifier WHEAT = Identifier.parse("craftbound:wheat");
+    public static final Identifier IRON_SWORD = Identifier.parse("craftbound:iron_sword");
+    public static final Identifier DIAMOND_SWORD = Identifier.parse("craftbound:diamond_sword");
+    public static final Identifier POTION_OF_STRENGTH = Identifier.parse("craftbound:potion_of_strength");
+    public static final Identifier VINDICATOR = Identifier.parse("craftbound:vindicator");
+    public static final Identifier SWEEPING_EDGE = Identifier.parse("craftbound:sweeping_edge");
+    public static final Identifier FURNACE = Identifier.parse("craftbound:furnace");
+    public static final Identifier DISPENSER = Identifier.parse("craftbound:dispenser");
+    public static final Identifier BEACON = Identifier.parse("craftbound:beacon");
+    public static final Identifier PISTON = Identifier.parse("craftbound:piston");
+    public static final Identifier BOW = Identifier.parse("craftbound:bow");
+    public static final Identifier BEE = Identifier.parse("craftbound:bee");
+    public static final Identifier BONE_MEAL = Identifier.parse("craftbound:bone_meal");
+    public static final Identifier SWEET_BERRY_BUSH = Identifier.parse("craftbound:sweet_berry_bush");
+    public static final Identifier BOUNTIFUL_HARVEST = Identifier.parse("craftbound:bountiful_harvest");
+    public static final Identifier COMPOSTER = Identifier.parse("craftbound:composter");
+    public static final Identifier SNIFFER = Identifier.parse("craftbound:sniffer");
+    public static final Identifier LAVA_BUCKET = Identifier.parse("craftbound:lava_bucket");
 
     public static CardDefinition get(Identifier id) {
-        return CARDS.get(id);
+        var entry = CardCatalog.entry(id);
+        return entry == null ? null : entry.definition();
     }
 
     public static Set<Identifier> ids() {
-        return CARDS.keySet();
+        return CardCatalog.current().entries().keySet();
     }
 
     // Every card you can collect, in order. These are the binder's numbered pockets.
     public static List<Identifier> collectible() {
         List<Identifier> result = new ArrayList<>();
-        for (Map.Entry<Identifier, CardDefinition> entry : CARDS.entrySet()) {
-            if (!entry.getValue().token()) {
+        for (var entry : CardCatalog.current().entries().entrySet()) {
+            if (!entry.getValue().deleted() && !entry.getValue().definition().token()) {
                 result.add(entry.getKey());
             }
         }
@@ -136,14 +81,25 @@ public class Cards {
     // A card's collector number: its pocket number in the binder (1, 2, 3...). Tokens have none (0).
     // New cards should be added at the end of the list above, so existing numbers never change.
     public static int collectorNumber(Identifier id) {
-        return collectible().indexOf(id) + 1;
+        int number = 0;
+        for (var e : CardCatalog.current().entries().entrySet()) {
+            if (!e.getValue().definition().token()) { number++; if (e.getKey().equals(id)) return number; }
+        }
+        return 0;
+    }
+
+    public static boolean deleted(Identifier id) {
+        var e = CardCatalog.entry(id); return e != null && e.deleted();
+    }
+    public static int collectorTotal() {
+        return (int) CardCatalog.current().entries().values().stream().filter(e -> !e.definition().token()).count();
     }
 
     // Collectible cards of one rarity. Tokens are left out, so packs never give them.
     public static List<Identifier> ofRarity(CardRarity rarity) {
         List<Identifier> result = new ArrayList<>();
-        for (Map.Entry<Identifier, CardDefinition> entry : CARDS.entrySet()) {
-            if (entry.getValue().rarity() == rarity && !entry.getValue().token()) {
+        for (var entry : CardCatalog.current().entries().entrySet()) {
+            if (!entry.getValue().deleted() && entry.getValue().definition().rarity() == rarity && !entry.getValue().definition().token()) {
                 result.add(entry.getKey());
             }
         }
@@ -151,13 +107,31 @@ public class Cards {
     }
 
     public static Component name(Identifier id) {
-        return Component.translatable("card." + id.getNamespace() + "." + id.getPath());
+        var e = CardCatalog.entry(id);
+        return e == null ? Component.literal(id.toString()) : Component.literal(e.name());
     }
 
     // The ability text, with the card's keywords dropped into its %s slots in bold.
     public static Component text(Identifier id) {
-        CardDefinition card = get(id);
-        Object[] keywords = card == null ? new Object[0] : card.keywords().stream().map(Keyword::inline).toArray();
-        return Component.translatable("card." + id.getNamespace() + "." + id.getPath() + ".text", keywords);
+        var e = CardCatalog.entry(id);
+        if (e == null) return Component.empty();
+        return styledText(CardCatalog.description(e));
+    }
+
+    public static Component styledText(String text) {
+        var result = Component.empty();
+        var matcher = RULE_WORDS.matcher(text);
+        int cursor = 0;
+        while (matcher.find()) {
+            result.append(Component.literal(text.substring(cursor, matcher.start())));
+            try {
+                Keyword keyword = matcher.group().equalsIgnoreCase("Withered") ? Keyword.WITHER
+                        : Keyword.valueOf(matcher.group().toUpperCase(java.util.Locale.ROOT).replace(' ', '_'));
+                result.append(Component.literal(matcher.group()).setStyle(keyword.inline().getStyle()));
+            }
+            catch (IllegalArgumentException ignored) { result.append(Component.literal(matcher.group()).withStyle(net.minecraft.ChatFormatting.BOLD)); }
+            cursor = matcher.end();
+        }
+        return result.append(Component.literal(text.substring(cursor)));
     }
 }

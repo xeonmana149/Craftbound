@@ -5,17 +5,29 @@ import net.minecraft.network.chat.Component;
 
 // Rules words that appear in card text. Hovering one on a card explains it.
 public enum Keyword {
-    SHIELD, SPRINT, RANGED, SPAWN, DROP, BLOCK;
+    SHIELD, SPRINT, RANGED, SPAWN, DROP, BLOCK, CLEANSE, IGNORE_SHIELD, BAD_OMEN, WITHER;
 
     // Tags the keyword's letters in card text, so the inspect screen can find where the word was drawn.
     private static final String INSERTION_PREFIX = "craftbound:keyword/";
 
     public Component displayName() {
-        return Component.translatable("keyword.craftbound." + name().toLowerCase(Locale.ROOT));
+        return Component.translatable("keyword.craftbound." + name().toLowerCase(Locale.ROOT))
+                .withStyle(net.minecraft.ChatFormatting.BOLD);
     }
 
     public Component description() {
         return Component.translatable("keyword.craftbound." + name().toLowerCase(Locale.ROOT) + ".desc");
+    }
+
+    /** Add the concrete outcome when a status refers to another card. */
+    public Component description(CardDefinition card) {
+        var result = description().copy();
+        if (this == BAD_OMEN && card != null) {
+            for (var id : card.createdBy(this).stream().distinct().toList()) {
+                result.append("\n").append(Component.translatable("keyword.craftbound.bad_omen.summons", Cards.name(id)));
+            }
+        }
+        return result;
     }
 
     // The keyword as it appears inside card text: bold and tagged.

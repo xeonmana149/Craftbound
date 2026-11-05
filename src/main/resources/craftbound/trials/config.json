@@ -1,0 +1,16 @@
+{
+  "draftSize": 10,
+  "minDeck": 8,
+  "maxDeck": 24,
+  "startLives": 2,
+  "startHealth": 30,
+  "startMarks": 3,
+  "cardPrice": 2,
+  "charmPrice": 3,
+  "removePrice": 2,
+  "trainPrice": 3,
+  "shopStock": 3,
+  "offerCount": 3,
+  "charmSlots": 2,
+  "bossPacks": 2
+}

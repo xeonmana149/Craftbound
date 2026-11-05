@@ -67,6 +67,12 @@ final class MatchSounds {
     static void mob(Identifier card, String kind) {
         String path = card.getPath();
         if (Cards.get(card) != null && Cards.get(card).keywords().contains(craftbound.card.Keyword.BLOCK)) {
+            var art=craftbound.client.card.CardRenderer.placeholderArt(card,Cards.get(card));
+            if(art.getItem() instanceof net.minecraft.world.item.BlockItem block){
+                var sound=block.getBlock().defaultBlockState().getSoundType();
+                Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(kind.equals("death")?sound.getBreakSound():sound.getHitSound(),1,.65F));
+                return;
+            }
             play(kind.equals("death") ? (path.equals("wheat") || path.equals("sweet_berry_bush") ? "block.crop.break" : "block.stone.break")
                     : "block.stone.hit", 1.0F, 0.7F);
             return;
@@ -76,6 +82,13 @@ final class MatchSounds {
     }
 
     static void summon(Identifier card) {
+        if(Cards.get(card)!=null && Cards.get(card).keywords().contains(craftbound.card.Keyword.BLOCK)){
+            var art=craftbound.client.card.CardRenderer.placeholderArt(card,Cards.get(card));
+            if(art.getItem() instanceof net.minecraft.world.item.BlockItem block){
+                Minecraft.getInstance().getSoundManager().play(SimpleSoundInstance.forUI(block.getBlock().defaultBlockState().getSoundType().getPlaceSound(),1,.7F));
+            }else play("block.stone.place",1,.7F);
+            return;
+        }
         String special = SUMMON.get(card.getPath());
         if (special != null) {
             play(special, 1.0F, 0.75F);
@@ -85,6 +98,7 @@ final class MatchSounds {
     }
 
     static void item(Identifier card) {
+        if(Cards.get(card)!=null && Cards.get(card).kind()==craftbound.card.CardKind.ENCHANTMENT){play("block.enchantment_table.use",1,.6F);return;}
         play(ITEM.getOrDefault(card.getPath(), "item.book.page_turn"), 1.0F, 0.75F);
     }
 

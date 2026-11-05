@@ -20,8 +20,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 
-// Getting a game going at a card table, standing up:
-// 1. Right-click the table: the lobby opens on your screen. Pick a Deck Case and an opponent, then Ready.
+// Getting a game going at a card table; participants sit automatically when it starts:
+// 1. Right-click the table: the lobby opens on your screen. Pick a saved binder deck and an opponent, then Ready.
 // 2. Card Master: one appears nearby and walks to the far side of the table. The match starts when it gets there.
 //    Another player: you wait at the table until someone else readies up there for a player too.
 // Walking away from the table, or right-clicking it again, stops the wait.
@@ -30,22 +30,32 @@ public class TableLobby {
     private static final double READY_RANGE = 6.0;
     private static final double WAIT_RANGE = 10.0;
 
-    private record Waiting(ResourceKey<Level> level, BlockPos table, int slot, int mode, CardMasterEntity cardMaster) {
+    private record Waiting(ResourceKey<Level> level, BlockPos table, int slot, String deckId, int mode, CardMasterEntity cardMaster) {
     }
 
     private static final Map<UUID, Waiting> WAITING = new HashMap<>();
     private static int ticks;
 
     static void initialize() {
+        CommanderTables.initialize();
+        RelayTables.initialize();
+        TrialsTables.initialize();
         PayloadTypeRegistry.clientboundPlay().register(TableLobbyPayload.TYPE, TableLobbyPayload.CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(craftbound.network.ResumeMatchPayload.TYPE, craftbound.network.ResumeMatchPayload.CODEC);
         PayloadTypeRegistry.serverboundPlay().register(TableActionPayload.TYPE, TableActionPayload.CODEC);
         ServerPlayNetworking.registerGlobalReceiver(TableActionPayload.TYPE, (payload, context) -> handle(context.player(), payload));
         ServerTickEvents.END_SERVER_TICK.register(TableLobby::tick);
         ServerPlayConnectionEvents.DISCONNECT.register((listener, server) -> stopWaiting(listener.player, false));
+        net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents.SERVER_STOPPING.register(server -> WAITING.clear());
     }
 
     // Right-clicking a card table.
     public static void open(ServerPlayer player, BlockPos table) {
+        table=craftbound.block.CardTableBlock.anchor(player.level(),table);
+        if(!craftbound.block.CardTableBlock.isTable(player.level().getBlockState(table))) return;
+        if(RelayTables.open(player,table) || CommanderTables.open(player,table))return;
+        if(TableSpectating.open(player,table))return;
+        if (MatchManager.openPaused(player,table)) return;
         if (MatchManager.inMatch(player)) {
             MatchManager.resend(player);
             return;
@@ -53,11 +63,19 @@ public class TableLobby {
         if (WAITING.containsKey(player.getUUID())) {
             stopWaiting(player, true);
         }
-        ServerPlayNetworking.send(player, new TableLobbyPayload(table, waitingAt(player, table), "", false));
+        ServerPlayNetworking.send(player, new TableLobbyPayload(table, waitingAt(player, table), "", false, DeveloperAccess.allowed(player), craftbound.block.CardTableBlock.mode(player.level(),table)));
     }
 
     // The name of someone else waiting at this table for a player to join, or "".
+    static boolean waiting(ServerPlayer p, BlockPos pos) {
+        return WAITING.containsKey(p.getUUID()) || WAITING.values().stream().anyMatch(w->w.level().equals(p.level().dimension()) && w.table().equals(pos));
+    }
+
     private static String waitingAt(ServerPlayer viewer, BlockPos table) {
+        String relay=RelayTables.waiting((ServerLevel)viewer.level(),table);
+        if(!relay.isEmpty()) return relay;
+        String commander=CommanderTables.waiting((ServerLevel)viewer.level(),table);
+        if(!commander.isEmpty()) return commander;
         MinecraftServer server = viewer.level().getServer();
         for (Map.Entry<UUID, Waiting> entry : WAITING.entrySet()) {
             Waiting waiting = entry.getValue();
@@ -86,7 +104,18 @@ public class TableLobby {
             error(player, table, "match_ui.craftbound.too_far");
             return;
         }
-        String problem = MatchManager.whyCantPlay(player, payload.slot());
+        if (payload.action() == TableActionPayload.RESUME) {
+            MatchManager.resumePaused(player, table);
+            return;
+        }
+        if (payload.action() != TableActionPayload.PLAYER && payload.action() != TableActionPayload.CARD_MASTER) return;
+        if (MatchManager.tableInUse((ServerLevel)player.level(),table)) {
+            player.sendOverlayMessage(Component.literal("This table already has a match in progress."));return;
+        }
+        if (!TableSeats.canJoinFromVehicle(player,table) || TableSeats.plan((ServerLevel)player.level(),table,player)==null) {
+            TableSeats.explain(player);return;
+        }
+        String problem = MatchManager.whyCantPlay(player, payload.slot(), payload.deckId());
         if (problem != null) {
             error(player, table, problem);
             return;
@@ -104,21 +133,21 @@ public class TableLobby {
                     continue;
                 }
                 WAITING.remove(entry.getKey());
-                String otherProblem = MatchManager.whyCantPlay(other, waiting.slot());
+                String otherProblem = MatchManager.whyCantPlay(other, waiting.slot(), waiting.deckId());
                 if (otherProblem != null) {
                     other.sendOverlayMessage(Component.translatable(otherProblem, MatchManager.PRACTICE_MIN_DECK));
                     continue;
                 }
                 close(player, table);
-                MatchManager.startVersus(other, MatchManager.deckIn(other, waiting.slot()), player, MatchManager.deckIn(player, payload.slot()));
+                MatchManager.startVersus(other, MatchManager.deckIn(other, waiting.slot(), waiting.deckId()), player, MatchManager.deckIn(player, payload.slot(), payload.deckId()), table);
                 return;
             }
-            WAITING.put(player.getUUID(), new Waiting(player.level().dimension(), table, payload.slot(), TableActionPayload.PLAYER, null));
+            WAITING.put(player.getUUID(), new Waiting(player.level().dimension(), table, payload.slot(), payload.deckId(), TableActionPayload.PLAYER, null));
             close(player, table);
             player.sendOverlayMessage(Component.translatable("match_ui.craftbound.waiting_player"));
         } else {
             CardMasterEntity cardMaster = CardMasterEntity.comeTo((ServerLevel) player.level(), table, player);
-            WAITING.put(player.getUUID(), new Waiting(player.level().dimension(), table, payload.slot(), TableActionPayload.CARD_MASTER, cardMaster));
+            WAITING.put(player.getUUID(), new Waiting(player.level().dimension(), table, payload.slot(), payload.deckId(), TableActionPayload.CARD_MASTER, cardMaster));
             close(player, table);
             player.sendOverlayMessage(Component.translatable("match_ui.craftbound.waiting_card_master"));
         }
@@ -139,7 +168,7 @@ public class TableLobby {
             BlockPos table = waiting.table();
             boolean wandered = !player.level().dimension().equals(waiting.level())
                     || player.distanceToSqr(table.getX() + 0.5, table.getY() + 0.5, table.getZ() + 0.5) > WAIT_RANGE * WAIT_RANGE;
-            if (wandered) {
+            if (wandered || !player.level().getBlockState(table).is(ModBlocks.CARD_TABLE)) {
                 stopWaiting(player, false);
                 continue;
             }
@@ -147,7 +176,7 @@ public class TableLobby {
                 CardMasterEntity cardMaster = waiting.cardMaster();
                 if (cardMaster == null || cardMaster.isRemoved() || cardMaster.hasArrived()) {
                     WAITING.remove(entry.getKey());
-                    String problem = MatchManager.whyCantPlay(player, waiting.slot());
+                    String problem = MatchManager.whyCantPlay(player, waiting.slot(), waiting.deckId());
                     if (problem != null) {
                         player.sendOverlayMessage(Component.translatable(problem, MatchManager.PRACTICE_MIN_DECK));
                         if (cardMaster != null) {
@@ -155,8 +184,8 @@ public class TableLobby {
                         }
                         continue;
                     }
-                    MatchManager.startVsCardMaster(player, MatchManager.deckIn(player, waiting.slot()),
-                            cardMaster == null || cardMaster.isRemoved() ? null : cardMaster);
+                    MatchManager.startVsCardMaster(player, MatchManager.deckIn(player, waiting.slot(), waiting.deckId()),
+                            cardMaster == null || cardMaster.isRemoved() ? null : cardMaster, table);
                 } else if (ticks % 40 == 0) {
                     player.sendOverlayMessage(Component.translatable("match_ui.craftbound.waiting_card_master"));
                 }
@@ -180,11 +209,11 @@ public class TableLobby {
     }
 
     private static void error(ServerPlayer player, BlockPos table, String key) {
-        ServerPlayNetworking.send(player, new TableLobbyPayload(table, waitingAt(player, table), key, false));
+        ServerPlayNetworking.send(player, new TableLobbyPayload(table, waitingAt(player, table), key, false, DeveloperAccess.allowed(player)));
     }
 
     private static void close(ServerPlayer player, BlockPos table) {
-        ServerPlayNetworking.send(player, new TableLobbyPayload(table, "", "", true));
+        ServerPlayNetworking.send(player, new TableLobbyPayload(table, "", "", true, false));
     }
 
     private TableLobby() {

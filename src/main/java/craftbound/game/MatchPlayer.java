@@ -1,6 +1,7 @@
 package craftbound.game;
 
 import craftbound.card.CardClass;
+import craftbound.card.Keyword;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -18,6 +19,14 @@ public class MatchPlayer {
     // The name the player gave their deck, or "" (the screen then calls it after its class).
     public String deckName = "";
     public int health = Match.START_HEALTH;
+    public int maxHealth = Match.START_HEALTH;
+    // A trial's printed starting Health survives Cleanse. Zero uses the format's ordinary hero Health.
+    int startingHealth;
+    // The active encounter owns its rule, even across a Workshop reload or a paused battle.
+    TrialsOpponents.Profile trialsFoe;
+    int trialsFoeTurns, trialsFoeUsedTurn;
+    List<String> trialsCharms;
+    int trialsCharmTurn, spentTrialsCharms;
     public int xp = 0;
     public int maxXp = 0;
     // How much the next Hunger hit does (drawing from an empty deck): 1, then 2, then 3...
@@ -29,6 +38,11 @@ public class MatchPlayer {
     public Tool tool;
     // Each turn the hero can attack once (with a tool) and use their power once.
     public boolean heroAttacked;
+    public int temporaryHeroAttack;
+    public Identifier badOmenSummon;
+    public Integer badOmenSource; // Missing in old duel snapshots.
+    public boolean frozen;
+    public boolean skippedAttackFromFreeze;
     public boolean powerUsed;
     // Farmer: after a Sow, the next use of the power is Reap.
     public boolean reap;
@@ -41,6 +55,13 @@ public class MatchPlayer {
         this.heroClass = heroClass;
         this.sleeve = sleeve;
         this.deck = new ArrayList<>(deck);
+    }
+
+    String rowFullReason(boolean block) {
+        int limit = Match.rowLimit(block);
+        long count = board.stream().filter(m -> m.has(Keyword.BLOCK) == block).count();
+        if (count < limit) return null;
+        return (block ? "Block" : "Mob") + " row full (" + count + "/" + limit + ")";
     }
 
     public boolean isAi() {

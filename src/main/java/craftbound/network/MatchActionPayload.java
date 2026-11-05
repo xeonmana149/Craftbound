@@ -19,6 +19,12 @@ public record MatchActionPayload(int action, int index, boolean targetHero, int 
     public static final int CONCEDE = 3;
     public static final int MULLIGAN = 4;
     public static final int POWER = 5;
+    public static final int DISMANTLE = 6;
+    public static final int REQUEST_PAUSE = 7;
+    public static final int ACCEPT_PAUSE = 8;
+    public static final int DECLINE_PAUSE = 9;
+    // A hand effect asked you to pick a card: `index` is its position in the hand being picked from.
+    public static final int CHOOSE_CARD = 10;
 
     public static final Type<MatchActionPayload> TYPE = new Type<>(Craftbound.id("match_action"));
     public static final StreamCodec<RegistryFriendlyByteBuf, MatchActionPayload> CODEC = StreamCodec.composite(

@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),M=require('./model.js');
+const source=JSON.parse(fs.readFileSync('src/test/resources/craftbound/test-cards.json','utf8'));
+const data=M.clone(source),c=data.cards.find(c=>c.id==='craftbound:skeleton');
+c.autoText=true;c.keywords=['RANGED'];c.passive='NONE';
+c.effects=[{...M.effect(),trigger:'DAMAGE_DEALT',action:'FREEZE',target:'CHOSEN_CHARACTER',boardKind:'MOB',type:'',excludeSelf:false,card:''}];
+assert.deepEqual(M.validate(data,source),[]);
+assert.equal(M.description(c,data),'Ranged. After this deals damage: Freeze the damaged mob or hero.');
+c.effects[0].action='WITHER';assert.ok(M.validate(data,source).some(e=>e.includes('mob target')));
+c.effects[0].action='FREEZE';c.effects[0].type='UNDEAD';assert.ok(M.validate(data,source).length);
+console.log('PASS: Freeze damaged mob/hero authoring and wording; hero Wither and mob type filters rejected.');

@@ -1,0 +1,27 @@
+.class-curve{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:16px 0;margin:20px 0}
+.class-curve h2{font-size:14px;margin:0 0 4px;letter-spacing:0}
+.class-curve .muted{margin:0 0 22px}
+.xp-chart{display:grid;grid-template-columns:repeat(11,minmax(0,1fr));gap:4px}
+.xp-column{text-align:center;font-size:10px;color:var(--muted)}
+.xp-track{height:64px;display:flex;align-items:flex-end;border-bottom:1px solid #6b795b;background:#263125}
+.xp-track i{position:relative;display:block;width:100%;background:#82ad5c;border-top:2px solid #c4e788;min-height:1px}
+.xp-track b{position:absolute;bottom:100%;left:0;right:0;font:10px/16px "Segoe UI",sans-serif;color:var(--text)}
+.xp-column:hover i{background:#b3d483}
+.xp-column>span{display:block;margin-top:5px}
+.curve-caption{font-size:10px;color:var(--muted);margin:10px 0 0}
+.class-curve .compact{margin-bottom:0}
+@media(max-width:1100px) and (min-width:761px){.class-curve{grid-column:2}}
+
+.token-usage{margin-top:18px;padding:16px;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.token-usage h2{font-size:15px;margin:0 0 6px}.token-usage h3{font-size:12px;color:var(--muted);margin:16px 0 8px}
+.token-links{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px}
+.token-link{text-align:left;overflow-wrap:anywhere}.token-link strong,.token-source strong{display:block;color:var(--green);font-size:13px}
+.token-link span,.token-source span{display:block;color:var(--muted);font-size:12px;margin-top:3px}
+.token-source{margin:8px 0}
+
+#warnings{max-height:340px;overflow:auto;scrollbar-gutter:stable}
+.validation-link{display:block;text-align:left;width:100%;border:1px solid #a9634f;white-space:normal;overflow-wrap:anywhere}
+.validation-link:hover{border-color:#ffd48b;background:#58372c}
+.validation-focus{outline:3px solid #ffbe68!important;outline-offset:3px;background-color:#583b25!important}
+.error-detail{border:1px solid #e29864;border-left:4px solid #ffbe68;background:#3c2a22;padding:14px;margin:0 0 20px;overflow-wrap:anywhere}
+.error-detail strong{color:#ffd48b}.error-detail p{font-size:13px;margin:8px 0}.error-detail button{margin-top:6px}

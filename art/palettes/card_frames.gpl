@@ -1,0 +1,46 @@
+GIMP Palette
+Name: Craftbound - Card frames
+Columns: 8
+#
+122  68  52	Frame
+154  90  72	Frame Light
+ 62  35  29	Frame Dark
+ 91 200 224	Sky
+106 191  51	Grass
+ 78 148  38	Grass Dark
+106 127 192	Item Backdrop
+245 201 138	Parchment
+201 148  90	Parchment Dark
+ 23 168  79	Emerald
+224 162  27	Attack
+200  50  43	Health
+126 133 140	Uses
+255 255 255	White
+154  58  46	Fighter frame
+194  90  76	Fighter frame light
+ 74  20  16	Fighter frame dark
+ 63  94 158	Builder frame
+ 98 134 198	Builder frame light
+ 22  42  82	Builder frame dark
+ 78 126  44	Farmer frame
+114 166  74	Farmer frame light
+ 30  58  14	Farmer frame dark
+ 40 124 131	Fisherman frame
+ 98 182 184	Fisherman frame light
+ 18  63  73	Fisherman frame dark
+117  78 145	Alchemist frame
+169 125 198	Alchemist frame light
+ 53  32  63	Alchemist frame dark
+144 101  46	Miner frame
+212 170  99	Miner frame light
+ 70  50  24	Miner frame dark
+184 120  69	Chef frame
+241 215 165	Chef frame light
+ 96  60  39	Chef frame dark
+ 89 115  69	Tamer frame
+162 192 135	Tamer frame light
+ 41  61  35	Tamer frame dark
+170 170 170	Common rarity
+ 85  85 255	Rare rarity
+170   0 170	Epic rarity
+255 170   0	Legendary rarity

@@ -3,7 +3,10 @@
 	"package": "craftbound.client.mixin",
 	"compatibilityLevel": "JAVA_25",
 	"client": [
-		"ExampleClientMixin"
+		"ExampleClientMixin",
+		"CardCursorMotionMixin",
+        "TableGuiRendererAccess",
+        "TableResourceReloadMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

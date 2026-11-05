@@ -21,7 +21,7 @@ public class DeckRules {
     // Whether a card can go in a deck of the given class at all (ignoring how many copies are already in).
     public static boolean allowed(Identifier id, CardClass deckClass) {
         CardDefinition card = Cards.get(id);
-        if (card == null || card.token()) {
+        if (card == null || card.token() || Cards.deleted(id)) {
             return false;
         }
         return card.cardClass() == CardClass.NEUTRAL || card.cardClass() == deckClass;

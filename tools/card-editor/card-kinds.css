@@ -1,0 +1,23 @@
+.preview-name{color:#fff1d8;background:#4b3023}
+.kind-item,.kind-enchantment{background:#ceac78}
+.kind-item .preview-art,.kind-enchantment .preview-art{background:#ead1a0;border-color:#987347;clip-path:polygon(18% 0,82% 0,100% 18%,100% 82%,82% 100%,18% 100%,0 82%,0 18%)}
+.kind-item .preview-glyph,.kind-enchantment .preview-glyph{color:#987347;text-shadow:3px 3px #c0a273}
+.kind-item .preview-art small,.kind-enchantment .preview-art small{color:#57452d}
+.kind-block{border-color:#8d958a;box-shadow:inset 0 0 0 3px #3d453d,0 12px 25px #0005}
+.kind-block .preview-art{background:repeating-linear-gradient(0deg,#515a52 0 23px,#384238 23px 25px);border:5px ridge #bbc0ae}
+.kind-block .preview-glyph{color:#c0c7b9}
+.legendary .preview-art{border:5px ridge #f3c35d;box-shadow:0 0 0 2px #80591e}
+.legendary .preview-art::before{content:"◆";position:absolute;top:4px;left:calc(50% - 7px);color:#ffe4a0;font-size:17px}
+
+/* Match the shared in-game class frame palette while retaining item parchment and block art. */
+.preview-card{border-color:var(--class-color,#756b62)}
+.preview-card:not(.kind-item):not(.kind-enchantment){background:var(--class-color,#756b62)}
+.preview-text{text-align:left}
+.preview-text.keyword-only{display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center}
+.associated-cards{border-top:1px solid var(--line);margin-top:22px;padding-top:18px;min-width:0}
+.associated-cards[hidden]{display:none}
+.associated-nav{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.associated-reason{font-size:12px;color:var(--green);overflow-wrap:anywhere;margin:12px 0 24px}
+.associated-face{margin:0 4px 12px}
+.associated-cards [data-edit-associated]{width:100%}
+@media(min-width:761px) and (max-width:1100px){.associated-cards{grid-column:1/-1}.associated-face{max-width:260px;margin:0 auto 12px}}

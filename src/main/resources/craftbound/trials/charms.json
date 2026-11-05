@@ -1,0 +1,56 @@
+[
+  {
+    "id": "FANG",
+    "title": "Fang",
+    "iconItem": "minecraft:bone",
+    "trigger": "MOB",
+    "action": "BUFF_ATTACK",
+    "amount": 1,
+    "cost": 0
+  },
+  {
+    "id": "MORTAR",
+    "title": "Mortar",
+    "iconItem": "minecraft:brick",
+    "trigger": "BLOCK",
+    "action": "BUFF_HEALTH",
+    "amount": 2,
+    "cost": 0
+  },
+  {
+    "id": "FLASK",
+    "title": "Ember Flask",
+    "iconItem": "minecraft:blaze_powder",
+    "trigger": "ACTION",
+    "action": "DAMAGE_ENEMY",
+    "amount": 1,
+    "cost": 0
+  },
+  {
+    "id": "WHETSTONE",
+    "title": "Whetstone",
+    "iconItem": "minecraft:grindstone",
+    "trigger": "TOOL",
+    "action": "TOOL_ATTACK",
+    "amount": 1,
+    "cost": 0
+  },
+  {
+    "id": "LANTERN",
+    "title": "Lantern",
+    "iconItem": "minecraft:lantern",
+    "trigger": "COST_AT_LEAST",
+    "action": "DRAW",
+    "amount": 1,
+    "cost": 4
+  },
+  {
+    "id": "RATION",
+    "title": "Trail Ration",
+    "iconItem": "minecraft:baked_potato",
+    "trigger": "COST_AT_MOST",
+    "action": "HEAL_SELF",
+    "amount": 2,
+    "cost": 2
+  }
+]

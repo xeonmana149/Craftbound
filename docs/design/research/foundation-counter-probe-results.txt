@@ -1,0 +1,5 @@
+pair,games,winsA,winsB,draws,unfinished,meanPlayerTurns
+FIGHTER vs BUILDER,100,74,26,0,0,15.28
+FIGHTER vs FARMER,100,77,23,0,0,17.56
+FIGHTER vs FISHERMAN,100,75,25,0,0,15.38
+TOTAL games=300 unfinished=0 firstWins=211 decisive=300 meanPlayerTurns=16.073333333333334

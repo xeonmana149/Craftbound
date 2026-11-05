@@ -1,0 +1,357 @@
+{
+  "name": "The Copper Depths",
+  "topology": "BRANCHING_V2",
+  "floors": [
+    {
+      "kinds": [
+        "FIGHT",
+        "FIGHT",
+        "FIGHT",
+        "FIGHT"
+      ],
+      "shuffle": true,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "kinds": [
+        "SHOP",
+        "REST",
+        "EVENT",
+        "REST"
+      ],
+      "shuffle": true,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "kinds": [
+        "FIGHT",
+        "FIGHT",
+        "ELITE",
+        "FIGHT"
+      ],
+      "shuffle": true,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "kinds": [
+        "SHOP",
+        "REST",
+        "EVENT",
+        "REST"
+      ],
+      "shuffle": true,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "kinds": [
+        "FIGHT",
+        "FIGHT",
+        "ELITE",
+        "FIGHT"
+      ],
+      "shuffle": true,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "kinds": [
+        "SHOP",
+        "REST",
+        "EVENT",
+        "REST"
+      ],
+      "shuffle": true,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "kinds": [
+        "FIGHT",
+        "FIGHT",
+        "ELITE",
+        "FIGHT"
+      ],
+      "shuffle": true,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "kinds": [
+        "SHOP",
+        "REST",
+        "EVENT",
+        "REST"
+      ],
+      "shuffle": true,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "kinds": [
+        "FIGHT",
+        "FIGHT",
+        "ELITE",
+        "FIGHT"
+      ],
+      "shuffle": true,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "kinds": [
+        "SHOP",
+        "REST",
+        "EVENT",
+        "REST"
+      ],
+      "shuffle": true,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "kinds": [
+        "FIGHT",
+        "FIGHT",
+        "ELITE",
+        "FIGHT"
+      ],
+      "shuffle": true,
+      "edges": [
+        [
+          0,
+          1
+        ],
+        [
+          0,
+          1,
+          2
+        ],
+        [
+          1,
+          2,
+          3
+        ],
+        [
+          2,
+          3
+        ]
+      ]
+    },
+    {
+      "kinds": [
+        "SHOP",
+        "REST",
+        "EVENT",
+        "REST"
+      ],
+      "shuffle": true,
+      "edges": [
+        [
+          0
+        ],
+        [
+          0
+        ],
+        [
+          0
+        ],
+        [
+          0
+        ]
+      ]
+    },
+    {
+      "kinds": [
+        "BOSS"
+      ],
+      "shuffle": false,
+      "edges": [
+        []
+      ]
+    }
+  ]
+}

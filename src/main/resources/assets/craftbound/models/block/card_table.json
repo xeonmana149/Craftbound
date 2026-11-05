@@ -2,7 +2,7 @@
   "parent": "minecraft:block/block",
   "textures": {
     "particle": "minecraft:block/oak_planks",
-    "top": "minecraft:block/green_wool",
+    "top": "craftbound:block/card_table_leather",
     "wood": "minecraft:block/oak_planks"
   },
   "elements": [

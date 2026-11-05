@@ -1,1 +1,7 @@
-{ "values": ["craftbound:card_table", "craftbound:card_display"] }
+{
+  "replace": false,
+  "values": [
+    "craftbound:team_table",
+    "craftbound:commander_table"
+  ]
+}

@@ -1,225 +1,394 @@
 package craftbound.game;
 
+import craftbound.card.CardCatalog;
+import craftbound.card.CardCatalog.*;
 import craftbound.card.Cards;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 import net.minecraft.resources.Identifier;
 
-// What each card actually does in a match: its Spawn, its Drop, what an item does when played, what a mob does
-// to whatever it damages, and "at the end of your turn" effects. Cards not listed here have no special effect.
-public class CardEffects {
-    // What a card has to be aimed at when you play it.
+/** Reusable effects authored in the card catalogue; the server remains authoritative. */
+public final class CardEffects {
+    public enum PlayPreview { NONE, POSSIBLE, AFFECTED }
+
+    /** Catalogue-only compatibility helper; live UI uses EffectPreview with current health/status values. */
+    public static PlayPreview previewOnPlay(Identifier source, Identifier target, boolean friendly) {
+        var preview = EffectPreview.forTarget(new EffectPreview.Source(source, 0, -1, false, 1),
+                new EffectPreview.Subject(EffectPreview.Kind.BOARD, target, friendly ? 0 : 1, 1,
+                        0, 1, false, false, false, false));
+        return preview == null ? PlayPreview.NONE : preview.possible() ? PlayPreview.POSSIBLE : PlayPreview.AFFECTED;
+    }
+
+    static boolean matches(Effect e, craftbound.card.CardDefinition definition) {
+        boolean block = definition.keywords().contains(craftbound.card.Keyword.BLOCK);
+        if (block && e.action() == Action.GRANT_KEYWORD && e.keyword() == craftbound.card.Keyword.SHIELD) return false;
+        return (e.boardKind() == BoardKind.BOTH || (e.boardKind() == BoardKind.BLOCK) == block)
+                && (e.type() == null || definition.mobType() == e.type());
+    }
+
+    public static boolean canTarget(Identifier card, Identifier target) {
+        var definition = Cards.get(target);
+        var entry = CardCatalog.entry(card);
+        return definition != null && entry != null && entry.effects().stream().anyMatch(e ->
+                e.trigger() == Trigger.PLAY && e.target().name().startsWith("CHOSEN") && matches(e, definition));
+    }
+    public static boolean canTargetHero(Identifier card) {
+        var entry = CardCatalog.entry(card);
+        return entry != null && entry.effects().stream().anyMatch(e ->
+                e.trigger() == Trigger.PLAY && e.target() == Aim.CHOSEN_CHARACTER);
+    }
+
     public static Target.Kind targetKind(Identifier card) {
-        if (card.equals(Cards.ARROW) || card.equals(Cards.PISTON)) return Target.Kind.ANY_MOB;
-        if (card.equals(Cards.ENDERMAN)) return Target.Kind.ENEMY_MOB;
-        if (card.equals(Cards.TOTEM_OF_UNDYING) || card.equals(Cards.ENCHANTED_GOLDEN_APPLE)
-                || card.equals(Cards.POTION_OF_STRENGTH) || card.equals(Cards.BONE_MEAL)) return Target.Kind.FRIENDLY_MOB;
+        var entry = CardCatalog.entry(card);
+        if (entry != null) for (Effect e : entry.effects()) if (e.trigger() == Trigger.PLAY) {
+            switch (e.target()) {
+                case CHOSEN_CHARACTER: return Target.Kind.ANY_CHARACTER;
+                case CHOSEN_ANY: return Target.Kind.ANY_MOB;
+                case CHOSEN_FRIENDLY: return Target.Kind.FRIENDLY_MOB;
+                case CHOSEN_ENEMY: return Target.Kind.ENEMY_MOB;
+                default: break;
+            }
+        }
         return Target.Kind.NONE;
     }
 
-    // Extra rules for when a card can be played, on top of cost, board space and targets.
     static String whyCantPlay(Match match, int side, Identifier card) {
-        if (card.equals(Cards.SWEEPING_EDGE)) {
-            if (match.player(side).tool == null) return "you need a tool";
-            if (match.opponent(side).board.isEmpty()) return "nothing to hit";
-        }
-        if (card.equals(Cards.LAVA_BUCKET) && match.opponent(side).tool == null) {
-            return "they have no tool";
+        if (Cards.get(card).kind() == craftbound.card.CardKind.ENCHANTMENT && match.player(side).tool == null)
+            return "equip a tool before enchanting";
+        for (Effect e : CardCatalog.entry(card).effects()) if (e.trigger() == Trigger.PLAY) {
+            if (e.action() == Action.ENCHANT_TOOL && match.player(side).tool == null) return "equip a tool before enchanting";
+            if (e.action() == Action.UPGRADE_TOOL && e.trigger() == Trigger.PLAY && !Cards.get(card).isMob()
+                    && match.player(side).tool == null) return "equip a tool before improving it";
+            if (e.action() == Action.TOOL_DAMAGE) {
+                if (match.player(side).tool == null) return "you need a tool";
+                boolean any = CardCatalog.eachHero(e.target());
+                for (int rival=0; !any && rival<match.players.length; rival++)
+                    if (match.isEnemy(side, rival) && match.inPlay(rival) && !match.player(rival).board.isEmpty()) { any=true; break; }
+                if (!any) return "nothing to hit";
+            }
+            if (e.action() == Action.DESTROY_TOOL
+                    && possibleTargets(match, side, null, e, Target.NONE).stream().noneMatch(t -> match.player(t.side()).tool != null))
+                return "nothing has a tool to destroy";
         }
         return null;
     }
+    static void onSpawn(Match m, int side, Minion source, Target target) { run(m, side, source.card, source, Trigger.PLAY, target); }
+    static void onDrop(Match m, int side, Minion source) { run(m, side, source.card, source, Trigger.DROP, Target.NONE); }
+    static void onItem(Match m, int side, CardRef card, Target target) {
+        Tool equipped = m.player(side).tool;
+        run(m, side, card, null, Trigger.PLAY, target);
+        if (Cards.get(card.id()).kind() == craftbound.card.CardKind.ENCHANTMENT && equipped != null
+                && m.player(side).tool == equipped && CardCatalog.entry(card.id()).effects().stream().anyMatch(e -> e.trigger() != Trigger.PLAY)) {
+            // Trigger-only enchantments attach without a dummy stat-upgrade effect.
+            // Keep legacy explicit attachments from adding a second visual entry/event.
+            if (CardCatalog.entry(card.id()).effects().stream().noneMatch(e -> e.action() == Action.ENCHANT_TOOL)) {
+                equipped.enchantments.add(new Tool.Enchantment(card, 0, 0));
+                m.log(m.player(side).name + " enchants " + Match.name(equipped.card) + " with " + Match.name(card) + ".", card);
+                m.event(MatchEvent.Type.ENCHANT, side, Match.HERO, card, equipped.attack, equipped.uses, null);
+            }
+            equipped.triggerEnchantments.add(card);
+        }
+    }
 
-    // Spawn: happens when you play the mob.
-    static void onSpawn(Match match, int side, Minion minion, Target target) {
-        Identifier id = minion.card.id();
-        if (id.equals(Cards.ENDERMAN) && !target.isNone()) {
-            // Teleport an enemy mob back to its owner's hand.
-            MatchPlayer enemy = match.player(target.side());
-            Minion victim = enemy.minion(target.minionId());
-            if (victim != null) {
-                match.log("The Enderman teleports " + Match.name(victim.card) + " back to " + enemy.name + "'s hand.", Cards.ENDERMAN);
-                match.bounce(victim);
+    static void onToolTrigger(Match m, int side, Tool tool, Trigger trigger, Target target) {
+        if (tool == null) return;
+        run(m, side, tool.card, null, trigger, target);
+        for (CardRef enchantment : List.copyOf(tool.triggerEnchantments)) run(m, side, enchantment, null, trigger, target);
+    }
+
+    // Snapshot listeners: newly summoned units cannot retroactively observe this event.
+    static void notifyEvent(Match m, Trigger trigger, int eventSide, CardRef eventCard, Target eventTarget) {
+        record Listener(int side, CardRef card, Minion mob, Tool tool) {}
+        List<Listener> listeners = new ArrayList<>();
+        for (int side = 0; side < m.players.length; side++) {
+            if (!m.inPlay(side)) continue;
+            for (Minion mob : List.copyOf(m.player(side).board)) if (!mob.isDead()) listeners.add(new Listener(side, mob.card, mob, null));
+            Tool tool = m.player(side).tool;
+            if (tool != null) {
+                listeners.add(new Listener(side, tool.card, null, tool));
+                for (CardRef enchantment : List.copyOf(tool.triggerEnchantments)) listeners.add(new Listener(side, enchantment, null, tool));
             }
-        } else if (id.equals(Cards.WARDEN)) {
-            // Sonic Boom: 3 damage to every enemy mob.
-            match.log("The Warden's Sonic Boom hits every enemy mob for 3.", Cards.WARDEN);
-            for (Minion enemy : new ArrayList<>(match.opponent(side).board)) {
-                match.damage(enemy, 3, null);
-            }
-        } else if (id.equals(Cards.WITHER)) {
-            match.log("The Wither blasts every other mob for 2.", Cards.WITHER);
-            for (Minion other : everyMob(match)) {
-                if (other != minion) {
-                    match.damage(other, 2, null);
-                }
-            }
-        } else if (id.equals(Cards.EVOKER)) {
-            match.log("The Evoker summons two Vexes.", Cards.EVOKER);
-            match.summon(side, new CardRef(Cards.VEX, false));
-            match.summon(side, new CardRef(Cards.VEX, false));
-        } else if (id.equals(Cards.BEE)) {
-            if (match.summon(side, new CardRef(Cards.WHEAT, false)) != null) {
-                match.log("The Bee plants a Wheat.", Cards.WHEAT);
-            }
-        } else if (id.equals(Cards.SNIFFER)) {
-            int dug = 0;
-            for (int i = 0; i < 2; i++) {
-                if (match.summon(side, new CardRef(Cards.WHEAT, false)) != null) {
-                    dug++;
-                }
-            }
-            if (dug > 0) {
-                match.log("The Sniffer digs up " + dug + " Wheat.", Cards.WHEAT);
+        }
+        for (Listener l : listeners) {
+            if (l.mob() != null && (l.mob().isDead() || !m.player(l.side()).board.contains(l.mob()))) continue;
+            if (l.tool() != null && m.player(l.side()).tool != l.tool()) continue;
+            run(m, l.side(), l.card(), l.mob(), trigger, eventTarget, e -> {
+                boolean self = eventTarget != null && eventTarget.side() == l.side()
+                        && (l.mob() == null ? eventTarget.hero() : !eventTarget.hero() && eventTarget.minionId() == l.mob().id);
+                boolean scope = switch (e.eventScope()) {
+                    case SELF -> self;
+                    case FRIENDLY -> eventSide == l.side();
+                    case ENEMY -> m.isEnemy(l.side(), eventSide);
+                    case ANY -> true;
+                };
+                return scope && (e.eventType() == null || eventCard != null && Cards.get(eventCard.id()).mobType() == e.eventType());
+            });
+        }
+    }
+
+    static void onKill(Match m, Minion killer, Minion killed) {
+        int side = m.sideOf(killer), victimSide = m.sideOf(killed);
+        if (side >= 0 && victimSide >= 0) run(m, side, killer.card, killer, Trigger.ON_KILL, Target.mob(victimSide, killed.id));
+    }
+
+    static int multiplier(Match m, int side, Minion source, Effect e) {
+        if (e.countScope() == CountScope.NONE) return 1;
+        int count = 0;
+        for (int s = 0; s < m.players.length; s++) {
+            if (!m.inPlay(s)) continue;
+            if (e.countScope() == CountScope.FRIENDLY && s != side || e.countScope() == CountScope.ENEMY && !m.isEnemy(side, s)) continue;
+            for (Minion mob : m.player(s).board) if (!mob.isDead() && (!e.countExcludeSelf() || source != mob)
+                    && (e.countKind() == BoardKind.BOTH || (e.countKind() == BoardKind.BLOCK) == mob.has(craftbound.card.Keyword.BLOCK))
+                    && (e.countType() == null || mob.definition().mobType() == e.countType())) count++;
+        }
+        return count;
+    }
+    static void onDamageDealt(Match m, Minion source, Minion victim) {
+        int side = m.sideOf(source), victimSide = m.sideOf(victim);
+        if (side >= 0 && victimSide >= 0) run(m, side, source.card, source, Trigger.DAMAGE_DEALT, Target.mob(victimSide, victim.id));
+    }
+    static void onMobPlayed(Match m, int side, Minion played) {
+        if (played.definition().mobType() != craftbound.card.MobType.AQUATIC || played.has(craftbound.card.Keyword.BLOCK)) return;
+        for (Minion source : new ArrayList<>(m.player(side).board)) {
+            if (source != played && !source.isDead() && CardCatalog.passive(source.card.id(), Passive.SCHOOLING)) {
+                int amount = CardCatalog.passiveAmount(source.card.id());
+                source.temporaryAttack += amount;
+                m.buff(source, amount, 0);
             }
         }
     }
 
-    // Drop: happens when the mob dies (it's already off the board).
-    static void onDrop(Match match, int side, Minion minion) {
-        Identifier id = minion.card.id();
-        if (id.equals(Cards.ZOMBIE)) {
-            match.giveCard(side, new CardRef(Cards.ROTTEN_FLESH, false));
-        } else if (id.equals(Cards.SKELETON)) {
-            match.giveCard(side, new CardRef(Cards.ARROW, false));
-        } else if (id.equals(Cards.CREEPER)) {
-            match.log("The Creeper explodes, dealing 2 to every other mob!", Cards.CREEPER);
-            for (Minion other : everyMob(match)) {
-                match.damage(other, 2, null);
+    static void onEndTurn(Match m, int side) {
+        for (Minion source : new ArrayList<>(m.player(side).board)) {
+            if (!m.over && m.player(side).board.contains(source)) {
+                if (!source.isDead() && CardCatalog.passive(source.card.id(), Passive.GRAZER)
+                        && m.player(side).board.stream().anyMatch(c -> !c.isDead() && c.definition().mobType() == craftbound.card.MobType.CROP)) {
+                    m.heal(Target.mob(side, source.id), CardCatalog.passiveAmount(source.card.id()), false);
+                }
+                run(m, side, source.card, source, Trigger.END_TURN, Target.NONE);
+                m.resolveDeaths();
             }
-        } else if (id.equals(Cards.CHARGED_CREEPER)) {
-            match.log("The Charged Creeper explodes, dealing 4 to every other mob and the enemy hero!", Cards.CHARGED_CREEPER);
-            for (Minion other : everyMob(match)) {
-                match.damage(other, 4, null);
-            }
-            match.damageHero(1 - side, 4);
-        } else if (id.equals(Cards.EVOKER)) {
-            match.giveCard(side, new CardRef(Cards.TOTEM_OF_UNDYING, false));
-        } else if (id.equals(Cards.WITHER)) {
-            match.giveCard(side, new CardRef(Cards.NETHER_STAR, false));
-        } else if (id.equals(Cards.ENDER_DRAGON)) {
-            match.giveCard(side, new CardRef(Cards.DRAGON_EGG, false));
         }
+        onToolTrigger(m, side, m.player(side).tool, Trigger.END_TURN, Target.NONE);
     }
 
-    // Items: what they do when played.
-    static void onItem(Match match, int side, CardRef card, Target target) {
-        Identifier id = card.id();
-        MatchPlayer player = match.player(side);
-        Minion aimed = target.isNone() ? null : match.player(target.side()).minion(target.minionId());
-        if (id.equals(Cards.ROTTEN_FLESH)) {
-            match.healHero(side, 2);
-        } else if (id.equals(Cards.ARROW)) {
-            if (aimed != null) {
-                match.damage(aimed, 2, null);
-            }
-        } else if (id.equals(Cards.NETHER_STAR)) {
-            match.draw(side);
-            match.draw(side);
-        } else if (id.equals(Cards.DRAGON_EGG)) {
-            match.gainXp(side, 3, card);
-        } else if (id.equals(Cards.EXPERIENCE_BOTTLE)) {
-            match.gainXp(side, 1, card);
-        } else if (id.equals(Cards.TOTEM_OF_UNDYING)) {
-            if (aimed != null) {
-                aimed.totem = true;
-                match.status(aimed, MatchEvent.STATUS_TOTEM);
-            }
-        } else if (id.equals(Cards.ENCHANTED_GOLDEN_APPLE)) {
-            if (aimed != null) {
-                aimed.invulnerable = true;
-                match.status(aimed, MatchEvent.STATUS_INVULNERABLE);
-            }
-        } else if (id.equals(Cards.POTION_OF_STRENGTH)) {
-            if (aimed != null) {
-                match.log(Match.name(aimed.card) + " gets +2 attack.", card);
-                match.buff(aimed, 2, 0);
-            }
-        } else if (id.equals(Cards.BONE_MEAL)) {
-            if (aimed != null) {
-                match.log(Match.name(aimed.card) + " gets +1/+1 from Bone Meal.", card);
-                match.buff(aimed, 1, 1);
-            }
-        } else if (id.equals(Cards.PISTON)) {
-            if (aimed != null) {
-                match.log("The Piston pushes " + Match.name(aimed.card) + " back to its owner's hand.", card);
-                match.bounce(aimed);
-            }
-        } else if (id.equals(Cards.SWEEPING_EDGE)) {
-            int amount = player.tool == null ? 0 : player.tool.attack;
-            match.log(player.name + " sweeps every enemy mob for " + amount + "!", card);
-            for (Minion enemy : new ArrayList<>(match.opponent(side).board)) {
-                match.damage(enemy, amount, null);
-            }
-        } else if (id.equals(Cards.LAVA_BUCKET)) {
-            // The other hero's tool melts.
-            MatchPlayer enemy = match.opponent(side);
-            if (enemy.tool != null) {
-                match.log(player.name + " pours lava on " + enemy.name + "'s " + Match.name(enemy.tool.card) + "!", card);
-                match.event(MatchEvent.Type.BREAK, 1 - side, Match.HERO, enemy.tool.card, 0, 0, null);
-                enemy.tool = null;
-            }
-        } else if (id.equals(Cards.BOUNTIFUL_HARVEST)) {
-            int planted = 0;
-            for (int i = 0; i < 2; i++) {
-                if (match.summon(side, new CardRef(Cards.WHEAT, false)) != null) {
-                    planted++;
+    static void run(Match m, int side, CardRef card, Minion source, Trigger trigger, Target chosen) {
+        run(m, side, card, source, trigger, chosen, e -> true);
+    }
+
+    private static void run(Match m, int side, CardRef card, Minion source, Trigger trigger, Target chosen,
+                            java.util.function.Predicate<Effect> filter) {
+        if (m.over || CardCatalog.entry(card.id()) == null) return;
+        if (m.effectDepth == 0) m.effectSteps = 0;
+        if (m.effectDepth >= 32) { m.effectLoop(); return; }
+        m.effectDepth++;
+        Target previousSource = m.animationSource;
+        m.animationSource = source == null ? Target.hero(side) : Target.mob(side, source.id);
+        try {
+        for (Effect e : CardCatalog.entry(card.id()).effects()) {
+            if (m.over) break;
+            if (e.trigger() != trigger || !filter.test(e)) continue;
+            if(!(switch(e.gate()){case ALWAYS -> true; case TOOL_EQUIPPED -> m.player(side).tool!=null; case HERO_HURT -> m.player(side).health<m.player(side).maxHealth; case EMPTY_HAND -> m.player(side).hand.isEmpty();})) continue;
+            if (++m.effectSteps > 512) { m.effectLoop(); break; }
+            int multiplier = multiplier(m, side, source, e);
+            if (multiplier == 0) continue;
+            int amount = e.amount() * multiplier;
+            int firstEvent = m.events.size();
+            switch (e.action()) {
+                case UPGRADE_TOOL -> {
+                    Tool tool = m.player(side).tool;
+                    if (tool != null) {
+                        tool.attack = Math.min(1000, tool.attack + e.attack());
+                        tool.uses = Math.min(1000, tool.uses + e.health());
+                        m.event(MatchEvent.Type.TOOL_UPGRADE, side, Match.HERO, card, tool.attack, tool.uses, null);
+                    }
+                }
+                case ENCHANT_TOOL -> {
+                    Tool tool = m.player(side).tool;
+                    if (tool != null) {
+                        tool.enchantments.add(new Tool.Enchantment(card, e.attack(), e.health()));
+                        tool.attack += e.attack();
+                        tool.uses += e.health();
+                        m.log(m.player(side).name + " enchants " + Match.name(tool.card) + " with " + Match.name(card) + ".", card);
+                        m.event(MatchEvent.Type.ENCHANT, side, Match.HERO, card, tool.attack, tool.uses, null);
+                    }
+                }
+                case CHOOSE_FROM_DECK -> m.chooseFromDeck(side, e, card);
+                case DRAW -> { for (int i = 0; i < amount && !m.over; i++) m.draw(side); }
+                case GAIN_XP -> m.gainXp(side, amount, card);
+                case GAIN_MAX_XP -> m.gainMaxXp(side, amount, card);
+                case GIVE -> { for (int i = 0; i < amount && !m.over; i++) m.giveCard(side, new CardRef(e.card(), false)); }
+                case GIVE_RANDOM_CLASS -> {
+                    var heroClass = m.player(side).heroClass;
+                    var pool = Cards.collectible().stream().filter(id -> heroClass != craftbound.card.CardClass.NEUTRAL
+                            && Cards.get(id).cardClass() == heroClass).toList();
+                    // No fallback to Neutral or tokens while a class's new set is still empty.
+                    for (int i = 0; i < amount && !pool.isEmpty() && !m.over; i++)
+                        m.giveCard(side, new CardRef(pool.get(m.random.nextInt(pool.size())), false));
+                }
+                case GIVE_RANDOM -> { for (int i = 0; i < amount && !m.over; i++)
+                    m.giveCard(side, new CardRef(e.pool().get(m.random.nextInt(e.pool().size())), false)); }
+                case SUMMON -> { for (int i = 0; i < amount && !m.over; i++) m.summon(side, new CardRef(e.card(), false)); }
+                default -> {
+                    for (Target target : targets(m, side, source, e, chosen)) {
+                        Minion victim = target.hero() ? null : m.player(target.side()).minion(target.minionId());
+                        if (!target.hero() && victim == null) continue;
+                        switch (e.action()) {
+                            case DAMAGE, TOOL_DAMAGE -> {
+                                int damage = e.action() == Action.TOOL_DAMAGE ? m.player(side).tool == null ? 0 : m.player(side).tool.attack : amount;
+                                boolean followUp = (trigger == Trigger.ON_KILL || trigger == Trigger.AFTER_ATTACK
+                                        || trigger == Trigger.AFTER_SURVIVING_KILL) && CardCatalog.randomTarget(e.target());
+                                if (followUp && damage > 0)
+                                    m.event(MatchEvent.Type.SHOOT, side, source == null ? Match.HERO : source.id,
+                                            card, damage, 160, target);
+                                else if (trigger == Trigger.END_TURN && e.target() == Aim.RANDOM_ENEMY && source != null)
+                                    m.event(MatchEvent.Type.SHOOT, side, source.id, card, damage, 0, target);
+                                boolean alive = victim != null && !victim.isDead();
+                                if (victim != null && source != null) m.damage(victim, damage, source);
+                                else m.damage(target, damage);
+                                if (alive && victim.isDead() && source == null && (Cards.get(card.id()).isTool()
+                                        || Cards.get(card.id()).kind() == craftbound.card.CardKind.ENCHANTMENT)) {
+                                    // A chained kill gets its own death and projectile beat too.
+                                    m.resolveDeaths();
+                                    onToolTrigger(m, side, m.player(side).tool, Trigger.ON_KILL, target);
+                                }
+                            }
+                            case HEAL, WELL_FED -> m.heal(target, amount, e.action() == Action.WELL_FED);
+                            case GRANT_KEYWORD -> m.grantKeyword(victim, e.keyword());
+                            case TRANSFORM -> m.transform(victim, e.card());
+                            case BAD_OMEN -> {
+                                MatchPlayer marked = m.player(target.side());
+                                if (marked.badOmenSummon == null) {
+                                    marked.badOmenSummon = e.card();
+                                    marked.badOmenSource = side;
+                                    m.log(marked.name + " gains Bad Omen.", card);
+                                }
+                            }
+                            case CLEANSE -> {
+                                if (target.hero()) {
+                                    m.cleanseHero(target.side());
+                                } else {
+                                    m.clearAppliedEffects(victim);
+                                    m.status(victim, MatchEvent.STATUS_CLEANSED);
+                                }
+                            }
+                            case BUFF -> {
+                                if (e.attack() != 0 || e.health() != 0)
+                                    m.buff(victim, e.attack() * multiplier, e.health() * multiplier);
+                                if (e.keyword() != null) m.grantKeyword(victim, e.keyword());
+                            }
+                            case DESTROY -> {
+                                if (source == victim && trigger == Trigger.START_TURN && CardCatalog.hasTntFuse(card.id()))
+                                    m.event(MatchEvent.Type.TNT_DETONATE, side, victim.id, card, 0, 0, Target.NONE);
+                                victim.health = 0;
+                            }
+                            case WEAKEN_UNTIL_NEXT_TURN -> m.weakenUntilNextTurn(victim, amount);
+                            case BOUNCE -> m.bounce(victim);
+                            case RETURN_AND_COPY -> {
+                                // Snapshot the exact card before bounce removes the board target.
+                                // CardRef preserves cosmetics/Trials training, not combat buffs or damage.
+                                CardRef copy = victim.card;
+                                m.bounce(victim);
+                                for (int i = 0; i < amount && !m.over; i++) m.giveCard(side, copy);
+                            }
+                            case MINE -> m.mine(victim);
+                            case TOTEM -> { victim.totem = true; m.status(victim, MatchEvent.STATUS_TOTEM); }
+                            case INVULNERABLE -> { victim.invulnerable = true; m.status(victim, MatchEvent.STATUS_INVULNERABLE); }
+                            case FREEZE -> {
+                                if (target.hero()) {
+                                    MatchPlayer hero = m.player(target.side());
+                                    if (!hero.frozen && !hero.skippedAttackFromFreeze) {
+                                        hero.frozen = true;
+                                        m.event(MatchEvent.Type.STATUS, target.side(), Match.HERO, null, MatchEvent.STATUS_FROZEN, 0, null);
+                                    }
+                                } else if (!victim.frozen && !victim.skippedAttackFromFreeze) {
+                                    victim.frozen = true;
+                                    m.status(victim, MatchEvent.STATUS_FROZEN);
+                                }
+                            }
+                            case WITHER -> { if (!victim.withered) { victim.withered = true; m.status(victim, MatchEvent.STATUS_WITHERED); } }
+                            case REVEAL_HAND, DISCARD_FROM_HAND, STEAL_FROM_HAND, SHUFFLE_FROM_HAND -> {
+                                if (target.hero()) m.handEffect(e.action(), side, target.side(), amount, e.chooser(), card);
+                            }
+                            case DESTROY_TOOL -> {
+                                MatchPlayer owner = m.player(target.side());
+                                if (owner.tool != null) {
+                                    m.event(MatchEvent.Type.BREAK, target.side(), Match.HERO, owner.tool.card, 0, 0, null);
+                                    owner.tool = null;
+                                }
+                            }
+                            default -> throw new IllegalStateException("Unexpected targeted action " + e.action());
+                        }
+                    }
                 }
             }
-            match.log(player.name + " plants " + planted + " Wheat and draws a card.", card);
-            match.draw(side);
+            // One boundary per authored effect, not per target: an area effect still lands together.
+            // Insert before nested trigger events as well, preserving their causal order.
+            if (m.events.size() > firstEvent)
+                m.events.add(firstEvent, new MatchEvent(MatchEvent.Type.EFFECT, side,
+                        source == null ? Match.HERO : source.id, card, 0, 0, Target.NONE, m.animationSource));
+        }
+        } finally {
+            m.refreshAuras(); m.effectDepth--; m.animationSource = previousSource;
+            if (m.effectDepth == 0) m.pruneChoices();
         }
     }
 
-    // Some mobs leave a mark on whatever they damage.
-    static void onDamageDealt(Match match, Minion source, Minion victim) {
-        Identifier id = source.card.id();
-        if (id.equals(Cards.SHULKER) && !victim.frozen) {
-            victim.frozen = true;
-            match.status(victim, MatchEvent.STATUS_FROZEN);
-        } else if (id.equals(Cards.WITHER_SKELETON) && !victim.withered) {
-            victim.withered = true;
-            match.status(victim, MatchEvent.STATUS_WITHERED);
-        }
+    private static List<Target> targets(Match m, int side, Minion source, Effect e, Target chosen) {
+        List<Target> targets = possibleTargets(m, side, source, e, chosen);
+        if (CardCatalog.randomTarget(e.target()) && !targets.isEmpty())
+            return List.of(targets.get(m.random.nextInt(targets.size())));
+        return targets;
     }
 
-    // "At the end of your turn" effects, in board order.
-    static void onEndTurn(Match match, int side) {
-        MatchPlayer player = match.player(side);
-        for (Minion minion : new ArrayList<>(player.board)) {
-            if (match.over || !player.board.contains(minion)) {
-                continue;
+    // Read-only candidate enumeration: AI evaluation must not consume random rolls.
+    static List<Target> possibleTargets(Match m, int side, Minion source, Effect e, Target chosen) {
+        List<Target> targets = new ArrayList<>();
+        switch (e.target()) {
+            case EVENT -> { if (chosen != null && !chosen.isNone()) targets.add(chosen); }
+            case KILLER -> {
+                if (source != null && m.inPlay(source.killerSide) && m.isEnemy(side, source.killerSide) && source.killerId > 0)
+                    targets.add(Target.mob(source.killerSide, source.killerId));
             }
-            Identifier id = minion.card.id();
-            if (id.equals(Cards.FURNACE)) {
-                match.log(player.name + "'s Furnace heals them 2.", Cards.FURNACE);
-                match.healHero(side, 2);
-            } else if (id.equals(Cards.DISPENSER)) {
-                // 1 damage to a random enemy: their hero or one of their mobs.
-                List<Target> options = new ArrayList<>();
-                options.add(Target.hero(1 - side));
-                for (Minion enemy : match.opponent(side).board) {
-                    options.add(Target.mob(1 - side, enemy.id));
-                }
-                Target shot = options.get(match.random.nextInt(options.size()));
-                match.log(player.name + "'s Dispenser fires for 1.", Cards.DISPENSER);
-                match.event(MatchEvent.Type.SHOOT, side, minion.id, minion.card, 1, 0, shot);
-                match.damage(shot, 1);
-                match.resolveDeaths();
-            } else if (id.equals(Cards.COMPOSTER)) {
-                List<Minion> others = new ArrayList<>(player.board);
-                others.remove(minion);
-                if (!others.isEmpty()) {
-                    Minion lucky = others.get(match.random.nextInt(others.size()));
-                    match.log(player.name + "'s Composter gives " + Match.name(lucky.card) + " +1/+1.", Cards.COMPOSTER);
-                    match.buff(lucky, 1, 1);
+            case SELF -> { if (source != null && m.sideOf(source) >= 0) targets.add(Target.mob(side, source.id)); }
+            case FRIENDLY_HERO -> targets.add(Target.hero(side));
+            case ENEMY_HERO -> targets.add(Target.hero(m.opponentSide(side)));
+            case EACH_HERO, EACH_ENEMY_HERO, RANDOM_HERO -> {
+                for (int seat = 0; seat < m.players.length; seat++) {
+                    if (m.inPlay(seat) && (e.target() != Aim.EACH_ENEMY_HERO || m.isEnemy(side, seat)))
+                        targets.add(Target.hero(seat));
                 }
             }
+            case CHOSEN_CHARACTER, CHOSEN_ANY, CHOSEN_FRIENDLY, CHOSEN_ENEMY -> {
+                if (!chosen.isNone() && (e.target() == Aim.CHOSEN_CHARACTER || e.target() == Aim.CHOSEN_ANY
+                        || e.target() == Aim.CHOSEN_FRIENDLY && chosen.side() == side
+                        || e.target() == Aim.CHOSEN_ENEMY && m.isEnemy(side, chosen.side()))) targets.add(chosen);
+            }
+            default -> {
+                if (e.target() == Aim.RANDOM_ENEMY) for (int i=0;i<m.players.length;i++) if (m.isEnemy(side, i) && m.inPlay(i)) targets.add(Target.hero(i));
+                if (e.target() == Aim.RANDOM_FRIENDLY) targets.add(Target.hero(side));
+                for (int s = 0; s < m.players.length; s++) {
+                    if (!m.inPlay(s)) continue;
+                    if ((e.target() == Aim.FRIENDLY_MOBS || e.target() == Aim.RANDOM_FRIENDLY_MOB || e.target() == Aim.RANDOM_FRIENDLY) && s != side) continue;
+                    if ((e.target() == Aim.ENEMY_MOBS || e.target() == Aim.RANDOM_ENEMY) && !m.isEnemy(side, s)) continue;
+                    for (Minion minion : new ArrayList<>(m.player(s).board)) targets.add(Target.mob(s, minion.id));
+                }
+            }
         }
+        targets.removeIf(t -> {
+            // Damage-dealt Chosen any is the legacy board-only target. The explicit character
+            // target (or Event) opts into hero hits without changing old mob-only abilities.
+            if (t.hero() && e.trigger() == Trigger.DAMAGE_DEALT && e.target() == Aim.CHOSEN_ANY) return true;
+            if (t.hero()) return e.type() != null || !CardCatalog.canAffectHero(e.action());
+            Minion minion = m.player(t.side()).minion(t.minionId());
+            return minion == null || minion.isDead() || e.excludeSelf() && minion == source || !matches(e, minion.definition());
+        });
+        // Random damage/healing selects a shared team Health pool once. Other hero effects
+        // (including Freeze and tool removal) still operate on a particular owner's hero.
+        if (CardCatalog.randomTarget(e.target()) && (e.action() == Action.DAMAGE || e.action() == Action.TOOL_DAMAGE || e.action() == Action.HEAL || e.action() == Action.WELL_FED)) {
+            Set<Integer> pools = new HashSet<>();
+            targets.removeIf(t -> t.hero() && !pools.add(m.healthPool(t.side())));
+        }
+        return targets;
     }
-
-    private static List<Minion> everyMob(Match match) {
-        List<Minion> all = new ArrayList<>(match.player(0).board);
-        all.addAll(match.player(1).board);
-        return all;
-    }
+    private CardEffects() {}
 }

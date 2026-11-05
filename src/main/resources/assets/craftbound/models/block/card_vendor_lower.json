@@ -1,0 +1,108 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "particle": "minecraft:block/iron_block",
+    "metal": "minecraft:block/iron_block",
+    "window": "minecraft:block/glass",
+    "display": "minecraft:block/emerald_block",
+    "slot": "minecraft:block/black_concrete"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        16,
+        16,
+        16
+      ],
+      "faces": {
+        "down": {
+          "texture": "#metal"
+        },
+        "up": {
+          "texture": "#metal"
+        },
+        "north": {
+          "texture": "#metal"
+        },
+        "south": {
+          "texture": "#metal"
+        },
+        "east": {
+          "texture": "#metal"
+        },
+        "west": {
+          "texture": "#metal"
+        }
+      }
+    },
+    {
+      "from": [
+        3,
+        2,
+        -0.02
+      ],
+      "to": [
+        13,
+        6,
+        0.02
+      ],
+      "faces": {
+        "down": {
+          "texture": "#slot"
+        },
+        "up": {
+          "texture": "#slot"
+        },
+        "north": {
+          "texture": "#slot"
+        },
+        "south": {
+          "texture": "#slot"
+        },
+        "east": {
+          "texture": "#slot"
+        },
+        "west": {
+          "texture": "#slot"
+        }
+      }
+    },
+    {
+      "from": [
+        11,
+        10,
+        -0.03
+      ],
+      "to": [
+        13,
+        13,
+        0.01
+      ],
+      "faces": {
+        "down": {
+          "texture": "#display"
+        },
+        "up": {
+          "texture": "#display"
+        },
+        "north": {
+          "texture": "#display"
+        },
+        "south": {
+          "texture": "#display"
+        },
+        "east": {
+          "texture": "#display"
+        },
+        "west": {
+          "texture": "#display"
+        }
+      }
+    }
+  ]
+}

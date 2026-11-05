@@ -22,6 +22,15 @@ loom {
 	}
 }
 
+// Isolated real-client rendering regression; never opens a user's save.
+fabricApi.configureTests {
+    createSourceSet = true
+    modId = 'craftbound_render_tests'
+    enableGameTests = false
+    enableClientGameTests = true
+    eula = true
+}
+
 dependencies {
 	// To change the versions see the gradle.properties file
 	minecraft "com.mojang:minecraft:${project.minecraft_version}"
@@ -44,6 +53,20 @@ tasks.withType(JavaCompile).configureEach {
 	it.options.release = 25
 }
 
+// Headless card-rule regression harness; no graphical client or external test framework required.
+sourceSets.test.compileClasspath += sourceSets.client.output
+sourceSets.test.runtimeClasspath += sourceSets.client.output
+tasks.named('compileTestJava') { dependsOn tasks.named('clientClasses') }
+// Regression checks are executable Java harnesses, rather than JUnit test classes.
+tasks.named('test') { failOnNoDiscoveredTests = false }
+tasks.named('check') { dependsOn 'checkCards', 'checkCardFaces', 'checkTableWorld', 'checkVendor' }
+
+tasks.register('checkCards', JavaExec) {
+    dependsOn tasks.named('testClasses'), tasks.named('clientClasses')
+    classpath = sourceSets.test.runtimeClasspath + sourceSets.client.runtimeClasspath
+    mainClass = 'craftbound.game.WorkshopChecks'
+}
+
 java {
 	// Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
 	// if it is present.
@@ -63,7 +86,33 @@ jar {
 	}
 }
 
+// A running dev client loads screens on demand. Give it a private copy of the mod so
+// compiling or replacing build/classes during play cannot remove a screen from its classpath.
+def playDirectory = layout.projectDirectory.dir('.gradle/craftbound-play-mod')
+def stagePlayClient = tasks.register('stagePlayClient', Copy) {
+    from(tasks.named('jar').flatMap { it.archiveFile })
+    into(playDirectory)
+    rename { 'craftbound-play.jar' }
+}
+tasks.named('runClient') {
+    dependsOn(stagePlayClient)
+    // Retain Loom's game and Fabric dependencies, replacing only the mutable mod outputs.
+    def loomClasspath = files(classpath.from.toList())
+    def modOutputs = sourceSets.main.output + sourceSets.client.output
+    setClasspath(loomClasspath.minus(modOutputs).plus(files(playDirectory.file('craftbound-play.jar'))))
+}
+
 // configure the maven publication
+['checkVendor': 'craftbound.vendor.VendorChecks',
+ 'checkCardFaces': 'craftbound.client.card.CardFaceChecks',
+ 'checkTableWorld': 'craftbound.game.TableWorldChecks'].each { taskName, entryPoint ->
+    tasks.register(taskName, JavaExec) {
+        dependsOn tasks.named('testClasses'), tasks.named('clientClasses')
+        classpath = sourceSets.test.runtimeClasspath + sourceSets.client.runtimeClasspath
+        mainClass = entryPoint
+    }
+}
+
 publishing {
 	publications {
 		create("mavenJava", MavenPublication) {

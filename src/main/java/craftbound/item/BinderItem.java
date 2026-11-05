@@ -27,6 +27,25 @@ public class BinderItem extends Item {
         super(properties);
     }
 
+    // A creative-tab preset, built from the current catalogue whenever the tab is populated.
+    // Use an ordinary binder stack so all binder and deck-building interactions work unchanged.
+    public static ItemStack creativeBinder() {
+        ItemStack stack = new ItemStack(craftbound.item.ModItems.BINDER);
+        stack.set(ModComponents.BINDER_CONTENTS, BinderContents.fullCollection());
+        stack.set(net.minecraft.core.component.DataComponents.ENCHANTMENT_GLINT_OVERRIDE,true);
+        stack.set(net.minecraft.core.component.DataComponents.CUSTOM_NAME,
+                Component.translatable("item.craftbound.creative_binder")
+                        .withStyle(net.minecraft.ChatFormatting.GOLD).withStyle(style -> style.withItalic(false)));
+        return stack;
+    }
+
+    @Override public boolean isFoil(ItemStack stack) {
+        // Recognize the original creative preset too, so existing binders gain the same visual cue.
+        var name=stack.get(net.minecraft.core.component.DataComponents.CUSTOM_NAME);
+        return name!=null && name.getContents() instanceof net.minecraft.network.chat.contents.TranslatableContents text
+                && text.getKey().equals("item.craftbound.creative_binder") || super.isFoil(stack);
+    }
+
     // Holding cards on the cursor and clicking them onto the binder files them.
     @Override
     public boolean overrideOtherStackedOnMe(ItemStack binder, ItemStack other, Slot slot, ClickAction action,

@@ -1,6 +1,7 @@
 package craftbound.game;
 
 import craftbound.card.CardDefinition;
+import craftbound.card.CardCatalog;
 import craftbound.card.Cards;
 import craftbound.card.Keyword;
 import java.util.ArrayList;
@@ -26,6 +27,19 @@ public class MatchAI {
         match.mulligan(side, mask);
     }
 
+    // Picks a card from victim's hand for a Discard/Steal/Shuffle effect, without using the match's RNG.
+    // Taking from the other player: their most expensive card. Giving up your own: your cheapest.
+    static int pickFromHand(Match match, CardCatalog.Action action, int owner, int victim, int chooser) {
+        List<CardRef> hand = match.player(victim).hand;
+        boolean ownHand = chooser == victim;
+        int best = 0;
+        for (int i = 1; i < hand.size(); i++) {
+            int cost = Cards.get(hand.get(i).id()).cost(), bestCost = Cards.get(hand.get(best).id()).cost();
+            if (ownHand ? cost < bestCost : cost > bestCost) best = i;
+        }
+        return best;
+    }
+
     // Does one thing. Returns false when it has nothing left to do and has ended its turn.
     public static boolean step(Match match, int side) {
         if (playBestCard(match, side) || usePower(match, side) || attackWithAMob(match, side) || attackWithHero(match, side)) {
@@ -38,20 +52,89 @@ public class MatchAI {
     private static boolean playBestCard(Match match, int side) {
         MatchPlayer me = match.player(side);
         int best = -1;
+        int bestScore = Integer.MIN_VALUE;
+        Target bestTarget = Target.NONE;
         for (int i = 0; i < me.hand.size(); i++) {
-            if (match.whyCantPlay(side, i) != null || !worthPlaying(match, side, me.hand.get(i))) {
-                continue;
-            }
-            if (best < 0 || Cards.get(me.hand.get(i).id()).cost() > Cards.get(me.hand.get(best).id()).cost()) {
-                best = i;
-            }
+            CardRef card = me.hand.get(i);
+            var definition = Cards.get(card.id());
+            if (match.whyCantPlay(side, i) != null || !worthPlaying(match, side, card)) continue;
+            int score=TrialsRoute.playPriority(match,side,card);
+            if(score<=bestScore) continue;
+            Target target = chooseTarget(match, side, card);
+            // A legal target may be strategically wrong (e.g. an Arrow with only friendly mobs).
+            // Passing NONE to a targeted action would reject the play and stall every later AI tick.
+            if (!definition.isMob() && target.isNone() && CardEffects.targetKind(card.id()) != Target.Kind.NONE) continue;
+            best = i;
+            bestScore = score;
+            bestTarget = target;
         }
-        if (best < 0) {
-            return false;
-        }
-        CardRef card = me.hand.get(best);
-        match.playCard(side, best, chooseTarget(match, side, card));
+        if (best < 0) return false;
+        match.playCard(side, best, bestTarget);
         return true;
+    }
+
+    private static boolean grantsChosenTotem(CardRef card) {
+        return CardCatalog.entry(card.id()).effects().stream().anyMatch(e ->
+                e.trigger() == CardCatalog.Trigger.PLAY && e.action() == CardCatalog.Action.TOTEM
+                        && e.target().name().startsWith("CHOSEN"));
+    }
+
+    private static boolean chosen(CardCatalog.Effect effect) {
+        return effect.trigger() == CardCatalog.Trigger.PLAY && effect.target().name().startsWith("CHOSEN");
+    }
+
+    private static boolean statusUtility(CardCatalog.Action action) {
+        return switch (action) {
+            case HEAL, WELL_FED, GRANT_KEYWORD, BUFF, FREEZE, CLEANSE, TOTEM, RETURN_AND_COPY -> true;
+            default -> false;
+        };
+    }
+
+    private static boolean usefulEffect(Match match, int side, CardCatalog.Effect effect, Target target) {
+        Minion mob = target.hero() ? null : match.player(target.side()).minion(target.minionId());
+        if (!target.hero() && (mob == null || mob.isDead())) return false;
+        MatchPlayer hero = match.player(target.side());
+        if (CardEffects.multiplier(match, side, null, effect) == 0) return false;
+        return switch (effect.action()) {
+            case RETURN_AND_COPY -> mob != null && match.player(side).hand.size() - 1 + effect.amount()
+                    + (target.side() == side && !mob.definition().token() ? 1 : 0) <= Match.MAX_HAND;
+            case WELL_FED -> target.side() == side && (target.hero() ? hero.maxHealth : mob.maxHealth) < 1000;
+            case GRANT_KEYWORD -> target.side() == side && mob != null && !mob.has(effect.keyword());
+            case BUFF -> mob != null && (effect.attack() < 0 ? target.side() != side && match.attackOf(mob) > 0
+                    : target.side() == side && (effect.attack() > 0 || effect.health() > 0
+                    || effect.keyword() != null && !mob.has(effect.keyword())));
+            case HEAL -> target.side() == side && effect.amount() > 0
+                    && (target.hero() ? hero.health < hero.maxHealth : mob.health < mob.maxHealth);
+            case FREEZE -> target.side() != side && (target.hero()
+                    ? !hero.frozen && !hero.skippedAttackFromFreeze : !mob.frozen && !mob.skippedAttackFromFreeze);
+            case CLEANSE -> cleanseValue(match, side, target) > 0;
+            case TOTEM -> target.side() == side && mob != null && !mob.totem;
+            default -> true; // A combined damage/buff effect may still make a target worthwhile.
+        };
+    }
+
+    private static int cleanseValue(Match match, int side, Target target) {
+        MatchPlayer owner = match.player(target.side());
+        Minion mob = target.hero() ? null : owner.minion(target.minionId());
+        int gains, losses;
+        if (mob == null) {
+            gains = (owner.badOmenSummon != null ? 3 : 0) + (owner.frozen || owner.skippedAttackFromFreeze ? 2 : 0);
+            losses = owner.temporaryHeroAttack + Math.max(0, owner.maxHealth - (owner.startingHealth > 0 ? owner.startingHealth : match.baseHealth()));
+        } else {
+            gains = mob.attackDebuff + (mob.withered ? 2 : 0) + (mob.frozen || mob.skippedAttackFromFreeze ? 2 : 0);
+            losses = Math.max(0, mob.attack - mob.card.training().attack(mob.definition())) + Math.max(0, mob.maxHealth - mob.auraHealth - mob.card.training().health(mob.definition()))
+                    + mob.grantedKeywords.size() * 2 + (mob.totem ? 4 : 0) + (mob.invulnerable ? 3 : 0);
+        }
+        return target.side() == side ? gains - losses : losses - gains;
+    }
+
+    private static List<Target> usefulTargets(Match match, int side, CardRef card) {
+        List<Target> options = match.validTargets(side, CardEffects.targetKind(card.id()), card.id());
+        var effects = CardCatalog.entry(card.id()).effects().stream().filter(MatchAI::chosen).toList();
+        if (effects.stream().noneMatch(e -> statusUtility(e.action()))) return options;
+        return options.stream().filter(target -> effects.stream().anyMatch(e ->
+                CardEffects.possibleTargets(match, side, null, e, target).contains(target)
+                        && usefulEffect(match, side, e, target))).toList();
     }
 
     // Skips cards that would be wasted, like healing at full health.
@@ -59,12 +142,37 @@ public class MatchAI {
         MatchPlayer me = match.player(side);
         MatchPlayer enemy = match.opponent(side);
         CardDefinition definition = Cards.get(card.id());
-        if (card.id().equals(Cards.ROTTEN_FLESH)) {
-            return me.health < Match.START_HEALTH;
+        var playEffects = CardCatalog.entry(card.id()).effects().stream()
+                .filter(e -> e.trigger() == CardCatalog.Trigger.PLAY).toList();
+        // Bodies can still be summoned with no useful battlecry target. Targeted items cannot.
+        if (!definition.isMob() && CardEffects.targetKind(card.id()) != Target.Kind.NONE
+                && usefulTargets(match, side, card).isEmpty()) return false;
+        // Includes friendly-hero healing, splash healing and random effects, without rolling RNG.
+        if (!definition.isMob() && !definition.isTool() && !playEffects.isEmpty()
+                && playEffects.stream().allMatch(e -> statusUtility(e.action()))) {
+            boolean useful = playEffects.stream().anyMatch(e -> {
+                if (chosen(e)) return !usefulTargets(match, side, card).isEmpty();
+                return CardEffects.possibleTargets(match, side, null, e, Target.NONE).stream()
+                        .anyMatch(t -> usefulEffect(match, side, e, t));
+            });
+            if (!useful) return false;
         }
-        if (card.id().equals(Cards.EXPERIENCE_BOTTLE)) {
-            // Only drink it if the extra XP lets it play something it otherwise couldn't.
-            return me.hand.stream().anyMatch(c -> Cards.get(c.id()).cost() == me.xp + 1);
+        // Discard/Steal/Shuffle Actions do nothing against an empty hand.
+        if (!definition.isMob() && !definition.isTool() && !playEffects.isEmpty()
+                && playEffects.stream().allMatch(e -> CardCatalog.handPick(e.action())) && enemy.hand.isEmpty()) {
+            return false;
+        }
+        if (card.id().equals(Cards.ROTTEN_FLESH)) {
+            return me.health < me.maxHealth;
+        }
+        if (card.id().equals(Cards.EXPERIENCE_BOTTLE) || card.id().getPath().equals("mined_coal")) {
+            // Bank XP resources until they can pay for a card; several Coal can fund one larger turn.
+            int storedXp = me.hand.stream().mapToInt(c -> craftbound.card.CardCatalog.entry(c.id()).effects().stream()
+                    .filter(e -> e.trigger() == craftbound.card.CardCatalog.Trigger.PLAY
+                            && e.action() == craftbound.card.CardCatalog.Action.GAIN_XP).mapToInt(e -> e.amount()).sum()).sum();
+            return me.hand.stream().anyMatch(c -> Cards.get(c.id()).cost() > me.xp
+                    && Cards.get(c.id()).cost() <= me.xp + storedXp
+                    && (!Cards.get(c.id()).isMob() || me.rowFullReason(Cards.get(c.id()).keywords().contains(Keyword.BLOCK)) == null));
         }
         if (definition.isTool()) {
             return me.tool == null || me.tool.attack < definition.attack();
@@ -88,26 +196,45 @@ public class MatchAI {
         if (kind == Target.Kind.NONE) {
             return Target.NONE;
         }
-        List<Target> options = match.validTargets(side, kind);
+        List<Target> options = usefulTargets(match, side, card);
         if (options.isEmpty()) {
             return Target.NONE;
         }
         // Friendly buffs go on its strongest mob that can attack; anything aimed at enemies goes at their strongest mob.
-        int wantedSide = kind == Target.Kind.FRIENDLY_MOB ? side : 1 - side;
+        boolean healing = craftbound.card.CardCatalog.entry(card.id()).effects().stream()
+                .anyMatch(e -> chosen(e) && (e.action() == craftbound.card.CardCatalog.Action.HEAL || e.action() == craftbound.card.CardCatalog.Action.WELL_FED));
+        boolean cleansing = craftbound.card.CardCatalog.entry(card.id()).effects().stream()
+                .anyMatch(e -> chosen(e) && e.action() == craftbound.card.CardCatalog.Action.CLEANSE);
+        boolean freezing = CardCatalog.entry(card.id()).effects().stream().anyMatch(e -> chosen(e) && e.action() == CardCatalog.Action.FREEZE);
+        boolean beneficial = CardCatalog.entry(card.id()).effects().stream().anyMatch(e -> chosen(e)
+                && (e.action() == CardCatalog.Action.GRANT_KEYWORD || e.action() == CardCatalog.Action.BUFF && e.attack() >= 0));
+        int wantedSide = kind == Target.Kind.FRIENDLY_MOB || healing || cleansing || beneficial || grantsChosenTotem(card) ? side : 1 - side;
         Target best = null;
         int bestScore = Integer.MIN_VALUE;
         for (Target target : options) {
-            if (target.side() != wantedSide && kind == Target.Kind.ANY_MOB) {
+            if (!cleansing && target.side() != wantedSide && (kind == Target.Kind.ANY_MOB || kind == Target.Kind.ANY_CHARACTER)) {
+                continue;
+            }
+            if (target.hero()) {
+                int score = healing ? (match.player(target.side()).maxHealth - match.player(target.side()).health) * 5
+                        : match.player(target.side()).health <= craftbound.card.CardCatalog.entry(card.id()).effects().stream()
+                                .filter(e -> e.action() == craftbound.card.CardCatalog.Action.DAMAGE).mapToInt(e -> e.amount()).sum() ? 1000 : 1;
+                if (freezing && !match.player(target.side()).frozen && !match.player(target.side()).skippedAttackFromFreeze) score += 40;
+                if (cleansing) score += 12 * cleanseValue(match, side, target);
+                if (score > bestScore) { bestScore = score; best = target; }
                 continue;
             }
             Minion minion = match.player(target.side()).minion(target.minionId());
             int score = match.attackOf(minion) + minion.health + (minion.has(Keyword.BLOCK) && wantedSide == side ? -20 : 0);
+            if (healing) score = (minion.maxHealth - minion.health) * 5;
+            if (freezing && !minion.frozen && !minion.skippedAttackFromFreeze) score += 40;
+            if (cleansing) score += 12 * cleanseValue(match, side, target);
             if (score > bestScore) {
                 bestScore = score;
                 best = target;
             }
         }
-        return best == null ? options.get(0) : best;
+        return best == null ? Target.NONE : best;
     }
 
     private static boolean usePower(Match match, int side) {
@@ -116,6 +243,36 @@ public class MatchAI {
             return false;
         }
         switch (HeroPowers.of(me)) {
+            case FEED -> {
+                Target best = null;int missing = 0;
+                if (me.health < me.maxHealth) { best = Target.hero(side);missing = me.maxHealth - me.health; }
+                for (Minion mob : me.board) if (mob.maxHealth - mob.health > missing) {
+                    best = Target.mob(side, mob.id);missing = mob.maxHealth - mob.health;
+                }
+                if (best == null) return false;
+                match.usePower(side, best);return true;
+            }
+            case THROW_POTION -> {
+                Minion victim = match.opponent(side).board.stream().filter(m -> !m.invulnerable && m.health == 1).findFirst().orElse(null);
+                match.usePower(side, victim == null ? Target.hero(1-side) : Target.mob(1-side, victim.id));return true;
+            }
+            case ACTIVATE -> {
+                Minion block = me.board.stream().filter(HeroPowers::canActivate).findFirst().orElse(null);
+                if (block == null) return false;
+                match.usePower(side, Target.mob(side, block.id));return true;
+            }
+            case STRIKE -> { if (me.heroAttacked || me.frozen || me.skippedAttackFromFreeze) return false; }
+            case EXCAVATE -> {
+                // Prefer an Ore payout, but avoid burning it into a full hand.
+                Minion ore = me.board.stream().filter(m -> HeroPowers.validExcavateTarget(match, side, Target.mob(side, m.id)))
+                        .max(Comparator.comparingInt(m -> m.definition().cost())).orElse(null);
+                if (ore != null && me.hand.size() < Match.MAX_HAND) {
+                    match.usePower(side, Target.mob(side, ore.id));
+                    return true;
+                }
+                // Never overwrite an upgraded/usable tool just to spend spare XP.
+                if (me.tool != null) return false;
+            }
             case CRAFT -> {
                 // Only craft a sword when it isn't already holding a tool.
                 if (me.tool != null) {
@@ -143,7 +300,7 @@ public class MatchAI {
             if (!attacker.canAttack() || match.attackOf(attacker) <= 0) {
                 continue;
             }
-            Target target = chooseAttack(match, side, attacker.id, match.attackOf(attacker), attacker.has(Keyword.RANGED), attacker.health);
+            Target target = chooseAttack(match, side, attacker.id, match.attackOf(attacker), attacker.health);
             if (target != null) {
                 match.attack(side, attacker.id, target);
                 return true;
@@ -158,7 +315,7 @@ public class MatchAI {
             return false;
         }
         // The hero is more careful than its mobs: it keeps 6 health spare when trading.
-        Target target = chooseAttack(match, side, Match.HERO, me.tool.attack, me.tool.ranged, me.health - 6);
+        Target target = chooseAttack(match, side, Match.HERO, match.heroAttackOf(side), me.health - 6);
         if (target == null) {
             return false;
         }
@@ -168,12 +325,14 @@ public class MatchAI {
 
     // A good trade (kill an enemy mob and live, or take nothing back), otherwise the enemy hero, otherwise a
     // Shield mob that's in the way. Null if there's nothing it can attack.
-    private static Target chooseAttack(Match match, int side, int attackerId, int attack, boolean ranged, int health) {
+    private static Target chooseAttack(Match match, int side, int attackerId, int attack, int health) {
         MatchPlayer enemy = match.opponent(side);
+        if (attack >= enemy.health && match.whyCantAttack(side, attackerId, Target.hero(1-side)) == null)
+            return Target.hero(1-side);
         Minion bestTrade = null;
         for (Minion defender : enemy.board) {
             boolean kills = attack >= defender.health && !defender.invulnerable;
-            boolean survives = ranged || defender.has(Keyword.BLOCK) || match.attackOf(defender) < health;
+            boolean survives = match.retaliationOf(defender) < health;
             if (kills && survives && match.whyCantAttack(side, attackerId, Target.mob(1 - side, defender.id)) == null) {
                 if (bestTrade == null || match.attackOf(defender) > match.attackOf(bestTrade)) {
                     bestTrade = defender;
@@ -188,7 +347,7 @@ public class MatchAI {
         }
         for (Minion defender : enemy.board) {
             if (match.whyCantAttack(side, attackerId, Target.mob(1 - side, defender.id)) == null
-                    && (ranged || match.attackOf(defender) < health || attackerId != Match.HERO)) {
+                    && (match.retaliationOf(defender) < health || attackerId != Match.HERO)) {
                 return Target.mob(1 - side, defender.id);
             }
         }

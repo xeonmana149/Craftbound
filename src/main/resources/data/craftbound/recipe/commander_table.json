@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "WWW",
+    "PTP",
+    "P P"
+  ],
+  "key": {
+    "W": "minecraft:purple_wool",
+    "P": "#minecraft:planks",
+    "T": "craftbound:card_table"
+  },
+  "result": {
+    "id": "craftbound:commander_table"
+  }
+}

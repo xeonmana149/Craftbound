@@ -63,6 +63,14 @@ public record BinderContents(Map<Identifier, Integer> cards, Map<Identifier, Int
         return total;
     }
 
+    public static BinderContents fullCollection() {
+        Map<Identifier, Integer> copies = new HashMap<>();
+        for (Identifier id : craftbound.card.Cards.collectible()) {
+            copies.put(id, craftbound.card.DeckRules.maxCopies(craftbound.card.Cards.get(id).rarity()));
+        }
+        return new BinderContents(copies, copies, Set.of(), Set.of());
+    }
+
     public int collected(List<Identifier> collection) {
         int collected = 0;
         for (Identifier id : collection) {

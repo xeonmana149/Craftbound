@@ -8,10 +8,11 @@ import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.Identifier;
 
 // Sent by the binder screen when you take a card out. The server does the actual moving.
-public record TakeFromBinderPayload(boolean mainHand, Identifier card, boolean enchanted, boolean all) implements CustomPacketPayload {
+public record TakeFromBinderPayload(int location, Identifier card, boolean enchanted, boolean all) implements CustomPacketPayload {
+    public TakeFromBinderPayload(boolean mainHand, Identifier card, boolean enchanted, boolean all) { this(mainHand ? 1 : 0, card, enchanted, all); }
     public static final Type<TakeFromBinderPayload> TYPE = new Type<>(Craftbound.id("take_from_binder"));
     public static final StreamCodec<RegistryFriendlyByteBuf, TakeFromBinderPayload> CODEC = StreamCodec.composite(
-            ByteBufCodecs.BOOL, TakeFromBinderPayload::mainHand,
+            ByteBufCodecs.VAR_INT, TakeFromBinderPayload::location,
             Identifier.STREAM_CODEC, TakeFromBinderPayload::card,
             ByteBufCodecs.BOOL, TakeFromBinderPayload::enchanted,
             ByteBufCodecs.BOOL, TakeFromBinderPayload::all,

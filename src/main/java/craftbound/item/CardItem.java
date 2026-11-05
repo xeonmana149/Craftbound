@@ -39,7 +39,7 @@ public class CardItem extends Item {
         if (stack.has(ModComponents.ENCHANTED)) {
             name = Component.translatable("card.craftbound.enchanted", name);
         }
-        return name.copy().withStyle(card.rarity().color());
+        return name;
     }
 
     // Enchanted cards get the enchantment glint.

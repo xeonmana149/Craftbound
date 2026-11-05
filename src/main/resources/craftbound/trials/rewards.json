@@ -1,0 +1,47 @@
+[
+  {
+    "heroClass": "FIGHTER",
+    "cardBack": "craftbound:trial_fighter",
+    "board": "trial_fighter"
+  },
+  {
+    "heroClass": "BUILDER",
+    "cardBack": "craftbound:trial_builder",
+    "board": "trial_builder"
+  },
+  {
+    "heroClass": "FARMER",
+    "cardBack": "craftbound:trial_farmer",
+    "board": "trial_farmer"
+  },
+  {
+    "heroClass": "FISHERMAN",
+    "cardBack": "craftbound:trial_fisherman",
+    "board": "trial_fisherman"
+  },
+  {
+    "heroClass": "ALCHEMIST",
+    "cardBack": "craftbound:trial_alchemist",
+    "board": "trial_alchemist"
+  },
+  {
+    "heroClass": "MINER",
+    "cardBack": "craftbound:trial_miner",
+    "board": "trial_miner"
+  },
+  {
+    "heroClass": "CHEF",
+    "cardBack": "craftbound:trial_chef",
+    "board": "trial_chef"
+  },
+  {
+    "heroClass": "TAMER",
+    "cardBack": "craftbound:trial_tamer",
+    "board": "trial_tamer"
+  },
+  {
+    "heroClass": "REDSTONER",
+    "cardBack": "craftbound:trial_redstoner",
+    "board": "trial_redstoner"
+  }
+]

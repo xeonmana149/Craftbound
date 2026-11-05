@@ -25,8 +25,10 @@ public class BoosterPacks {
     }
 
     public static Opening open(RandomSource random, double luck, int fortune) {
+        if (Cards.collectible().isEmpty()) return new Opening(List.of(), false);
         int enchantedChance = (int) Math.max(0, Math.min(100, ENCHANTED_CHANCE + ENCHANTED_CHANCE_PER_LUCK * luck));
-        boolean jackpot = random.nextInt(Math.max(1, JACKPOT_ODDS / (1 + fortune))) == 0;
+        boolean jackpot = !Cards.ofRarity(CardRarity.LEGENDARY).isEmpty()
+                && random.nextInt(Math.max(1, JACKPOT_ODDS / (1 + fortune))) == 0;
         List<Pull> pulls = new ArrayList<>();
         for (int i = 0; i < CARDS_PER_PACK; i++) {
             CardRarity rarity;
@@ -75,6 +77,8 @@ public class BoosterPacks {
                 return options.get(random.nextInt(options.size()));
             }
         }
-        throw new IllegalStateException("No cards registered");
+        // An unfinished set may contain only higher rarities.
+        List<Identifier> options = Cards.collectible();
+        return options.get(random.nextInt(options.size()));
     }
 }

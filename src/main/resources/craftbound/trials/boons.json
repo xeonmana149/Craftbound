@@ -1,0 +1,70 @@
+[
+  {
+    "id": "HEART",
+    "title": "Golden Heart",
+    "description": "Gain 4 maximum Health and recover 4 Health.",
+    "operations": [
+      {
+        "type": "MAX_HEALTH",
+        "amount": 4
+      }
+    ],
+    "limit": 3,
+    "iconItem": "minecraft:golden_apple"
+  },
+  {
+    "id": "PACK",
+    "title": "Field Satchel",
+    "description": "Draw one extra opening card each trial.",
+    "operations": [
+      {
+        "type": "OPENING_DRAW",
+        "amount": 1
+      }
+    ],
+    "limit": 3,
+    "iconItem": "minecraft:book"
+  },
+  {
+    "id": "TORCH",
+    "title": "Miner's Torch",
+    "description": "Begin each trial with one extra maximum XP.",
+    "operations": [
+      {
+        "type": "START_XP",
+        "amount": 1
+      }
+    ],
+    "limit": 3,
+    "iconItem": "minecraft:torch"
+  },
+  {
+    "id": "JOURNEYMAN",
+    "title": "Journeyman's Lesson",
+    "description": "Recover 2 Health and train a single copy.",
+    "operations": [
+      {
+        "type": "HEAL",
+        "amount": 2
+      },
+      {
+        "type": "TRAIN_CARD"
+      }
+    ],
+    "limit": 1,
+    "iconItem": "minecraft:anvil"
+  },
+  {
+    "id": "CARAVAN",
+    "title": "Caravan Charter",
+    "description": "Gain 5 Emeralds to spend at future shops.",
+    "operations": [
+      {
+        "type": "MARKS",
+        "amount": 5
+      }
+    ],
+    "limit": 1,
+    "iconItem": "minecraft:emerald"
+  }
+]

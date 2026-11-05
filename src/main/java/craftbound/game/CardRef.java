@@ -2,6 +2,11 @@ package craftbound.game;
 
 import net.minecraft.resources.Identifier;
 
-// A card in a match (in a deck, a hand, or on the board): which card, and whether it's an Enchanted copy.
-public record CardRef(Identifier id, boolean enchanted) {
+/** One copy in a match. Old snapshots and ordinary deck cards have no Trials training. */
+public record CardRef(Identifier id, boolean enchanted, TrialTraining training) {
+    public CardRef {
+        if (training == null) training = TrialTraining.NONE;
+    }
+
+    public CardRef(Identifier id, boolean enchanted) { this(id, enchanted, TrialTraining.NONE); }
 }

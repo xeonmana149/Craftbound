@@ -1,0 +1,33 @@
+[
+  {
+    "id": "HEAL",
+    "title": "Rest by the fire",
+    "description": "Recover 8 Health, up to your maximum.",
+    "operations": [
+      {
+        "type": "HEAL",
+        "amount": 8
+      }
+    ]
+  },
+  {
+    "id": "TRAIN",
+    "title": "Train a card",
+    "description": "Choose a lasting improvement for one card.",
+    "operations": [
+      {
+        "type": "TRAIN_CARD"
+      }
+    ]
+  },
+  {
+    "id": "BOON",
+    "title": "Take a boon",
+    "description": "Choose a persistent benefit for this expedition.",
+    "operations": [
+      {
+        "type": "BOON"
+      }
+    ]
+  }
+]

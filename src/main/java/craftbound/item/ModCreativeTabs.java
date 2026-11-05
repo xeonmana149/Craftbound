@@ -25,15 +25,18 @@ public class ModCreativeTabs {
             .displayItems((params, output) -> {
                 output.accept(ModItems.BOOSTER_PACK);
                 output.accept(ModItems.BINDER);
-                output.accept(ModItems.DECK_CASE);
+                output.accept(BinderItem.creativeBinder());
                 output.accept(ModBlocks.CARD_TABLE);
+                output.accept(ModBlocks.TEAM_TABLE);
+                output.accept(ModBlocks.COMMANDER_TABLE);
                 output.accept(ModBlocks.CARD_DISPLAY);
+                output.accept(ModBlocks.CARD_VENDOR);
                 for (Identifier sleeve : Sleeves.ids()) {
                     output.accept(SleeveItem.of(sleeve));
                 }
                 output.accept(ModItems.CARD);
                 for (Identifier id : Cards.ids()) {
-                    if (Cards.get(id).token()) {
+                    if (Cards.get(id).token() || Cards.deleted(id)) {
                         continue;
                     }
                     output.accept(CardItem.of(id));

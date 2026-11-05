@@ -1,0 +1,31 @@
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const M=require('./model.js');
+const source=JSON.parse(fs.readFileSync(require('node:path').join(__dirname,'../../src/test/resources/craftbound/test-cards.json'),'utf8'));
+const data=M.clone(source);
+const loot={...M.clone(M.TEMPLATES.looting),id:'craftbound:test_looting'};
+const rally={...M.clone(M.TEMPLATES.illager_rally),id:'craftbound:test_rally'};
+data.cards.push(loot,rally);
+assert.deepEqual(M.validate(data,source),[]);
+assert.equal(M.description(loot,data),'Your tool gains: After this destroys a mob or block, draw 1 card.');
+assert.equal(M.description(rally,data),'Give a friendly Illager mob +2/+2 and Sprint.');
+assert.equal(rally.effects.length,1);
+const f=rally.effects[0];
+for(const keyword of ['SHIELD','SPRINT','RANGED','IGNORE_SHIELD','']){
+ f.keyword=keyword;assert.deepEqual(M.validate(data,source),[]);
+ assert.ok(!M.description(rally,data).includes('undefined'));
+}
+f.keyword='BLOCK';assert.ok(M.validate(data,source).some(e=>e.includes('Shield, Sprint')));
+f.keyword='SPRINT';f.boardKind='BLOCK';assert.ok(M.validate(data,source).length);
+f.boardKind='MOB';f.attack=0;f.health=0;
+assert.equal(M.description(rally,data),'Give a friendly Illager mob Sprint.');
+assert.deepEqual(M.validate(data,source),[]);
+f.action='HEAL';assert.ok(M.validate(data,source).some(e=>e.includes('Only Buff')));
+f.action='BUFF';f.target='RANDOM_FRIENDLY_MOB';f.attack=2;f.health=2;
+assert.deepEqual(M.validate(JSON.parse(JSON.stringify(data)),source),[]);
+assert.equal(loot.effects.length,1,'Ability-only enchantments need no dummy upgrade');
+loot.effects.unshift({...M.effect(),action:'ENCHANT_TOOL',target:'SELF',type:'',excludeSelf:false,attack:1,health:0});
+assert.ok(M.description(loot,data).startsWith('Give your equipped tool +1 Attack. Your tool gains:'));
+loot.effects.pop();loot.effects[0].attack=0;
+assert.ok(M.validate(data,source).length,'Statless enchantment without an attached ability is rejected');
+console.log('PASS: Looting template, compound buff wording, optional grants, validation and JSON round trip');

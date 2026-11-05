@@ -69,14 +69,24 @@ public final class NewCards {
         g.outline(x - 2, y - 2, width + 4, height + 4, (edge << 24) | 0x7FD0FF);
     }
 
+    public static int badgeWidth(Font font, int count) {
+        return Math.max(9, font.width(String.valueOf(count)) + 4);
+    }
+
+    // Includes the surrounding one-pixel border.
+    public static int badgeHeight(Font font) {
+        return font.lineHeight + 3;
+    }
+
     // A small blue badge with a number: how many new cards are behind a tab or page arrow.
     public static void badge(GuiGraphicsExtractor g, Font font, int x, int y, int count) {
         String text = String.valueOf(count);
-        int width = Math.max(9, font.width(text) + 4);
-        g.fill(x - 1, y - 1, x + width + 1, y + 10, 0xFF000000);
-        g.fill(x, y, x + width, y + 9, 0xFF2F8FE8);
+        int width = badgeWidth(font, count);
+        int height = badgeHeight(font) - 2;
+        g.fill(x - 1, y - 1, x + width + 1, y + height + 1, 0xFF102A40);
+        g.fill(x, y, x + width, y + height, 0xFF2169A8);
         g.fill(x, y, x + width, y + 1, 0xFF7FD0FF);
-        g.text(font, text, x + (width - font.width(text)) / 2 + 1, y + 1, 0xFFFFFFFF);
+        g.text(font, text, x + (width - font.width(text)) / 2, y + 1, 0xFFFFFFFF, false);
     }
 
     private NewCards() {

@@ -68,6 +68,12 @@ public class ModComponents {
                     .build()
     );
 
+    public static final DataComponentType<craftbound.deck.SavedDecks> SAVED_DECKS = Registry.register(
+            BuiltInRegistries.DATA_COMPONENT_TYPE, Craftbound.id("saved_decks"),
+            DataComponentType.<craftbound.deck.SavedDecks>builder()
+                    .persistent(craftbound.deck.SavedDecks.CODEC)
+                    .networkSynchronized(craftbound.deck.SavedDecks.STREAM_CODEC).build());
+
     public static void initialize() {
         // Unknown IDs (e.g. a typo in /give) get an empty tooltip instead of crashing.
         ItemComponentTooltipProviderRegistry.addFirst(CARD_ID, id -> {

@@ -1,0 +1,63 @@
+'use strict';
+const assert=require('node:assert/strict');
+const {mkdtempSync,copyFileSync,readFileSync,existsSync,rmSync}=require('node:fs');
+const path=require('node:path'), os=require('node:os');
+const {createWorkshopServer}=require('./server.cjs');
+const M=require('./trials-model.js');
+(async()=>{
+ const tmp=mkdtempSync(path.join(os.tmpdir(),'craftbound-trials-check-'));
+ const cards=path.join(tmp,'cards.json');
+ const source=path.resolve(__dirname,'../../src/test/resources/craftbound/test-cards.json');
+ copyFileSync(source,cards);
+ const {server,token}=createWorkshopServer({catalogue:cards,bundled:source});
+ await new Promise(r=>server.listen(0,'127.0.0.1',r));
+ const base='http://127.0.0.1:'+server.address().port;
+ const headers={'Content-Type':'application/json','X-Workshop-Token':token};
+ const save=(data,revision)=>fetch(base+'/api/trials',{method:'POST',headers,body:JSON.stringify({data,revision})});
+ try{
+  assert.equal((await fetch(base+'/api/trials')).status,403);
+  let reply=await fetch(base+'/api/trials',{headers}),book=await reply.json(); assert.equal(reply.status,200);
+  const draft=structuredClone(book.data);assert.deepEqual(M.validate(draft,book.cards),[]);
+  assert.equal(draft.act.topology,'BRANCHING_V2');
+  assert(draft.act.floors.slice(0,-1).every(f=>f.kinds.length===4));
+  const v1=structuredClone(draft);v1.act.topology='BRANCHING_V1';
+  for(const f of v1.act.floors.slice(0,-1)){f.kinds.pop();f.edges=f.edges.slice(0,3).map(edges=>edges.filter(i=>i<3));}
+  assert.deepEqual(M.validate(v1,book.cards),[],'saved V1 templates remain valid');
+  const editedV1=structuredClone(v1);editedV1.act.floors[0].kinds.push('FIGHT');editedV1.act.floors[0].edges.push([0]);
+  assert(M.validate(editedV1,book.cards).some(e=>e.path==='act.floors.0.kinds'),'V1 still caps three templates');
+  assert(!draft.boons.some(b=>/\bMarks?\b/.test(b.title+' '+b.description)),'bundled boons use Emeralds');
+  assert.equal(draft.events[0].options[0].operations[0].type!=null,true);
+  const icon=structuredClone(draft);icon.boons[0].iconItem='bad icon';
+  assert(M.validate(icon,book.cards).some(e=>e.path==='boons.0.iconItem'));
+  icon.boons[0].iconItem='';assert.deepEqual(M.validate(icon,book.cards),[],'blank icon falls back safely');
+  icon.boons[0].iconItem='minecraft:apple';assert.deepEqual(M.validate(icon,book.cards),[]);
+  const badMode=structuredClone(draft);badMode.act.topology='UNKNOWN';
+  assert(M.validate(badMode,book.cards).some(e=>e.path==='act.topology'));
+  const shortRoute=structuredClone(draft);shortRoute.act.floors=shortRoute.act.floors.slice(-6);
+  assert(M.validate(shortRoute,book.cards).some(e=>e.path==='act.floors'));
+  shortRoute.act.topology='AUTHORED';assert.deepEqual(M.validate(shortRoute,book.cards),[]);
+  delete shortRoute.act.topology;assert.deepEqual(M.validate(shortRoute,book.cards),[]);
+  const twoBosses=structuredClone(draft);twoBosses.act.floors.at(-1).kinds.push('BOSS');twoBosses.act.floors.at(-1).edges.push([]);
+  twoBosses.act.floors.at(-2).edges.forEach(e=>e.push(1));
+  assert(M.validate(twoBosses,book.cards).some(e=>e.path==='act.floors.12.kinds'));
+  twoBosses.act.topology='AUTHORED';assert.deepEqual(M.validate(twoBosses,book.cards),[]);
+  const boss=structuredClone(draft.opponents.find(o=>o.tier==='BOSS'));boss.name='Test Guardian';boss.id='test_guardian';draft.opponents.push(boss);
+  const final=draft.act.floors.at(-1);final.opponents=final.kinds.map(()=>boss.id);
+  draft.events[0].options[0].costMarks=3;draft.rewards[0].cardBack='';draft.charms[0].amount=2;
+  reply=await save(draft,book.revision);assert.equal(reply.status,200,JSON.stringify(await reply.clone().json())); const revision=(await reply.json()).revision;
+  reply=await save(book.data,book.revision);assert.equal(reply.status,409);
+  draft.opponents.pop();
+  reply=await save(draft,revision);assert.equal(reply.status,422);assert((await reply.json()).errors.some(e=>e.path.startsWith('act.')));
+  draft.opponents.push(boss); const before=readFileSync(book.path,'utf8');
+  draft.act.floors[0].edges[0]=[];assert.equal((await save(draft,revision)).status,422);
+  assert.equal(readFileSync(book.path,'utf8'),before);
+  draft.act.floors[0].edges[0]=book.data.act.floors[0].edges[0];draft.config.startMarks+=1;
+  assert.equal((await save(draft,revision)).status,200);
+  assert(existsSync(book.path+'.workshop-backup.json'));
+  assert.equal(readFileSync(book.path+'.workshop-backup.json','utf8'),before);
+  assert.equal(readFileSync(cards,'utf8'),readFileSync(source,'utf8'));
+  console.log('PASS: Trials defaults, optional card references, authored rewards, guarded HTTP saves, stale tabs, invalid routes and one-file backup.');
+ }finally{
+  server.closeAllConnections();await new Promise(r=>server.close(r));rmSync(tmp,{recursive:true,force:true});
+ }
+})().catch(e=>{console.error(e);process.exitCode=1;});

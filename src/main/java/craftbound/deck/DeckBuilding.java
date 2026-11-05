@@ -11,7 +11,7 @@ import craftbound.card.DeckRules;
 import craftbound.component.ModComponents;
 import craftbound.item.CardItem;
 import craftbound.item.ModItems;
-import craftbound.item.SleeveItem;
+import craftbound.sleeve.SleeveCollection;
 import craftbound.network.DeckRenamePayload;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
@@ -79,6 +79,16 @@ public class DeckBuilding {
             return "match_ui.craftbound.no_deck";
         }
         DeckContents deck = deckCase.getOrDefault(ModComponents.DECK_CONTENTS, DeckContents.EMPTY);
+        return whyCantPlay(deck, (id, enchanted) -> owned(inventory, id, enchanted));
+    }
+
+    // Shared by the table and ownership regression checks. Counts are read at match start,
+    // never reserved by a saved list, and distinguish normal from Enchanted copies.
+    public static String whyCantPlay(DeckContents deck, java.util.function.BiFunction<Identifier, Boolean, Integer> ownedCopies) {
+        var selected=new java.util.HashSet<>(deck.cards().cards().keySet());
+        selected.addAll(deck.cards().enchanted().keySet());
+        for(Identifier id:selected) if(deck.copies(id)>0 && !DeckRules.allowed(id,deck.deckClass()))
+            return "match_ui.craftbound.deck_missing";
         if (deck.deckClass() == CardClass.NEUTRAL || deck.size() < craftbound.game.MatchManager.PRACTICE_MIN_DECK) {
             return "match_ui.craftbound.deck_too_small";
         }
@@ -86,9 +96,9 @@ public class DeckBuilding {
         if (!deck.list()) {
             return null;
         }
-        for (Identifier id : Cards.collectible()) {
+        for (Identifier id : selected) {
             for (boolean enchanted : new boolean[]{false, true}) {
-                if (missing(inventory, deck, id, enchanted) > 0) {
+                if (deck.cards().count(id, enchanted) > ownedCopies.apply(id, enchanted)) {
                     return "match_ui.craftbound.deck_missing";
                 }
             }
@@ -173,50 +183,38 @@ public class DeckBuilding {
         }
     }
 
-    // A deck's class is one of the real classes, and it can only change if every card already in the deck is
-    // still allowed afterwards. Neutral means "not picked yet": an empty deck can go back to that to pick again.
+    // Switching classes keeps compatible entries. Cards remain in binders; only the deck list changes.
     public static void setClass(ItemStack deckCase, CardClass newClass) {
         DeckContents deck = deckCase.getOrDefault(ModComponents.DECK_CONTENTS, DeckContents.EMPTY);
-        if (newClass == CardClass.NEUTRAL ? deck.size() > 0 : !canSwitchTo(deck, newClass)) {
-            return;
-        }
-        deckCase.set(ModComponents.DECK_CONTENTS, deck.withClass(newClass));
+        if (newClass == CardClass.NEUTRAL) return;
+        deckCase.set(ModComponents.DECK_CONTENTS, forClass(deck, newClass));
     }
 
-    // Puts a sleeve from your inventory on the Deck Case; the sleeve it had goes back to your inventory.
-    // Classic is the default card back, so picking it just takes the current sleeve off.
+    public static DeckContents forClass(DeckContents deck, CardClass newClass) {
+        BinderContents kept = BinderContents.EMPTY;
+        for (Identifier id : Cards.collectible()) if (DeckRules.allowed(id, newClass)) {
+            for (boolean enchanted : new boolean[]{false, true}) {
+                int count = deck.cards().count(id, enchanted);
+                if (count > 0) kept = kept.add(id, enchanted, count);
+            }
+        }
+        return new DeckContents(newClass, kept, true);
+    }
+
+    // Unlocked designs can be used on any deck without moving or consuming more sleeve items.
     public static void setSleeve(ServerPlayer player, ItemStack deckCase, Identifier sleeve) {
+        SleeveCollection.unlockEquipped(player);
+        if (!Sleeves.ids().contains(sleeve) || !SleeveCollection.owns(player, sleeve)) return;
         Identifier current = deckCase.get(ModComponents.SLEEVE_ID);
         Identifier currentOrClassic = current == null ? Sleeves.CLASSIC : current;
         if (sleeve.equals(currentOrClassic)) {
             return;
-        }
-        Inventory inventory = player.getInventory();
-        if (!sleeve.equals(Sleeves.CLASSIC)) {
-            ItemStack owned = findSleeve(inventory, sleeve);
-            if (owned.isEmpty()) {
-                return;
-            }
-            owned.shrink(1);
-        }
-        if (current != null) {
-            inventory.placeItemBackInInventory(SleeveItem.of(current), Prediction.SERVER_ONLY);
         }
         if (sleeve.equals(Sleeves.CLASSIC)) {
             deckCase.remove(ModComponents.SLEEVE_ID);
         } else {
             deckCase.set(ModComponents.SLEEVE_ID, sleeve);
         }
-    }
-
-    private static ItemStack findSleeve(Inventory inventory, Identifier sleeve) {
-        for (int i = 0; i < inventory.getContainerSize(); i++) {
-            ItemStack stack = inventory.getItem(i);
-            if (stack.is(ModItems.SLEEVE) && sleeve.equals(stack.get(ModComponents.SLEEVE_ID))) {
-                return stack;
-            }
-        }
-        return ItemStack.EMPTY;
     }
 
     public static boolean canSwitchTo(DeckContents deck, CardClass newClass) {

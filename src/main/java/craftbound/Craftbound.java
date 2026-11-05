@@ -32,13 +32,21 @@ public class Craftbound implements ModInitializer {
 
 		LOGGER.info("Hello Fabric world!");
 		ModComponents.initialize();
+		craftbound.card.CardCatalogService.initialize();
 		ModItems.initialize();
 		ModBlocks.initialize();
 		ModEntities.initialize();
 		ModCreativeTabs.initialize();
 		ModNetworking.initialize();
+		craftbound.sleeve.SleeveCollection.initialize();
+		craftbound.board.BoardCollection.initialize();
+		craftbound.game.TrialsRewards.initialize();
+		craftbound.game.TrialsContent.initialize();
+		craftbound.mastery.ClassMastery.initialize();
 		ModLoot.initialize();
+		craftbound.game.DeveloperAccess.initialize();
 		MatchManager.initialize();
+		craftbound.deck.DeckCaseRetirement.initialize();
 	}
 
 	public static Identifier id(String path) {

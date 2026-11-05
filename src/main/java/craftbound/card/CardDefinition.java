@@ -51,6 +51,8 @@ public record CardDefinition(CardKind kind, CardClass cardClass, CardRarity rari
 
     // The lines under the card's name in the inventory.
     public void appendTooltip(Identifier id, Consumer<Component> tooltip) {
+        tooltip.accept(Component.translatable("card_ui.craftbound.rarity_short",
+                rarity.displayName().copy().withStyle(rarity.color())).withStyle(ChatFormatting.GRAY));
         tooltip.accept(Component.translatable("card_ui.craftbound.cost_short", cost).withStyle(ChatFormatting.GREEN));
         if (isMob()) {
             tooltip.accept(Component.translatable("card_ui.craftbound.stats_short", attack, health).withStyle(ChatFormatting.GRAY));
@@ -65,7 +67,7 @@ public record CardDefinition(CardKind kind, CardClass cardClass, CardRarity rari
         }
         int number = Cards.collectorNumber(id);
         if (number > 0) {
-            tooltip.accept(Component.translatable("card_ui.craftbound.number", number, Cards.collectible().size())
+            tooltip.accept(Component.translatable("card_ui.craftbound.number", number, Cards.collectorTotal())
                     .withStyle(ChatFormatting.DARK_GRAY));
         }
     }

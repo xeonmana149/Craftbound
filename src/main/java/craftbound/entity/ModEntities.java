@@ -13,14 +13,18 @@ import net.minecraft.world.entity.ai.attributes.Attributes;
 
 public class ModEntities {
     private static final ResourceKey<EntityType<?>> CARD_MASTER_KEY = ResourceKey.create(Registries.ENTITY_TYPE, Craftbound.id("card_master"));
-    // The Card Master only exists for a game, so it never saves with the world.
+    // A Card Master waiting at a paused table survives chunk unloads and world reloads.
     public static final EntityType<CardMasterEntity> CARD_MASTER = Registry.register(BuiltInRegistries.ENTITY_TYPE, CARD_MASTER_KEY,
             EntityType.Builder.<CardMasterEntity>of(CardMasterEntity::new, MobCategory.MISC)
                     .sized(0.6F, 1.95F)
-                    .noSave()
                     .noSummon()
                     .clientTrackingRange(10)
                     .build(CARD_MASTER_KEY));
+
+    private static final ResourceKey<EntityType<?>> CARD_SEAT_KEY = ResourceKey.create(Registries.ENTITY_TYPE, Craftbound.id("card_seat"));
+    public static final EntityType<CardSeatEntity> CARD_SEAT = Registry.register(BuiltInRegistries.ENTITY_TYPE, CARD_SEAT_KEY,
+            EntityType.Builder.<CardSeatEntity>of(CardSeatEntity::new, MobCategory.MISC)
+                    .sized(0.75F, 1.25F).noSummon().clientTrackingRange(10).build(CARD_SEAT_KEY));
 
     public static void initialize() {
         FabricDefaultAttributeRegistry.register(CARD_MASTER, Mob.createMobAttributes().add(Attributes.MOVEMENT_SPEED, 0.5));

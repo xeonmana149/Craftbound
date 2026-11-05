@@ -1,0 +1,278 @@
+[
+  {
+    "id": "archive",
+    "title": "Echoing Archive",
+    "description": "A librarian can transcribe a card from your expedition deck.",
+    "options": [
+      {
+        "id": "DUPLICATE",
+        "title": "Copy a card",
+        "description": "Make one copy, including any training.",
+        "operations": [
+          {
+            "type": "COPY_CARD"
+          }
+        ]
+      },
+      {
+        "id": "MARKS",
+        "title": "Take 2 Emeralds",
+        "description": "Keep the supplies for the next villager.",
+        "operations": [
+          {
+            "type": "MARKS",
+            "amount": 2
+          }
+        ]
+      },
+      {
+        "id": "SKIP",
+        "title": "Pass by",
+        "description": "Continue along the trail.",
+        "operations": [
+          {
+            "type": "SKIP"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "forge",
+    "title": "Abandoned Forge",
+    "description": "There is enough heat left to reforge one card.",
+    "options": [
+      {
+        "id": "TRAIN",
+        "title": "Work the bellows",
+        "description": "Spend 3 Health to train one untrained card.",
+        "operations": [
+          {
+            "type": "TRAIN_CARD"
+          }
+        ],
+        "costHealth": 3
+      },
+      {
+        "id": "REMOVE",
+        "title": "Melt a card",
+        "description": "Remove one copy from the expedition deck.",
+        "operations": [
+          {
+            "type": "REMOVE_CARD"
+          }
+        ]
+      },
+      {
+        "id": "SKIP",
+        "title": "Pass by",
+        "description": "Continue along the trail.",
+        "operations": [
+          {
+            "type": "SKIP"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "collector",
+    "title": "Wandering Collector",
+    "description": "Swap an unwanted card for a choice from the collector's stock.",
+    "options": [
+      {
+        "id": "TRADE",
+        "title": "Exchange a card",
+        "description": "Choose a card to trade for one of three other cards.",
+        "operations": [
+          {
+            "type": "SWAP_CARD"
+          }
+        ]
+      },
+      {
+        "id": "MARKS",
+        "title": "Take 2 Emeralds",
+        "description": "Keep the supplies for the next villager.",
+        "operations": [
+          {
+            "type": "MARKS",
+            "amount": 2
+          }
+        ]
+      },
+      {
+        "id": "SKIP",
+        "title": "Pass by",
+        "description": "Continue along the trail.",
+        "operations": [
+          {
+            "type": "SKIP"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "apiary",
+    "title": "The Sunken Apiary",
+    "description": "A beekeeper has one jar of honey left. The broken hives still hold enough comb to trade.",
+    "options": [
+      {
+        "id": "HONEY",
+        "title": "Buy the honey",
+        "description": "Pay 2 Emeralds to recover 7 Health.",
+        "operations": [
+          {
+            "type": "HEAL",
+            "amount": 7
+          }
+        ],
+        "costMarks": 2
+      },
+      {
+        "id": "COMB",
+        "title": "Reach into the hive",
+        "description": "Lose 3 Health and collect 4 Emeralds.",
+        "operations": [
+          {
+            "type": "MARKS",
+            "amount": 4
+          }
+        ],
+        "costHealth": 3
+      },
+      {
+        "id": "SKIP",
+        "title": "Pass by",
+        "description": "Keep walking.",
+        "operations": [
+          {
+            "type": "SKIP"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "rail_cache",
+    "title": "The Last Minecart",
+    "description": "A supply cart is stuck on a broken rail. Its chest and its cargo are too heavy to carry together.",
+    "options": [
+      {
+        "id": "OPEN",
+        "title": "Open the chest",
+        "description": "Choose one borrowed card to add to your deck.",
+        "operations": [
+          {
+            "type": "ADD_CARD"
+          }
+        ]
+      },
+      {
+        "id": "SELL",
+        "title": "Sell the cargo",
+        "description": "Gain 3 Emeralds for the next village.",
+        "operations": [
+          {
+            "type": "MARKS",
+            "amount": 3
+          }
+        ]
+      },
+      {
+        "id": "SKIP",
+        "title": "Pass by",
+        "description": "Keep walking.",
+        "operations": [
+          {
+            "type": "SKIP"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "geode",
+    "title": "The Singing Geode",
+    "description": "Deep inside the amethyst, a single note rings back every time your pick strikes.",
+    "options": [
+      {
+        "id": "ECHO",
+        "title": "Leave an echo",
+        "description": "Pay 3 Emeralds to duplicate a card, including its training.",
+        "operations": [
+          {
+            "type": "COPY_CARD"
+          }
+        ],
+        "costMarks": 3
+      },
+      {
+        "id": "SHARDS",
+        "title": "Chip out a charm",
+        "description": "Lose 4 Health and choose a charm.",
+        "operations": [
+          {
+            "type": "CHARM"
+          }
+        ],
+        "costHealth": 4
+      },
+      {
+        "id": "SKIP",
+        "title": "Pass by",
+        "description": "Keep walking.",
+        "operations": [
+          {
+            "type": "SKIP"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "portal",
+    "title": "The Ruined Portal",
+    "description": "A cartographer wants a rubbing of the portal runes. Beyond the arch you can hear boots on blackstone.",
+    "options": [
+      {
+        "id": "CROSS",
+        "title": "Step through",
+        "description": "Lose 5 Health and gain 1 starting XP for every remaining fight.",
+        "operations": [
+          {
+            "type": "START_XP",
+            "amount": 1
+          }
+        ],
+        "costHealth": 5
+      },
+      {
+        "id": "TRACE",
+        "title": "Trace the runes",
+        "description": "Recover 3 Health and earn 1 Emerald.",
+        "operations": [
+          {
+            "type": "HEAL",
+            "amount": 3
+          },
+          {
+            "type": "MARKS",
+            "amount": 1
+          }
+        ]
+      },
+      {
+        "id": "SKIP",
+        "title": "Pass by",
+        "description": "Keep walking.",
+        "operations": [
+          {
+            "type": "SKIP"
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -1,0 +1,17 @@
+{
+  "version": "Minecraft Java 26.3",
+  "date": "2026-11-02",
+  "counts": {
+    "items": 1658,
+    "blocks": 1286,
+    "entities": 161,
+    "effects": 40,
+    "potions": 46,
+    "enchantments": 43,
+    "biomes": 67,
+    "structures": 52
+  },
+  "chapters": 30,
+  "cards": 98,
+  "source_sha256": "e89fb53eb923afc553e3ced63b770cac3d717079923177493cf60efb17572317"
+}

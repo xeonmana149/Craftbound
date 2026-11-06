@@ -11,7 +11,7 @@ public final class CardCatalog {
     public static final int MAX_JSON = 250_000;
     public enum Trigger { PLAY, DROP, END_TURN, AFTER_ATTACK, DAMAGE_DEALT, ATTACKED, HARVEST, ON_KILL, CARD_ADDED, ITEM_PLAYED, MINED, HEALED, DISMANTLE, START_TURN, ACTIVATE, AFTER_SURVIVING_KILL }
     public enum Action { BUFF, DAMAGE, HEAL, DRAW, CHOOSE_FROM_DECK, GAIN_XP, SUMMON, GIVE, BOUNCE, RETURN_AND_COPY, TOTEM, INVULNERABLE, FREEZE, WITHER, TOOL_DAMAGE, DESTROY_TOOL, ENCHANT_TOOL, CLEANSE, MINE, GRANT_KEYWORD, GIVE_RANDOM, WELL_FED, TRANSFORM, GAIN_MAX_XP, DESTROY, WEAKEN_UNTIL_NEXT_TURN, GIVE_RANDOM_CLASS, UPGRADE_TOOL, BAD_OMEN,
-        REVEAL_HAND, DISCARD_FROM_HAND, STEAL_FROM_HAND, SHUFFLE_FROM_HAND }
+        REVEAL_HAND, DISCARD_FROM_HAND, STEAL_FROM_HAND, SHUFFLE_FROM_HAND, PICK_ONE, BREW_POTION }
     /** Who picks the card for Discard/Steal/Shuffle from hand. YOU = the effect's controller. */
     public enum HandChooser { YOU, OPPONENT, RANDOM }
     /** Effects that act on the enemy hero's hand. */
@@ -36,14 +36,45 @@ public final class CardCatalog {
         return List.of(Action.DAMAGE, Action.HEAL, Action.WELL_FED, Action.CLEANSE, Action.FREEZE,
                 Action.DESTROY_TOOL, Action.BAD_OMEN, Action.TOOL_DAMAGE).contains(action) || handAction(action);
     }
-    public enum Passive { NONE, AURA_ATTACK, ARMOR, GRAZER, BATTLE_HARDENED, SCHOOLING, AURA_STATS }
+    public enum Passive { NONE, AURA_ATTACK, ARMOR, GRAZER, BATTLE_HARDENED, SCHOOLING, AURA_STATS, NEGATE_KEYWORD, AMPLIFY_ELEMENT }
+    // Keywords a Negate keyword passive can switch off on enemy cards.
+    public static final List<Keyword> NEGATABLE = List.of(Keyword.SHIELD, Keyword.SPRINT, Keyword.RANGED, Keyword.IGNORE_SHIELD);
     public enum BoardKind { MOB, BLOCK, BOTH }
     public enum Scope { SELF, FRIENDLY, ENEMY, ANY }
+    // Elements tag any card (Fire, Frost...). Append only: saved cards store the names.
+    public enum Element { FIRE, FROST, WITHER, POISON, LIGHTNING, EXPLOSIVE, WATER, MAGIC, ENDER;
+        public String displayName() { return title(name()); }
+    }
+    // When an effect's optional boost applies. TARGET_* conditions are checked for each target.
+    public enum BoostWhen { YOU_CONTROL, ENEMY_CONTROLS, ANYONE_CONTROLS, TARGET_IS, TARGET_FROZEN, TARGET_WITHERED, TARGET_DAMAGED;
+        public boolean perTarget() { return name().startsWith("TARGET_"); }
+        public boolean needsMatch() { return this == YOU_CONTROL || this == ENEMY_CONTROLS || this == ANYONE_CONTROLS || this == TARGET_IS; } }
+    public enum BoostHow { DOUBLE, TRIPLE, PLUS }
+    /** "If ..." on an effect: scales its number when the condition holds. card, or else kind + optional type, says what must match. */
+    public record Boost(BoostWhen when, Identifier card, MobType type, BoardKind kind, BoostHow how, int amount) {
+        public int apply(int value) { return switch (how) { case DOUBLE -> value * 2; case TRIPLE -> value * 3; case PLUS -> value + (value < 0 ? -amount : amount); }; }
+    }
+    public static final List<Action> BOOSTABLE = List.of(Action.DAMAGE, Action.TOOL_DAMAGE, Action.HEAL, Action.WELL_FED, Action.BUFF,
+            Action.WEAKEN_UNTIL_NEXT_TURN, Action.DRAW, Action.GAIN_XP);
     public enum CountScope { NONE, FRIENDLY, ENEMY, ALL }
     public record Effect(Trigger trigger, Action action, Aim target, BoardKind boardKind, MobType type, int amount,
                          int attack, int health, Identifier card, boolean excludeSelf, Keyword keyword, List<Identifier> pool,
                          CountScope countScope, BoardKind countKind, MobType countType, boolean countExcludeSelf,
-                         Scope eventScope, MobType eventType, Gate gate, HandChooser chooser) {
+                         Scope eventScope, MobType eventType, Gate gate, HandChooser chooser, boolean randomKeyword, Boost boost) {
+        public Effect(Trigger trigger, Action action, Aim target, BoardKind boardKind, MobType type, int amount,
+                      int attack, int health, Identifier card, boolean excludeSelf, Keyword keyword, List<Identifier> pool,
+                      CountScope countScope, BoardKind countKind, MobType countType, boolean countExcludeSelf,
+                      Scope eventScope, MobType eventType, Gate gate, HandChooser chooser, boolean randomKeyword) {
+            this(trigger, action, target, boardKind, type, amount, attack, health, card, excludeSelf, keyword, pool,
+                    countScope, countKind, countType, countExcludeSelf, eventScope, eventType, gate, chooser, randomKeyword, null);
+        }
+        public Effect(Trigger trigger, Action action, Aim target, BoardKind boardKind, MobType type, int amount,
+                      int attack, int health, Identifier card, boolean excludeSelf, Keyword keyword, List<Identifier> pool,
+                      CountScope countScope, BoardKind countKind, MobType countType, boolean countExcludeSelf,
+                      Scope eventScope, MobType eventType, Gate gate, HandChooser chooser) {
+            this(trigger, action, target, boardKind, type, amount, attack, health, card, excludeSelf, keyword, pool,
+                    countScope, countKind, countType, countExcludeSelf, eventScope, eventType, gate, chooser, false);
+        }
         public Effect(Trigger trigger, Action action, Aim target, BoardKind boardKind, MobType type, int amount,
                       int attack, int health, Identifier card, boolean excludeSelf, Keyword keyword, List<Identifier> pool,
                       CountScope countScope, BoardKind countKind, MobType countType, boolean countExcludeSelf,
@@ -62,7 +93,26 @@ public final class CardCatalog {
     }
     public static Scope defaultScope(Trigger t) { return t == Trigger.HEALED ? Scope.SELF : Scope.FRIENDLY; }
     public record Entry(CardDefinition definition, String name, String text, boolean autoText,
-                        Passive passive, int passiveAmount, List<Effect> effects, MobType auraType, boolean deleted, int auraHealth, CastFx castFx, DeathFx deathFx, ArrivalFx arrivalFx, BoardKind auraKind) {
+                        Passive passive, int passiveAmount, List<Effect> effects, MobType auraType, boolean deleted, int auraHealth, CastFx castFx, DeathFx deathFx, ArrivalFx arrivalFx, BoardKind auraKind, Keyword negateKeyword,
+                        Element element, Element ampElement, BoostHow ampHow, boolean potion, int uses) {
+        public Entry(CardDefinition definition, String name, String text, boolean autoText,
+                     Passive passive, int passiveAmount, List<Effect> effects, MobType auraType, boolean deleted, int auraHealth, CastFx castFx, DeathFx deathFx, ArrivalFx arrivalFx, BoardKind auraKind, Keyword negateKeyword,
+                     Element element, Element ampElement, BoostHow ampHow, boolean potion) {
+            this(definition, name, text, autoText, passive, passiveAmount, effects, auraType, deleted, auraHealth, castFx, deathFx, arrivalFx, auraKind, negateKeyword, element, ampElement, ampHow, potion, 0);
+        }
+        public Entry(CardDefinition definition, String name, String text, boolean autoText,
+                     Passive passive, int passiveAmount, List<Effect> effects, MobType auraType, boolean deleted, int auraHealth, CastFx castFx, DeathFx deathFx, ArrivalFx arrivalFx, BoardKind auraKind, Keyword negateKeyword,
+                     Element element, Element ampElement, BoostHow ampHow) {
+            this(definition, name, text, autoText, passive, passiveAmount, effects, auraType, deleted, auraHealth, castFx, deathFx, arrivalFx, auraKind, negateKeyword, element, ampElement, ampHow, false);
+        }
+        public Entry(CardDefinition definition, String name, String text, boolean autoText,
+                     Passive passive, int passiveAmount, List<Effect> effects, MobType auraType, boolean deleted, int auraHealth, CastFx castFx, DeathFx deathFx, ArrivalFx arrivalFx, BoardKind auraKind, Keyword negateKeyword) {
+            this(definition, name, text, autoText, passive, passiveAmount, effects, auraType, deleted, auraHealth, castFx, deathFx, arrivalFx, auraKind, negateKeyword, null, null, BoostHow.DOUBLE);
+        }
+        public Entry(CardDefinition definition, String name, String text, boolean autoText,
+                     Passive passive, int passiveAmount, List<Effect> effects, MobType auraType, boolean deleted, int auraHealth, CastFx castFx, DeathFx deathFx, ArrivalFx arrivalFx, BoardKind auraKind) {
+            this(definition, name, text, autoText, passive, passiveAmount, effects, auraType, deleted, auraHealth, castFx, deathFx, arrivalFx, auraKind, null, null, null, BoostHow.DOUBLE);
+        }
         public Entry(CardDefinition definition, String name, String text, boolean autoText,
                      Passive passive, int passiveAmount, List<Effect> effects) {
             this(definition, name, text, autoText, passive, passiveAmount, effects, null, false, 0, CastFx.AUTO, DeathFx.AUTO, ArrivalFx.AUTO, BoardKind.MOB);
@@ -139,23 +189,44 @@ public final class CardCatalog {
                     if (keywords.contains(keyword)) throw new IllegalArgumentException("Duplicate keyword");
                     keywords.add(keyword);
                 }
-                if (keywords.contains(Keyword.BLOCK)) keywords.remove(Keyword.SHIELD); // Older catalogues printed Shield on walls.
                 if (keywords.contains(Keyword.BLOCK) && (kind != CardKind.MOB || attack != 0))
                     throw new IllegalArgumentException("Blocks must be mobs with 0 attack");
-                if (kind != CardKind.MOB && keywords.stream().anyMatch(k -> k != Keyword.RANGED && k != Keyword.IGNORE_SHIELD))
-                    throw new IllegalArgumentException("Tools support Ranged and Ignore Shield; other combat keywords need a mob");
-                if (spell && !keywords.isEmpty()) throw new IllegalArgumentException("Actions and Enchantments cannot have combat keywords");
+                if (kind != CardKind.MOB && keywords.stream().anyMatch(k -> k != Keyword.RANGED && k != Keyword.IGNORE_SHIELD && k != Keyword.REPAIR
+                        && k != Keyword.THROW && k != Keyword.LOYALTY && k != Keyword.CHANNELING))
+                    throw new IllegalArgumentException("Tools support Ranged, Ignore Shield, Repair and Throw; other combat keywords need a mob");
+                if (kind != CardKind.TOOL && keywords.contains(Keyword.THROW)) throw new IllegalArgumentException("Throw is a tool keyword");
+                if (kind != CardKind.ENCHANTMENT && (keywords.contains(Keyword.LOYALTY) || keywords.contains(Keyword.CHANNELING)))
+                    throw new IllegalArgumentException("Loyalty and Channeling are enchantment keywords");
+                if (kind != CardKind.TOOL && keywords.contains(Keyword.REPAIR))
+                    throw new IllegalArgumentException("Repair is a tool keyword");
+                if (spell && keywords.stream().anyMatch(k -> kind != CardKind.ENCHANTMENT || k != Keyword.LOYALTY && k != Keyword.CHANNELING))
+                    throw new IllegalArgumentException("Actions and Enchantments cannot have combat keywords");
                 String name = string(c, "name", 80), text = string(c, "text", 1200), art = string(c, "art", 120);
                 if (name.isBlank()) throw new IllegalArgumentException("Name is empty");
                 if (!art.isEmpty()) Identifier.parse(art);
                 Passive passive = enumeration(Passive.class, c, "passive");
                 int passiveAmount = integer(c, "passiveAmount", 0, 100);
                 int auraHealth = c.has("auraHealth") ? integer(c, "auraHealth", 0, 100) : 0;
-                BoardKind auraKind = optionalEnum(BoardKind.class, c, "auraKind", BoardKind.MOB);
+                // Negate keyword reuses the aura filters to pick which enemies it affects; it defaults to mobs and blocks.
+                BoardKind auraKind = optionalEnum(BoardKind.class, c, "auraKind", passive == Passive.NEGATE_KEYWORD ? BoardKind.BOTH : BoardKind.MOB);
                 if ((passive == Passive.AURA_ATTACK || passive == Passive.AURA_STATS)
                         && auraKind != BoardKind.MOB && passiveAmount > 0)
                     throw new IllegalArgumentException("Auras affecting blocks can only grant Health; set Attack bonus to 0");
                 if (passive != Passive.NONE && kind != CardKind.MOB) throw new IllegalArgumentException("Passives require a mob");
+                Keyword negateKeyword = passive == Passive.NEGATE_KEYWORD ? optionalEnum(Keyword.class, c, "negateKeyword", null) : null;
+                Element cardElement = optionalEnum(Element.class, c, "element", null);
+                // Potions are the Actions a Brewing Stand can upgrade.
+                boolean potion = c.has("potion") && bool(c, "potion");
+                // Uses: a board card is destroyed after its triggered abilities have run this many times (0 = no limit).
+                int uses = c.has("uses") ? integer(c, "uses", 0, 20) : 0;
+                if (uses > 0 && kind != CardKind.MOB) throw new IllegalArgumentException("Only mobs and blocks can have limited uses");
+                if (potion && kind != CardKind.ITEM) throw new IllegalArgumentException("Only Actions can be potions");
+                Element ampElement = passive == Passive.AMPLIFY_ELEMENT ? optionalEnum(Element.class, c, "ampElement", null) : null;
+                BoostHow ampHow = optionalEnum(BoostHow.class, c, "ampHow", BoostHow.DOUBLE);
+                if (passive == Passive.AMPLIFY_ELEMENT && ampElement == null) throw new IllegalArgumentException("Amplify element needs an element");
+                if (passive == Passive.AMPLIFY_ELEMENT && ampHow == BoostHow.PLUS && passiveAmount < 1) throw new IllegalArgumentException("Amplify +damage needs an amount of at least 1");
+                if (passive == Passive.NEGATE_KEYWORD && !NEGATABLE.contains(negateKeyword))
+                    throw new IllegalArgumentException("Negate keyword needs Shield, Sprint, Ranged or Ignore Shield");
                 if ((passive == Passive.BATTLE_HARDENED || passive == Passive.SCHOOLING) && keywords.contains(Keyword.BLOCK))
                     throw new IllegalArgumentException("Attack-growth passives require a non-block mob");
                 List<Effect> effects = new ArrayList<>();
@@ -169,15 +240,24 @@ public final class CardCatalog {
                     Action action = enumeration(Action.class, e, "action");
                     Aim target = enumeration(Aim.class, e, "target");
                     String filter = string(e, "type", 40), card = string(e, "card", 120);
+                    // Grant keyword can roll a random combat keyword: "keyword": "RANDOM".
+                    boolean randomKeyword = e.has("keyword") && e.get("keyword").isJsonPrimitive() && "RANDOM".equals(e.get("keyword").getAsString());
                     Effect effect = new Effect(trigger, action, target, enumeration(BoardKind.class, e, "boardKind"), filter.isEmpty() ? null : MobType.valueOf(filter),
                             integer(e, "amount", 1, 100), integer(e, "attack", action == Action.BUFF ? -100 : 0, 100), integer(e, "health", 0, 100),
                             card.isEmpty() ? null : Identifier.parse(card), bool(e, "excludeSelf"),
-                            optionalEnum(Keyword.class, e, "keyword", null), pool(e),
+                            randomKeyword ? null : optionalEnum(Keyword.class, e, "keyword", null), pool(e),
                             optionalEnum(CountScope.class, e, "countScope", CountScope.NONE),
                             optionalEnum(BoardKind.class, e, "countKind", BoardKind.BOTH),
                             optionalEnum(MobType.class, e, "countType", null), e.has("countExcludeSelf") && bool(e, "countExcludeSelf"),
                             optionalEnum(Scope.class, e, "eventScope", defaultScope(trigger)), optionalEnum(MobType.class, e, "eventType", null),optionalEnum(Gate.class,e,"gate",Gate.ALWAYS),
-                            optionalEnum(HandChooser.class, e, "chooser", HandChooser.YOU));
+                            optionalEnum(HandChooser.class, e, "chooser", HandChooser.YOU), randomKeyword, boost(e));
+                    if (effect.boost() != null) {
+                        Boost b = effect.boost();
+                        if (!BOOSTABLE.contains(action)) throw new IllegalArgumentException("Boosts work on Damage, Tool damage, Heal, Well Fed, Buff, Weaken, Draw and Gain XP");
+                        if (b.when().perTarget() && (action == Action.DRAW || action == Action.GAIN_XP)) throw new IllegalArgumentException("Target conditions need an action that hits targets");
+                        if (b.how() == BoostHow.PLUS && (b.amount() < 1 || b.amount() > 20)) throw new IllegalArgumentException("Boost bonus must be 1 to 20");
+                    }
+                    if (randomKeyword && action != Action.GRANT_KEYWORD) throw new IllegalArgumentException("Only Grant keyword can pick a random keyword");
                     if(effect.gate()!=Gate.ALWAYS && trigger==Trigger.PLAY) throw new IllegalArgumentException("Timing conditions require a non-Play trigger");
                     if (e.has("chooser") && !string(e, "chooser", 40).isEmpty() && !handPick(action)) throw new IllegalArgumentException("Only Discard, Steal and Shuffle from hand choose a card");
                     if (handAction(action)) {
@@ -210,7 +290,7 @@ public final class CardCatalog {
                         throw new IllegalArgumentException("Return and copy allows at most 10 extra copies");
                     if (action == Action.CHOOSE_FROM_DECK && (target != Aim.SELF || effect.excludeSelf() || effect.amount() > 3))
                         throw new IllegalArgumentException("Choose from deck uses SELF, 1–3 options, and no exclude-self filter");
-                    boolean generator = action == Action.DRAW || action == Action.GAIN_XP || action == Action.GAIN_MAX_XP || action == Action.GIVE || action == Action.GIVE_RANDOM || action == Action.GIVE_RANDOM_CLASS || action == Action.SUMMON || action == Action.ENCHANT_TOOL || action == Action.UPGRADE_TOOL;
+                    boolean generator = action == Action.DRAW || action == Action.GAIN_XP || action == Action.GAIN_MAX_XP || action == Action.GIVE || action == Action.GIVE_RANDOM || action == Action.GIVE_RANDOM_CLASS || action == Action.SUMMON || action == Action.ENCHANT_TOOL || action == Action.UPGRADE_TOOL || action == Action.PICK_ONE || action == Action.BREW_POTION;
                     if (generator && target != Aim.SELF) throw new IllegalArgumentException(action + " uses SELF (its owner)");
                     if (generator && effect.amount() > 10) throw new IllegalArgumentException("Draw/summon/give/XP amount cannot exceed 10");
                     if (generator && (effect.type() != null || effect.excludeSelf())) throw new IllegalArgumentException("Owner effects cannot filter mobs");
@@ -230,12 +310,14 @@ public final class CardCatalog {
                             && kind != CardKind.MOB) throw new IllegalArgumentException("This trigger requires a mob or block");
                     if (trigger == Trigger.HARVEST && type != MobType.CROP) throw new IllegalArgumentException("Harvest requires a Crop");
                     if (trigger == Trigger.DISMANTLE && !keywords.contains(Keyword.BLOCK)) throw new IllegalArgumentException("Dismantle requires a block");
-                    if ((action == Action.GRANT_KEYWORD || action == Action.BUFF && effect.keyword() != null) && (effect.keyword() != Keyword.SHIELD && effect.keyword() != Keyword.SPRINT && effect.keyword() != Keyword.RANGED && effect.keyword() != Keyword.IGNORE_SHIELD))
+                    if (!effect.randomKeyword() && (action == Action.GRANT_KEYWORD || action == Action.BUFF && effect.keyword() != null) && (effect.keyword() != Keyword.SHIELD && effect.keyword() != Keyword.SPRINT && effect.keyword() != Keyword.RANGED && effect.keyword() != Keyword.IGNORE_SHIELD))
                         throw new IllegalArgumentException("Grant keyword requires Shield, Sprint, Ranged or Ignore Shield");
                     if (effect.keyword() != null && effect.keyword() != Keyword.SHIELD && effect.boardKind() != BoardKind.MOB)
                         throw new IllegalArgumentException("Sprint/Ranged/Ignore Shield grants require mobs only");
                     if (action != Action.GRANT_KEYWORD && action != Action.BUFF && effect.keyword() != null) throw new IllegalArgumentException("Only Buff and Grant keyword use keyword");
-                    if ((action == Action.GIVE_RANDOM) != !effect.pool().isEmpty()) throw new IllegalArgumentException("Random Give requires a nonempty card pool");
+                    if ((action == Action.GIVE_RANDOM || action == Action.PICK_ONE) != !effect.pool().isEmpty()) throw new IllegalArgumentException("Random Give and Pick one need a card list");
+                    if (action == Action.PICK_ONE && (effect.pool().size() < 2 || effect.pool().size() > 3 || effect.pool().stream().distinct().count() != effect.pool().size()))
+                        throw new IllegalArgumentException("Pick one needs 2 or 3 different cards to choose from");
                     if (effect.countScope() != CountScope.NONE && !List.of(Action.BUFF, Action.DAMAGE, Action.HEAL, Action.WELL_FED, Action.DRAW, Action.GIVE, Action.GIVE_RANDOM, Action.GIVE_RANDOM_CLASS, Action.SUMMON, Action.GAIN_XP).contains(action))
                         throw new IllegalArgumentException("For each requires a numeric action");
                     if (!observed(trigger) && (e.has("eventScope") && effect.eventScope() != defaultScope(trigger) || effect.eventType() != null))
@@ -268,11 +350,14 @@ public final class CardCatalog {
                         if (effect.card() != null) related.add(new CardDefinition.Related(k, effect.card()));
                     }
                 }
-                if (kind == CardKind.ENCHANTMENT && effects.stream().noneMatch(e -> e.action() == Action.ENCHANT_TOOL || e.trigger() != Trigger.PLAY))
+                if (kind == CardKind.ENCHANTMENT && !keywords.contains(Keyword.LOYALTY) && !keywords.contains(Keyword.CHANNELING)
+                        && effects.stream().noneMatch(e -> e.action() == Action.ENCHANT_TOOL || e.trigger() != Trigger.PLAY))
                     throw new IllegalArgumentException("An enchantment needs a tool stat bonus or an attached triggered ability");
+                if (uses > 0 && effects.stream().noneMatch(CardCatalog::spendsUse))
+                    throw new IllegalArgumentException("Limited uses need a triggered ability (not Spawn or Drop) to count");
                 CardDefinition definition = new CardDefinition(kind, cardClass, rarity, cost, attack, health, type,
                         List.copyOf(keywords), List.copyOf(related), bool(c, "token"), art.isEmpty() ? null : art);
-                entries.put(id, new Entry(definition, name, text, bool(c, "autoText"), passive, passiveAmount, List.copyOf(effects), optionalEnum(MobType.class, c, "auraType", null), c.has("deleted") && bool(c, "deleted"), auraHealth, optionalEnum(CastFx.class,c,"castFx",CastFx.AUTO), optionalEnum(DeathFx.class,c,"deathFx",DeathFx.AUTO), optionalEnum(ArrivalFx.class,c,"arrivalFx",ArrivalFx.AUTO), auraKind));
+                entries.put(id, new Entry(definition, name, text, bool(c, "autoText"), passive, passiveAmount, List.copyOf(effects), optionalEnum(MobType.class, c, "auraType", null), c.has("deleted") && bool(c, "deleted"), auraHealth, optionalEnum(CastFx.class,c,"castFx",CastFx.AUTO), optionalEnum(DeathFx.class,c,"deathFx",DeathFx.AUTO), optionalEnum(ArrivalFx.class,c,"arrivalFx",ArrivalFx.AUTO), auraKind, negateKeyword, cardElement, ampElement, ampHow, potion, uses));
             } catch (RuntimeException e) { throw new IllegalArgumentException(label + ": " + e.getMessage(), e); }
         }
         for (var pair : entries.entrySet()) for (Effect effect : pair.getValue().effects()) {
@@ -285,6 +370,8 @@ public final class CardCatalog {
                 if ((effect.action() == Action.SUMMON || effect.action() == Action.TRANSFORM) && !ref.definition().isMob())
                     throw new IllegalArgumentException(pair.getKey() + ": Summon requires a mob");
             }
+            if (effect.boost() != null && effect.boost().card() != null && !entries.containsKey(effect.boost().card()))
+                throw new IllegalArgumentException(pair.getKey() + ": Unknown boost card " + effect.boost().card());
             for (Identifier choice : effect.pool()) if (!entries.containsKey(choice) || !pair.getValue().deleted() && entries.get(choice).deleted())
                 throw new IllegalArgumentException(pair.getKey() + ": Unknown pool card " + choice);
         }
@@ -355,6 +442,8 @@ public final class CardCatalog {
     public static String description(Entry e) {
         if (!e.autoText()) return e.text();
         List<String> lines = new ArrayList<>();
+        // An action's element is printed on its type label instead of in the rules text.
+        if (e.element() != null && e.definition().kind() != CardKind.ITEM) lines.add(title(e.element().name()) + ".");
         e.definition().keywords().stream().filter(k -> k != Keyword.SPAWN && k != Keyword.DROP && k != Keyword.CLEANSE && k != Keyword.BAD_OMEN && k != Keyword.WITHER && k != Keyword.BLOCK).forEach(k -> lines.add(title(k.name()) + "."));
         if (e.passive() == Passive.ARMOR) lines.add("Reduce incoming damage by " + e.passiveAmount() + ".");
         if (e.hasAura()) {
@@ -363,6 +452,10 @@ public final class CardCatalog {
                     : "+" + e.passiveAmount() + " Attack and +" + e.auraHealthBonus() + " Health";
             lines.add("Your other " + (e.auraType() == null ? "" : title(e.auraType().name()) + " ")  + (e.auraKind() == BoardKind.BLOCK ? "blocks" : e.auraKind() == BoardKind.BOTH ? "mobs and blocks" : "mobs") + " have " + stats + ".");
         }
+        if (e.passive() == Passive.AMPLIFY_ELEMENT && e.ampElement() != null) lines.add("Your " + title(e.ampElement().name()) + " effects deal "
+                + (e.ampHow() == BoostHow.TRIPLE ? "triple" : e.ampHow() == BoostHow.PLUS ? "+" + e.passiveAmount() : "double") + " damage.");
+        if (e.passive() == Passive.NEGATE_KEYWORD && e.negateKeyword() != null) lines.add("Enemy " + (e.auraType() == null ? "" : title(e.auraType().name()) + " ")
+                + (e.auraKind() == BoardKind.BLOCK ? "blocks" : e.auraKind() == BoardKind.MOB ? "mobs" : "mobs and blocks") + " lose " + title(e.negateKeyword().name()) + " while this is in play.");
         if (e.passive() == Passive.GRAZER) lines.add("At the end of your turn, if you control a Crop, restore " + e.passiveAmount() + " Health to this mob.");
         if (e.passive() == Passive.BATTLE_HARDENED) lines.add("After this survives damage, gain +" + e.passiveAmount() + " Attack. Once per turn.");
         if (e.passive() == Passive.SCHOOLING) lines.add("After you play another Aquatic mob, this gains +" + e.passiveAmount() + " Attack until the end of the turn.");
@@ -381,10 +474,12 @@ public final class CardCatalog {
                 case DAMAGE -> "Deal " + f.amount() + " damage to " + target;
                 case HEAL -> "Restore " + f.amount() + " Health to " + target;
                 case WELL_FED -> "Well Fed: restore " + f.amount() + " Health to " + target + "; excess healing increases maximum Health";
-                case GRANT_KEYWORD -> "Give " + target + " " + title(f.keyword().name());
+                case GRANT_KEYWORD -> "Give " + target + " " + (f.randomKeyword() ? "a random keyword it doesn't have" : title(f.keyword().name()));
                 case TRANSFORM -> "Transform " + target + " into " + ref;
                 case GIVE_RANDOM -> "Add " + f.amount() + (f.amount() == 1 ? " random card from [" : " random cards from [") + f.pool().stream().map(id -> current.entries().containsKey(id) ? current.entries().get(id).name() : id.getPath()).collect(java.util.stream.Collectors.joining(", ")) + "] to your hand";
                 case BAD_OMEN -> "Give " + target + " Bad Omen";
+                case BREW_POTION -> "Brew a potion in your hand: add Potency, Duration or Lingering";
+                case PICK_ONE -> "Pick one of [" + f.pool().stream().map(id -> current.entries().containsKey(id) ? current.entries().get(id).name() : id.getPath()).collect(java.util.stream.Collectors.joining(", ")) + "] to add to your hand";
                 case CLEANSE -> "Cleanse " + target;
                 case MINE -> "Mine " + target + ": remove it and trigger its Drop";
                 case CHOOSE_FROM_DECK -> "Choose one of up to " + f.amount() + " different "
@@ -417,6 +512,7 @@ public final class CardCatalog {
                     + (f.countType() == null ? "" : title(f.countType().name()) + " ")
                     + (f.countKind() == BoardKind.BLOCK ? "block" : f.countKind() == BoardKind.MOB ? "mob" : "mob or block")
                     + (f.countExcludeSelf() ? " other than this" : "");
+            action += boostText(f.boost());
             if (e.definition().kind() == CardKind.ENCHANTMENT && f.trigger() != Trigger.PLAY) trigger = "Your tool gains: " + trigger;
             if (!trigger.isEmpty() && trigger.equals(previousTrigger)) {
                 String previous = lines.removeLast();
@@ -431,7 +527,40 @@ public final class CardCatalog {
             }
             lines.add((trigger.isEmpty() ? "" : trigger + ": ") + action + ".");
         }
+        if (e.uses() > 0) lines.add(e.uses() == 1 ? "After 1 use, this is destroyed." : "After " + e.uses() + " uses, this is destroyed.");
         return String.join(" ", lines);
+    }
+    /** Which triggers count as a use of a card with limited uses: everything but Spawn (play) and Drop (death). */
+    public static boolean spendsUse(Effect e) { return e.trigger() != Trigger.PLAY && e.trigger() != Trigger.DROP; }
+    private static Boost boost(JsonObject e) {
+        if (!e.has("boost") || e.get("boost").isJsonNull()) return null;
+        if (!e.get("boost").isJsonObject()) throw new IllegalArgumentException("boost must be an object");
+        JsonObject b = e.getAsJsonObject("boost");
+        String card = b.has("card") ? string(b, "card", 120) : "";
+        BoostHow how = optionalEnum(BoostHow.class, b, "how", BoostHow.DOUBLE);
+        return new Boost(enumeration(BoostWhen.class, b, "when"), card.isEmpty() ? null : Identifier.parse(card),
+                optionalEnum(MobType.class, b, "type", null), optionalEnum(BoardKind.class, b, "kind", BoardKind.BOTH),
+                how, how == BoostHow.PLUS ? integer(b, "amount", 0, 100) : 0);
+    }
+    // " (doubled if you control Netherrack)" - kept word for word in step with the Workshop's model.js.
+    private static String boostText(Boost b) {
+        if (b == null) return "";
+        String change = switch (b.how()) { case DOUBLE -> "doubled"; case TRIPLE -> "tripled"; case PLUS -> "+" + b.amount(); };
+        String noun = b.kind() == BoardKind.BLOCK ? "block" : b.kind() == BoardKind.MOB ? "mob" : "mob or block";
+        String plural = b.kind() == BoardKind.BLOCK ? "blocks" : b.kind() == BoardKind.MOB ? "mobs" : "mobs or blocks";
+        String typed = b.type() == null ? "" : title(b.type().name()) + " ";
+        String named = b.card() == null ? null : current.entries().containsKey(b.card()) ? current.entries().get(b.card()).name() : b.card().getPath();
+        String one = named != null ? named : ("AEIOU".indexOf((typed + noun).charAt(0)) >= 0 ? "an " : "a ") + typed + noun;
+        String condition = switch (b.when()) {
+            case YOU_CONTROL -> "if you control " + one;
+            case ENEMY_CONTROLS -> "if an enemy controls " + one;
+            case ANYONE_CONTROLS -> "if " + one + " is in play";
+            case TARGET_IS -> "against " + (named != null ? named : typed + plural);
+            case TARGET_FROZEN -> "against Frozen targets";
+            case TARGET_WITHERED -> "against Withered targets";
+            case TARGET_DAMAGED -> "against damaged targets";
+        };
+        return " (" + change + " " + condition + ")";
     }
     private static String triggerText(Entry e, Effect f) {
         boolean tool = e.definition().kind() == CardKind.TOOL || e.definition().kind() == CardKind.ENCHANTMENT;

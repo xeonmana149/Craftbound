@@ -506,3 +506,180 @@ The binder reserves recessed pockets on collection, card back and board design p
 
 - Before attacking, the AI checks for a win with its ready attackers. When the opposing board threatens lethal next turn, it can sacrifice a mob, combine attackers against one threat, or clear several threats. The estimate uses visible mobs, tools, Shields, armor, Freeze and Wither.
 - Match-engine checks cover defensive trades, multiple kills, Shield bypass, and taking immediate lethal. The offline Gradle checks, game-test compilation and JAR build passed. Build log: build/ai-board-lethal-check.log.
+
+## 2026-11-06 — Repair tools and Shield blocks (Claude)
+
+- New tool keyword `REPAIR` (appended to Keyword). With a Repair tool equipped, the hero can target one of its own damaged blocks. This heals the block by the hero's attack, capped at max Health. It uses the hero's attack and costs 1 Durability, and the last use breaks the tool. It deals no damage and takes no retaliation. The tool still attacks enemies normally. The ATTACK event carries `MatchEvent.ATTACK_REPAIR` (extra=1); MatchScreen plays a lunge with an anvil sound for it. `Match.heroRepairs`, `Match.repair` and the own-side branch in `whyCantAttack` hold the rules. In MatchScreen, `isAttackTargetFor` highlights damaged own blocks. Codex: please keep both MatchScreen spans when editing that file. MatchAI does not use Repair yet, and MultiplayerBoardScreen doesn't offer own-block targets.
+- Blocks can now have Shield, printed or granted. The old strip in CardCatalog/model.js/editor.js and the exclusions in Minion.has, Match.grantKeyword and CardEffects.matches are removed. A Shield block still taunts, and it can be attacked past the front row by melee. CombatTactics line ~60 still assumes blocks behind a front row are unreachable without Ranged; Codex may want to update it for Shield blocks.
+- Checks: RepairToolChecks, plus the updated "Blocks can gain Shield" check in WorkshopChecks. Offline checkCards/checkCardFaces/checkVendor pass. Workshop Node checks pass except `checks.cjs:24`, which expects 101 cards; the committed test-cards.json has 115, so this assertion was already stale at 3285fbd. Not playtested in a client.
+
+## 2026-11-06 — Binder formats, Egg throw and Card Master board control
+
+- My Decks in a carried binder opens on 1v1. Switching to 2v2 or Commander filters the saved lists and sets the format for New Deck. Editing returns to the same category. Tables keep their own mode.
+- Egg travels straight from the casting hero to the chosen target. Damage follows the 175 ms flight in the duel animation queue. The shell and yolk splat fades over 270 ms. Four-seat boards also use the original public target position, including when a unit is removed.
+- The Card Master builds an opening curve from its legal card pool. It weighs combined attacks, the cost of a sacrifice, threats to valuable allies, repeatable block effects and finishing a mob with targeted damage. Immediate wins and immediate survival take priority.
+- Offline Gradle checks and the playable JAR build passed. In 108 paired headless matchups using the active Workshop catalogue, the previous and updated AI swapped seats on identical decks and seeds. The updated AI won 137 of 216 matches. Visual changes have not been playtested in a running client.
+
+## 2026-11-06 — Random keyword grants, no duplicate grants (Claude)
+
+- Grant keyword accepts `"keyword": "RANDOM"`. The Workshop lists it as "Random (one it doesn't have)". It is stored as the new `Effect.randomKeyword` record component; a 20-arg constructor keeps old call sites working. It rolls one of Shield, Sprint, Ranged or Ignore Shield that the target lacks. Blocks only roll Shield. Rules text: "Give X a random keyword it doesn't have". Only Grant keyword may use RANDOM; Buff may not.
+- A Grant keyword effect can't target something that already has the keyword, or has every option for Random. `CardEffects.grantOptions` holds the rule. `canTarget(card, target, has)` uses live keywords: Match.validTargets uses Minion::has, and MatchScreen uses the mob's shield/sprint/ranged/ignoreShield flags. Random and all-targets grants skip those cards in `possibleTargets`. A card with other chosen effects (e.g. a buff) can still target them.
+- One-line MatchAI change (line ~147): the GRANT_KEYWORD usefulness check now calls `CardEffects.grantOptions`, so the AI understands Random.
+- Checks: KeywordGrantChecks.java and keyword-grant-checks.cjs. Offline checkCards/checkCardFaces/checkVendor pass, and all Workshop Node checks pass except the stale 101-card count in checks.cjs:24. Not playtested in a client.
+
+## 2026-11-06 — Workshop rule explanations must cover every mechanic (Claude)
+
+- Owner rule: any new keyword or mechanic must also get a rule explanation in the Workshop's "Browse rule explanations" panel. Add it to `GUIDE` in tools/card-editor/model.js, in the section for its kind: trigger, action, target, passive, keyword or chooser.
+- The browser gained Keywords and "Who picks (hand effects)" sections. Keyword tick boxes show their explanation on hover. Explanations are filled in for Repair, Shield on blocks, the Random keyword grant, and the four hand actions plus their choosers, which were missing.
+- `tools/card-editor/guide-checks.cjs` fails when anything in KEYWORDS, TRIGGERS, ACTIONS, TARGETS, PASSIVES or HAND_CHOOSERS has no explanation. It also fails when a Java Trigger/Action/Aim/Passive value is missing from the Workshop lists; DISMANTLE is exempt as retired.
+
+## 2026-11-06 — Negate keyword passive (Claude)
+
+- New passive `NEGATE_KEYWORD`, appended to the Passive enum, with a card field `"negateKeyword"`: SHIELD, SPRINT, RANGED or IGNORE_SHIELD. It is stored as the new `Entry.negateKeyword` component; the old 14-arg Entry constructor still works. While the card is on the board, enemy mobs and blocks lose that keyword, even if printed, trained or granted. Rules text: "Enemy mobs and blocks lose X while this is in play." The intended use is Soul Sand negating Sprint.
+- `Minion.negatedKeywords` makes `has()` return false. `Match.refreshNegations()`, run at the end of `refreshAuras()`, recomputes it. A fresh, unattacked Sprint mob loses `ready` when negated and regains it when the source leaves. `grantKeyword` keeps a negated grant but doesn't ready the mob. New `MatchEvent.STATUS_NEGATED` (11, extra = Keyword ordinal); MatchScreen clears the flag and floats "No Sprint" etc. Restoring sends the normal STATUS_SHIELD/SPRINT/RANGED/IGNORE_SHIELD events.
+- AI and CombatTactics see negation through `Minion.has`. No AI-specific changes.
+- Workshop: Passive "Negate keyword" has a "Keyword enemies lose" picker. GUIDE.passive and GUIDE.negateKeyword explain it, and passive recipes carry negateKeyword. Checks: NegateKeywordChecks.java and negate-keyword-checks.cjs. All offline Gradle checks pass. Not playtested in a client.
+- Follow-up: Negate keyword now reuses `auraKind` and `auraType` to choose which enemies it hits: mobs, blocks or both, optionally one mob type. auraKind defaults to BOTH for this passive. The Workshop shows "Negate affects" and "Negate affects this mob type". Rules text follows the choice, e.g. "Enemy blocks lose Shield…" or "Enemy Undead mobs lose Sprint…". Covered in NegateKeywordChecks and negate-keyword-checks.cjs.
+
+## 2026-11-06 — Pick one action (Claude)
+
+- New action `PICK_ONE`, appended to Action. It uses the effect's `pool` (2 or 3 different card IDs) and targets SELF. When it triggers, the owner chooses one option and it is added to their hand via `giveCard`; a full hand burns it as usual. Rules text: "Pick one of [A, B, C] to add to your hand". Example: a Cauldron block with End of turn → Pick one of three potion tokens.
+- Built on the HandChoice queue: `Match.pickOne`, `HandChoice.pickOne()`, `choiceCards` returns the offers, and `resolveChoice` gives the pick. The 30-second timeout picks at random. The AI and team tables (`interactiveChoices()` false) pick at random immediately. HandPickOverlay title: "Pick one to add to your hand".
+- Workshop: "Cards to choose from (Ctrl-click 2 or 3)" multi-select. Options show as linked cards, and GUIDE.action.PICK_ONE explains it. Checks: PickOneChecks.java (seat-aware because of the coin toss) and pick-one-checks.cjs. Offline Gradle checks pass. Not playtested in a client.
+
+## 2026-11-06 — Elements, effect boosts and Amplify element (Claude)
+
+- **Elements.** New `CardCatalog.Element` enum (append only): FIRE, FROST, WITHER, POISON, LIGHTNING, EXPLOSIVE, WATER, MAGIC. Optional card field `"element"` on any kind, stored as `Entry.element`. Auto text starts with "Fire." etc.
+- **Boosts.** Optional effect field `"boost": {when, card, kind, type, how, amount}`, stored as `Effect.boost` (a `CardCatalog.Boost` record; the 21-arg Effect constructor still works). `when` is one of YOU_CONTROL, ENEMY_CONTROLS, ANYONE_CONTROLS, TARGET_IS, TARGET_FROZEN, TARGET_WITHERED or TARGET_DAMAGED; TARGET_* conditions are checked for each target. `how` is DOUBLE, TRIPLE or PLUS (amount 1–20). Boosts are allowed on `CardCatalog.BOOSTABLE`: Damage, Tool damage, Heal, Well Fed, Buff (both stats), Weaken, Draw and Gain XP. Draw and Gain XP can't use target conditions. Text adds a bracket, e.g. "Deal 3 damage to enemy mobs and blocks (doubled if you control Netherrack)." `CardEffects.boostValue` and `boostHolds` hold the logic.
+- **Amplify element.** New passive `AMPLIFY_ELEMENT` with card fields `ampElement` and `ampHow` (DOUBLE/TRIPLE/PLUS; PLUS uses passiveAmount). Damage from effects on the controller's cards of that element is changed by `CardEffects.amplify`: bonuses add, then the biggest multiplier applies once. It applies after the boost. Mob and hero attacks are not affected. Text: "Your Fire effects deal double damage."
+- Workshop: Element select on every card; Amplify fields; a "Boost (optional)" block on boostable effects using `data-boost` inputs that edit `f.boost`. GUIDE has `element` and `boost` sections and the AMPLIFY_ELEMENT passive; guide-checks.cjs covers them, and the browser lists Elements and Boosts. Java and JS wording must stay identical: `CardCatalog.boostText` and `model.js boostText`.
+- Checks: ElementBoostChecks.java covers Flint + Netherrack 3→6, enemy Netherrack not counting, Amplify ×2 stacking with the boost, Frozen ×3 per target, +2 vs Undead, and validation. element-boost-checks.cjs covers wording and validation. AI and client damage previews don't account for boosts yet. Not playtested in a client.
+
+## 2026-11-06 — Row-limited Shield on blocks (Claude)
+- Shield on a block no longer works as a full taunt. New rule, in `Match.shieldStops(board, defender)`. A front-row mob with Shield still guards everything, including Shield blocks. A block with Shield guards only the hero and other blocks. Enemy front-row mobs stay attackable, and the Shield block itself still needs the front row cleared or a Ranged attack. The old exception for Shield blocks in the front-row check of `whyCantAttack` is gone. New failure reason: "a block with Shield must be attacked first".
+- Ignore Shield gets past both kinds of Shield, as before.
+- The client mirror is `MatchScreen.shieldStops(Mob)`, which replaces `enemyHasShield()`. `CombatTactics.exposedAllyValue` uses `Match.shieldStops` to judge which allies a threat can reach.
+- Shield text is updated in lang and in the Workshop GUIDE. Tests: new RowShieldChecks. RepairToolChecks' Shield-wall assertions are flipped to the new rule.
+- Known approximation: `CombatTactics.Incoming.faceDamage` still treats every friendly Shield as absorbing attacks before face. It doesn't account for a Shield block being out of melee reach behind the front row, so the AI slightly overestimates incoming face damage. That's conservative, so it's fine for now.
+- Follow-up: Shield explanations rewritten everywhere for the row-limited rule.
+  - Lang `keyword.craftbound.shield.desc` drives the hand, binder, board and inspect tooltips.
+  - Workshop GUIDE text.
+  - Rules book (RulePage): ROWS, the SHIELD page (now 4 paragraphs, split into a mob part and a block part) and BLOCKS. The BLOCKS page no longer says blocks can't gain Shield.
+  - The Shield row in the Workshop `reference.html`.
+
+## 2026-11-06 — Element type labels on actions, Ender element, per-kind frame folders (Claude)
+- An Action (CardKind.ITEM) with an element shows the element on its bottom type label instead of "Action", like a spell school (`CardRenderer.kindLabel(id, card)`, used by the full face and the mini card). Actions without an element still say Action. For actions, the auto rules text no longer starts with "Fire."; other kinds still print the element first. Java `CardCatalog.description` and model.js `description` match.
+- `Element.ENDER` appended (enum is append-only), plus `Element.displayName()`. The Workshop has ELEMENTS + a GUIDE entry for Ender, and a GUIDE.element.LABEL note explaining the label rule. The Workshop preview shows the element on an action's type plate.
+- CardFrames now loads `textures/gui/card/base_<kind>/base_<kind>_<rarity>.png` (the owner moved the mob frames into `base_mob/` and added `base_enchantment/base_enchantment_common.png`). The old shared `base/` folder is still read as a fallback.
+- Tests: ElementBoostChecks and element-boost-checks.cjs now expect no element prefix on actions, and Ender on other kinds.
+- Follow-up (same day): card frames are now **one base per kind + one gem per rarity**.
+  - **Base:** `textures/gui/card/base_<kind>/base_<kind>.png` has an empty (transparent) gem socket.
+  - **Gem:** `textures/gui/card/gem/gem_<rarity>.png` is a 120x168 transparent overlay with only the 36 socket pixels (x56–63, y96–101) painted. It's drawn on top of the base, so it lands in the same spot on every kind. `CardFrames.Frame` is now `(texture, gem)`.
+  - **Fallback:** per-rarity bases are still used (with no gem overlay) when a kind has no single base.
+  - **Where the art came from:**
+    - The gems were cut from the owner's base_mob_<rarity>.png frames.
+    - base_mob.png is base_mob_common.png with the socket cleared.
+    - base_enchantment.png is the owner's own gemless base (saved as base_enchantmen.png, renamed).
+  - The per-rarity mob/enchantment files are now unused.
+  - MobFrameScenario expects base_mob.png + gem_<rarity>.png.
+
+## 2026-11-06 — Brewing Stand: Potency / Duration / Lingering on potions in hand (Claude)
+- **Potions:** new card field `"potion": true`, Actions only. It is stored as `Entry.potion`, a new last component; the old 18-arg Entry constructor delegates with false. The type label reads "Potion", or "<Element> Potion".
+- **New action `BREW_POTION`** (appended, target SELF, generator-style), usually At the end of your turn on a block. Text: "Brew a potion in your hand: add Potency, Duration or Lingering".
+- **`craftbound.card.Brew(potent, lasting, lingering)`** is stored on `CardRef.brew`, a new 4th component. Old constructors default to Brew.NONE; old snapshots read null, which becomes NONE. Wire format is bits: 1 Potency, 2 Duration, 4 Lingering, written as `"brew"` beside `"training"` in `MatchView.writeTraining`. Each upgrade can be added once.
+  - **Potency:** +1 to amount (damage/heal/draw/XP/summon/give...) or to attack/health above 0 (buff/weaken/tool).
+  - **Lingering:** CHOSEN_ENEMY becomes ENEMY_MOBS, CHOSEN_FRIENDLY becomes FRIENDLY_MOBS. For CHOSEN_ANY/CHARACTER, harmful actions hit enemies and helpful ones hit your mobs. `CardEffects.targetKind(CardRef)` returns NONE for lingering; every caller holding a CardRef now passes the ref.
+  - **Duration:** on play, `MatchPlayer.brewing` stores a BrewRepeat (the card without Duration, plus its aim). `beginTurnFor` runs it once via onItem before START_TURN triggers. A chosen mob that has left becomes Target.NONE.
+  - `CardEffects.run` applies `card.brew().apply(effects)`, so brews affect every effect path.
+- **Picking:** reuses HandChoice with action BREW_POTION.
+  - count 1 = pick the potion (offers = distinct brewable hand cards); this step is skipped when only one potion is brewable.
+  - count 2 = pick the upgrade (offers = the potion already brewed with each available upgrade; source = the original).
+  - `finishBrew` replaces the hand card, logs it publicly, and emits the new `MatchEvent.Type.BREW` (amount = hand index, extra = bits). The card is hidden from the opponent like DRAW.
+  - AI and team tables brew at random.
+- **Client:** `HandCard.brew`, plus `MatchState.readBrew`. The BREW event updates the hand card and plays the brewing stand sound. `CardRenderer.drawTrial(..., training, brew, ...)` uses `brewText`: green "Brewed: X." then the upgraded rules. TextKey includes brew. It's used for the hand, hand hover and the pick overlay; the picker titles are "Brewing Stand: choose a potion to brew / how to brew it". Played-card flight and reveal animations still show the unbrewed face.
+- **Workshop:** a Potion tick box on Actions, the BREW_POTION action, GUIDE.action.BREW_POTION, and a new GUIDE.brew section ("Potions and brewing", enforced by guide-checks). The preview label shows Potion.
+- **Tests:** BrewChecks. Also: Repair is now bold on cards (Cards.RULE_WORDS) and in the Workshop text/short-rules patterns.
+
+## 2026-11-06 — Limited uses on mobs and blocks (Claude)
+- **Card field `"uses"`** (0–20, mobs/blocks only) is stored as `Entry.uses`, the new last component; the old 19-arg constructor delegates with 0.
+  - Validation needs at least one effect whose trigger isn't PLAY (Spawn) or DROP: `CardCatalog.spendsUse`.
+  - Rules text ends "After N uses, this is destroyed." Java and model.js match.
+- **Spending uses:** in `CardEffects.run`, a run where at least one use-spending effect of the card's own trigger fired (`source.card == card`) calls `Match.spendUse`.
+  - `Minion.usesSpent` goes up by 1 (it starts at 0, so old saves are safe), and a `STATUS` event is sent with the new `STATUS_USES = 12` (extra = uses left).
+  - At 0 the card logs "X is used up." and is set to health 0, so Drop still fires.
+- **Client:**
+  - The board JSON carries `usesLeft`, read into `Mob.usesLeft`.
+  - A gold counter is drawn on the board card (bottom-left on blocks, top-left on mobs).
+  - Hovering shows "N uses left before it is destroyed".
+  - When a use is spent, "N uses left" / "Used up" floats up.
+- **Workshop:** a "Uses before destroyed" field for mobs and blocks, a new guide section "Card limits" (GUIDE.card.USES) that guide-checks enforces, and the UsesChecks test.
+- Follow-up to Brewing: the Brewing Stand only offers upgrades that would change the potion (`Brew.options`).
+  - **Potency:** only offered if some number is above 0 (already the case).
+  - **Duration:** only offered if repeating does something (`Brew.repeats`). Not for keyword grants, Wither, Totem, Transform or a keyword-only Buff, nor for Destroy/Bounce on a single chosen target unless it is Lingering.
+  - **Lingering:** only offered for a chosen-target effect that can hit a mob (`Brew.lingers`). Not for untargeted effects, hand effects, Destroy tool or Tool damage, and `linger()` leaves those unchanged.
+  - A potion with nothing left to offer can't be picked for brewing.
+  - BrewChecks covers Swiftness (Lingering only) and a draw potion (Potency and Duration only). The Workshop guide text is updated.
+
+## Trident: Throw, Loyalty, Channeling (Claude)
+- New keywords, appended to `Keyword`: **THROW** (tools only), **LOYALTY** and **CHANNELING** (enchantments only). They're bold rule words, have lang text, and validation in both Java and model.js. An enchantment with Loyalty or Channeling needs no other effect.
+- **Throw:**
+  - A hero with a Throw tool throws it at an enemy mob. It reaches the back row like Ranged, and the mob doesn't hit back. It can't target heroes ("a thrown trident needs a mob to stick in").
+  - If the mob survives, the tool (with its enchantments and Durability) sticks in it (`Minion.impaled` / `impaledBy`) and the hero is unarmed.
+  - When that mob leaves the board (dies, bounce, remove, transform), `Match.returnImpaled` gives it back. It re-equips if the hero is unarmed, otherwise a fresh copy goes to hand.
+- **At the thrower's turn start** (`tridentsAtTurnStart`):
+  - **Channeling** strikes the stuck mob and its left and right neighbours in the same row for `CHANNEL_DAMAGE` = 2 (amplified).
+  - Then **Loyalty** returns the tool.
+- **Events:** IMPALE (amount 1 = stuck, 0 = out) and CHANNEL. Board JSON `impaled`.
+- **Client:**
+  - The thrown item flies at the target, then sticks out of the mob's top-right corner.
+  - Trident sounds and a lightning flash.
+  - The hover explains it, and hero targets are blocked.
+- **Test:** TridentChecks.
+
+## Shield frame and hero health (Claude)
+- The Shield rim on mobs and blocks is now a thin rectangle, with no pointed bottom. Targeting and preview outlines for shielded mobs match it.
+- The hero's health heart is drawn again after the board rows, so a front block's frame can never cover it.
+
+## Trials map controls (Claude)
+- The mouse wheel zooms the map around the cursor; left-drag pans. The hint and tooltip were updated, and TrialsMapScenario now zooms out with the wheel to find the boss.
+- Rooms you can travel to next have a pulsing gold halo, a thick gold ring and a bobbing arrow. Routes to them are gold, so they no longer blend with green Camp rooms.
+
+## Spectator bars slimmed (Claude)
+- SpectatorScreen: the top bar is 22px with 16px buttons. The bottom is one 18px row: the notice on the left, and two compact (14px, at most 150px) hand-request buttons on the right. Before, the bottom was 46px with full-width buttons covering the watched player's hand. The board gets the freed height.
+
+## Brewing Stand waits for the Cauldron (Claude)
+- `CardEffects.onEndTurn` holds every BREW_POTION until all other end-of-turn effects (and the tool's) have run, then calls `Match.releaseBrews`. So a Cauldron's potion can be brewed no matter which of the two was placed first.
+- For a human with a pick still waiting (the Cauldron's Pick One), the stand queues a waiting brew (`HandChoice` with count 0, `waitingBrew()`). `pruneChoices` turns it into the real potion/upgrade pick once it reaches the front of the queue. The AI and team tables brew at once, after the triggers.
+- BrewChecks covers the stand placed before a Cauldron, for both a human and the AI.
+
+## Shorter tooltips, pinned inspect, potion marks (Claude)
+- **Keyword text:**
+  - `Keyword.shortDescription()` reads the new `keyword.craftbound.<k>.short` lang lines and falls back to `.desc`. `hasMore()` says whether a full rule exists.
+  - The match hover notes and mob status lines use the short line.
+  - The Shield `.desc` itself is shorter too.
+- **Pinned inspect (duel board):**
+  - Right-click a hand card or a mob to pin its preview open; right-click it again, right-click elsewhere, or left-click to let go. One pin at a time.
+  - While pinned, hovering a keyword note expands it to the full rule. Unpinned notes end with a "Right-click to pin and read more." hint.
+  - The 4-seat board and spectators aren't pinnable.
+- **Potion marks:**
+  - `CardEffects.onItem` snapshots mobs before a potion's effects and marks any mob with a lasting change (`Minion.PotionMark` id/brew/temporary).
+  - A mark that is only a weakness goes when the weakness ends (`activePotions()`). Cleanse (`clearAppliedEffects`) clears all marks.
+  - Board JSON `potions`.
+  - Client: coloured potion particles rising through the mob (more of them if it was brewed), small potion icons down its left edge (a green pip if brewed), and a hover line "Under X (brewed: ...)".
+  - BrewChecks covers Lingering marks, no mark from Healing, and Cleanse.
+
+## Release jar with built-in cards and Trials (Claude)
+- `./gradlew releaseJar` writes `build/release/craftbound-<version>.jar`. It is the normal jar with `craftbound/cards.json` replaced by the Workshop's `run/config/craftbound/cards.json`, and the Workshop's `trials.json` added as `craftbound/trials-bundle.json`. The repo's own resources (test fixtures) are unchanged.
+- `TrialsContent.defaults()` uses `trials-bundle.json` when the jar has one. If it fails to parse it falls back to `sectionDefaults()` with a logged error.
+- **`BundledConfig.refresh`:**
+  - Writes a missing config from the jar, plus a `<file>.bundled` SHA-256 marker.
+  - When a newer jar bundles different content and the file still matches its marker (never edited), it replaces the file and keeps `<file>.previous`.
+  - Edited files, and files from before markers existed, are never touched. The dev `run/config` files have no marker, so the Workshop's files are safe.
+  - Used for both cards.json and trials.json. Covered by BundledConfigChecks.
+- README release and multiplayer notes updated.
+
+## Workshop auto-builds the release jar (Claude)
+- New `tools/card-editor/release-builder.cjs`. After every successful card or Trials save, the Workshop host runs `gradlew releaseJar --offline -q` in the background (hidden window). Output goes to `build/release-build.log`.
+- Saves within 3 s share one build. A save during a build queues exactly one more.
+- `GET /api/release` (token) reports idle/queued/building/ready/failed. The cards editor and Trials page append "Release jar building…/ready: <path>/failed" to the save message.
+- Turn it off with `WORKSHOP_AUTO_RELEASE=0`. Covered by release-builder-checks.cjs.

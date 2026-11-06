@@ -18,7 +18,8 @@ import net.minecraft.util.RandomSource;
 //   draw. Drawing from an empty deck causes Hunger: 1 damage, then 2, then 3...
 // - Up to 7 mobs each on the board and 10 cards in hand.
 // - Mobs can attack the turn after they arrive (Sprint: board targets immediately, heroes next turn). A mob that's attacked hits back,
-//   unless the attacker is Ranged or the mob is a Block. Enemy mobs with Shield must be attacked first.
+//   unless the attacker is Ranged or the mob is a Block. Enemy mobs with Shield must be attacked first; enemy
+//   blocks with Shield only guard the hero and other blocks, and still sit behind the front row.
 // - Your class power costs 2 XP, once per turn. A hero holding a tool can attack once per turn with it.
 // Everything that happens is also recorded as a MatchEvent so the screen can animate it.
 public class Match {
@@ -268,6 +269,21 @@ public class Match {
     void beginTurnFor(int side, boolean drawsCard) {
         if (over) return;
         MatchPlayer player = player(side);
+        if (player.brewing == null) player.brewing = new ArrayList<>();
+        var repeats = new ArrayList<>(player.brewing);
+        player.brewing.clear();
+        for (var repeat : repeats) {
+            if (over) return;
+            Target aim = repeat.aim() == null ? Target.NONE : repeat.aim();
+            // A chosen mob that has left the board can't be hit again; effects without a chosen target still run.
+            if (!aim.isNone() && !aim.hero() && (!inPlay(aim.side()) || player(aim.side()).minion(aim.minionId()) == null)) aim = Target.NONE;
+            log(name(repeat.card()) + " takes effect again.", repeat.card());
+            CardEffects.onItem(this, side, repeat.card(), aim);
+        }
+        resolveDeaths();
+        if (this.over) return;
+        tridentsAtTurnStart(side);
+        if (this.over) return;
         for (Minion mob : new ArrayList<>(player.board)) {
             if (!mob.isDead()) CardEffects.run(this, side, mob.card, mob, CardCatalog.Trigger.START_TURN, Target.NONE);
         }
@@ -404,6 +420,11 @@ public class Match {
         }
         public HandChoice { offers = List.copyOf(offers); }
         boolean fromDeck() { return action == CardCatalog.Action.CHOOSE_FROM_DECK; }
+        boolean pickOne() { return action == CardCatalog.Action.PICK_ONE; }
+        // count 1: pick which potion to brew; count 2: pick its upgrade (source is the potion).
+        boolean brewing() { return action == CardCatalog.Action.BREW_POTION; }
+        // A Brewing Stand queued behind other picks (count 0): it chooses its potion when it reaches the front.
+        boolean waitingBrew() { return brewing() && count == 0; }
     }
     // Picks wait here in order. Each is resolved by chooseFromHand, or at random when CHOICE_TICKS run out.
     final java.util.ArrayDeque<HandChoice> pendingChoices = new java.util.ArrayDeque<>();
@@ -414,7 +435,18 @@ public class Match {
 
     void pruneChoices() {
         HandChoice first = pendingChoice();
-        pendingChoices.removeIf(c -> over || !inPlay(c.chooser()) || !inPlay(c.victim()) || choiceCards(c).isEmpty());
+        // A waiting Brewing Stand turns into its real pick once everything queued before it is done.
+        do {
+            while (!over && pendingChoice() != null && pendingChoice().waitingBrew()) {
+                HandChoice wait = pendingChoices.pollFirst();
+                if (!inPlay(wait.owner())) continue;
+                List<CardRef> potions = brewable(wait.owner());
+                if (potions.isEmpty()) continue;
+                pendingChoices.addFirst(potions.size() == 1 ? brewChoice(wait.owner(), potions.getFirst())
+                        : new HandChoice(CardCatalog.Action.BREW_POTION, wait.owner(), wait.owner(), wait.owner(), 1, wait.source(), potions));
+            }
+            pendingChoices.removeIf(c -> over || !inPlay(c.chooser()) || !inPlay(c.victim()) || !c.waitingBrew() && choiceCards(c).isEmpty());
+        } while (!over && pendingChoice() != null && pendingChoice().waitingBrew());
         if (pendingChoice() != first) choiceTicksRemaining = CHOICE_TICKS;
     }
 
@@ -447,8 +479,164 @@ public class Match {
         }
     }
 
+    /** Pick one: the owner chooses one of the effect's 2-3 cards and it is added to their hand. */
+    void pickOne(int side, CardCatalog.Effect effect, CardRef source) {
+        if (over || !inPlay(side) || effect.pool().isEmpty()) return;
+        var offers = effect.pool().stream().map(id -> new CardRef(id, false)).toList();
+        if (player(side).isAi() || !interactiveChoices()) {
+            giveCard(side, offers.get(random.nextInt(offers.size())));
+            return;
+        }
+        if (pendingChoices.isEmpty()) choiceTicksRemaining = CHOICE_TICKS;
+        pendingChoices.addLast(new HandChoice(CardCatalog.Action.PICK_ONE, side, side, side, 1, source, offers));
+    }
+
+    // --- Trident: Throw, Loyalty, Channeling ---------------------------------------------------------
+    public static final int CHANNEL_DAMAGE = 2;
+
+    /** A tool's own keywords plus those of the enchantments on it (Loyalty, Channeling). */
+    static boolean toolHas(Tool tool, Keyword keyword) {
+        if (tool == null) return false;
+        if (Cards.get(tool.card.id()).keywords().contains(keyword)) return true;
+        return tool.enchantments.stream().anyMatch(e -> Cards.get(e.card().id()).keywords().contains(keyword));
+    }
+
+    private static CardRef enchantmentWith(Tool tool, Keyword keyword) {
+        return tool.enchantments.stream().map(Tool.Enchantment::card)
+                .filter(c -> Cards.get(c.id()).keywords().contains(keyword)).findFirst().orElse(null);
+    }
+
+    void impale(int side, Tool tool, int mobSide, Minion mob) {
+        player(side).tool = null;
+        mob.impaled = tool;
+        mob.impaledBy = side;
+        log(name(tool.card) + " sticks in " + name(mob.card) + ".", tool.card);
+        event(MatchEvent.Type.IMPALE, side, HERO, tool.card, 1, mob.id, Target.mob(mobSide, mob.id));
+    }
+
+    /** The mob is leaving the board (or Loyalty pulls it out): the thrower gets the Trident back. */
+    void returnImpaled(int mobSide, Minion mob) {
+        Tool tool = mob.impaled;
+        if (tool == null) return;
+        mob.impaled = null;
+        int owner = mob.impaledBy;
+        if (owner < 0 || owner >= players.length) return;
+        event(MatchEvent.Type.IMPALE, owner, HERO, tool.card, 0, mob.id, Target.mob(mobSide, mob.id));
+        if (!inPlay(owner)) return;
+        MatchPlayer thrower = player(owner);
+        if (thrower.tool == null) {
+            thrower.tool = tool;
+            log(name(tool.card) + " returns to " + thrower.name + ".", tool.card);
+            event(MatchEvent.Type.EQUIP, owner, HERO, tool.card, tool.attack, tool.uses, null);
+        } else {
+            // The hero picked up another tool meanwhile, so the Trident goes back to hand as a fresh card.
+            log(name(tool.card) + " returns to " + thrower.name + "'s hand.", tool.card);
+            giveCard(owner, new CardRef(tool.card.id(), tool.card.enchanted(), tool.card.training()));
+        }
+    }
+
+    /** Start of the thrower's turn: Channeling strikes, then Loyalty pulls the Trident back. */
+    private void tridentsAtTurnStart(int side) {
+        for (int s = 0; s < players.length; s++) {
+            for (Minion mob : new ArrayList<>(players[s].board)) {
+                if (over) return;
+                if (mob.impaled == null || mob.impaledBy != side) continue;
+                Tool tool = mob.impaled;
+                CardRef channel = enchantmentWith(tool, Keyword.CHANNELING);
+                if (channel != null) channel(side, s, mob, channel);
+                if (mob.impaled == tool && toolHas(tool, Keyword.LOYALTY)) returnImpaled(s, mob);
+            }
+        }
+        resolveDeaths();
+    }
+
+    // Lightning hits the impaled mob and the mobs on its left and right in the same row.
+    private void channel(int side, int mobSide, Minion mob, CardRef channelCard) {
+        boolean block = mob.has(Keyword.BLOCK);
+        List<Minion> row = players[mobSide].board.stream().filter(m -> m.has(Keyword.BLOCK) == block).toList();
+        int at = row.indexOf(mob);
+        List<Minion> struck = new ArrayList<>();
+        if (at > 0) struck.add(row.get(at - 1));
+        struck.add(mob);
+        if (at >= 0 && at + 1 < row.size()) struck.add(row.get(at + 1));
+        log("Lightning strikes " + name(mob.card) + (struck.size() > 1 ? " and the mobs beside it." : "."), channelCard);
+        event(MatchEvent.Type.CHANNEL, side, HERO, channelCard, struck.size(), 0, Target.mob(mobSide, mob.id));
+        int amount = CardEffects.amplify(this, side, channelCard, CHANNEL_DAMAGE);
+        for (Minion hit : struck) damage(hit, amount, null);
+    }
+
+    // --- Limited uses ----------------------------------------------------------------------------------
+    void spendUse(int side, Minion mob) {
+        if (mob.usesLeft() < 0) return;
+        mob.usesSpent++;
+        int left = mob.usesLeft();
+        event(MatchEvent.Type.STATUS, side, mob.id, mob.card, MatchEvent.STATUS_USES, left, null);
+        if (left == 0) {
+            log(name(mob.card) + " is used up.", mob.card);
+            mob.health = 0;
+        }
+    }
+
+    // --- Brewing Stand: upgrade a potion in hand with Potency, Duration or Lingering -----------------
+
+    List<CardRef> brewable(int side) {
+        return player(side).hand.stream().distinct()
+                .filter(ref -> !craftbound.card.Brew.options(CardCatalog.entry(ref.id()), ref.brew()).isEmpty()).toList();
+    }
+
+    // While end-of-turn effects run, Brewing Stands wait so potions those effects add can be brewed.
+    boolean holdBrews;
+    private final List<Object[]> heldBrews = new ArrayList<>();
+
+    void releaseBrews() {
+        var held = new ArrayList<>(heldBrews);
+        heldBrews.clear();
+        for (Object[] brew : held) brewPotion((Integer) brew[0], (CardRef) brew[1]);
+    }
+
+    void brewPotion(int side, CardRef stand) {
+        if (over || !inPlay(side)) return;
+        if (holdBrews) { heldBrews.add(new Object[]{side, stand}); return; }
+        // A pick is still waiting (the Cauldron's potion): brew after it is resolved.
+        if (!player(side).isAi() && interactiveChoices() && !pendingChoices.isEmpty()) {
+            pendingChoices.addLast(new HandChoice(CardCatalog.Action.BREW_POTION, side, side, side, 0, stand, List.of()));
+            return;
+        }
+        List<CardRef> potions = brewable(side);
+        if (potions.isEmpty()) return;
+        if (player(side).isAi() || !interactiveChoices()) {
+            CardRef potion = potions.get(random.nextInt(potions.size()));
+            var offers = brewChoice(side, potion).offers();
+            finishBrew(side, potion, offers.get(random.nextInt(offers.size())));
+            return;
+        }
+        if (pendingChoices.isEmpty()) choiceTicksRemaining = CHOICE_TICKS;
+        pendingChoices.addLast(potions.size() == 1 ? brewChoice(side, potions.getFirst())
+                : new HandChoice(CardCatalog.Action.BREW_POTION, side, side, side, 1, stand, potions));
+    }
+
+    // The upgrade pick shows the potion once per upgrade it can still take, already brewed.
+    HandChoice brewChoice(int side, CardRef potion) {
+        var offers = craftbound.card.Brew.options(CardCatalog.entry(potion.id()), potion.brew()).stream()
+                .map(u -> potion.brewed(potion.brew().with(u))).toList();
+        return new HandChoice(CardCatalog.Action.BREW_POTION, side, side, side, 2, potion, offers);
+    }
+
+    void finishBrew(int side, CardRef original, CardRef brewed) {
+        var hand = player(side).hand;
+        int index = hand.indexOf(original);
+        if (index < 0) return;
+        hand.set(index, brewed);
+        var added = brewed.brew().upgrades().stream().filter(u -> !original.brew().has(u)).map(u -> u.label).toList();
+        log(player(side).name + " brews " + name(brewed) + ": " + String.join(", ", added) + ".", brewed);
+        event(MatchEvent.Type.BREW, side, HERO, brewed, index, brewed.brew().bits(), null);
+    }
+
     /** Only the chooser receives this list. Stale offers are omitted if another effect drew them first. */
     public List<CardRef> choiceCards(HandChoice choice) {
+        if (choice.pickOne()) return choice.offers();
+        if (choice.brewing()) return choice.count() == 1 ? choice.offers().stream().filter(player(choice.owner()).hand::contains).toList()
+                : player(choice.owner()).hand.contains(choice.source()) ? choice.offers() : List.of();
         return choice.fromDeck() ? choice.offers().stream().filter(player(choice.victim()).deck::contains).toList()
                 : player(choice.victim()).hand;
     }
@@ -524,17 +712,25 @@ public class Match {
         if (choice == null) return;
         var cards = choiceCards(choice);
         if (over) { this.pendingChoices.clear(); return; }
-        if (cards.isEmpty()) { pendingChoices.pollFirst(); choiceTicksRemaining = CHOICE_TICKS; return; }
+        if (cards.isEmpty()) { pendingChoices.pollFirst(); choiceTicksRemaining = CHOICE_TICKS; pruneChoices(); return; }
         resolveChoice(choice, this.random.nextInt(cards.size()));
     }
 
     private void resolveChoice(HandChoice choice, int index) {
         this.pendingChoices.pollFirst();
-        if (choice.fromDeck()) {
+        if (choice.brewing()) {
+            CardRef picked = choiceCards(choice).get(index);
+            if (choice.count() == 1) this.pendingChoices.addFirst(brewChoice(choice.owner(), picked));
+            else finishBrew(choice.owner(), choice.source(), picked);
+        } else if (choice.pickOne()) {
+            CardRef picked = choiceCards(choice).get(index);
+            log(player(choice.owner()).name + " picks " + name(picked) + ".", choice.source());
+            giveCard(choice.owner(), picked);
+        } else if (choice.fromDeck()) {
             CardRef selected = choiceCards(choice).get(index);
             drawFromDeck(choice.victim(), player(choice.victim()).deck.indexOf(selected));
         } else moveFromHand(choice.action(), choice.owner(), choice.victim(), index, choice.source());
-        if (!choice.fromDeck() && choice.count() > 1 && !player(choice.victim()).hand.isEmpty())
+        if (!choice.fromDeck() && !choice.pickOne() && !choice.brewing() && choice.count() > 1 && !player(choice.victim()).hand.isEmpty())
             this.pendingChoices.addFirst(new HandChoice(choice.action(), choice.owner(), choice.victim(),
                     choice.chooser(), choice.count() - 1, choice.source()));
         // A later pick from a hand that has since emptied has nothing left to take.
@@ -561,7 +757,7 @@ public class Match {
             if (reason != null) return reason;
         }
         // Items aimed at a mob need a mob to aim at. (Mobs that pick a target can still be played without one.)
-        Target.Kind kind = CardEffects.targetKind(card.id());
+        Target.Kind kind = CardEffects.targetKind(card);
         if (!definition.isMob() && kind != Target.Kind.NONE && validTargets(side, kind, card.id()).isEmpty()) {
             return "nothing to target";
         }
@@ -585,7 +781,11 @@ public class Match {
     }
 
     public List<Target> validTargets(int side, Target.Kind kind, Identifier card) {
-        return validTargets(side, kind).stream().filter(t -> t.hero() ? CardEffects.canTargetHero(card) : CardEffects.canTarget(card, player(t.side()).minion(t.minionId()).card.id())).toList();
+        return validTargets(side, kind).stream().filter(t -> t.hero() ? CardEffects.canTargetHero(card) : canTargetMinion(card, player(t.side()).minion(t.minionId()))).toList();
+    }
+
+    private static boolean canTargetMinion(Identifier card, Minion minion) {
+        return CardEffects.canTarget(card, minion.card.id(), minion::has);
     }
 
     public void playCard(int side, int handIndex, Target target) {
@@ -601,7 +801,7 @@ public class Match {
     void resolvePlay(int side, int handIndex, CardRef card, int cost, Target target) {
         MatchPlayer player = player(side);
         CardDefinition definition = Cards.get(card.id());
-        Target.Kind kind = CardEffects.targetKind(card.id());
+        Target.Kind kind = CardEffects.targetKind(card);
         boolean targetOk = kind != Target.Kind.NONE && validTargets(side, kind, card.id()).contains(target);
         // Items that need a target must have a valid one.
         if (!definition.isMob() && kind != Target.Kind.NONE && !targetOk) {
@@ -630,6 +830,7 @@ public class Match {
         } else {
             log(player.name + " plays " + name(card) + ".", card);
             CardEffects.onItem(this, side, card, aim);
+            if (card.brew().lasting()) player.brewing.add(new MatchPlayer.BrewRepeat(card.brewed(card.brew().withoutDuration()), aim));
         }
         if (definition.kind() == craftbound.card.CardKind.ITEM)
             CardEffects.notifyEvent(this, CardCatalog.Trigger.ITEM_PLAYED, side, card, aim);
@@ -664,7 +865,8 @@ public class Match {
         if (player.tool != null) {
             log(player.name + "'s " + name(player.tool.card) + " is replaced.", player.tool.card);
         }
-        player.tool = new Tool(card, card.training().attack(definition), definition.health(), definition.keywords().contains(Keyword.RANGED));
+        player.tool = new Tool(card, card.training().attack(definition), definition.health(),
+                definition.keywords().contains(Keyword.RANGED) || definition.keywords().contains(Keyword.THROW));
         log(player.name + " equips " + name(card) + ".", card);
         event(MatchEvent.Type.EQUIP, side, HERO, card, player.tool.attack, player.tool.uses, null);
     }
@@ -746,6 +948,40 @@ public class Match {
                 event(MatchEvent.Type.AURA_ATTACK, side, mob.id, mob.card, attackOf(mob), 0, null);
             }
         }
+        refreshNegations();
+    }
+
+    // Enemy Negate keyword passives switch keywords off while their source is on the board.
+    void refreshNegations() {
+        for (int side = 0; side < players.length; side++) for (Minion mob : players[side].board) {
+            if (mob.isDead()) continue;
+            var negated = java.util.EnumSet.noneOf(Keyword.class);
+            for (int other = 0; other < players.length; other++) {
+                if (!inPlay(other) || !isEnemy(side, other)) continue;
+                for (Minion source : players[other].board) {
+                    var entry = CardCatalog.entry(source.card.id());
+                    if (!source.isDead() && entry != null && entry.passive() == CardCatalog.Passive.NEGATE_KEYWORD && entry.negateKeyword() != null
+                            && entry.auraMatches(mob.definition()))
+                        negated.add(entry.negateKeyword());
+                }
+            }
+            if (negated.equals(mob.negatedKeywords)) continue;
+            var before = java.util.EnumSet.noneOf(Keyword.class);
+            for (Keyword k : CardCatalog.NEGATABLE) if (mob.has(k)) before.add(k);
+            mob.negatedKeywords.clear();
+            mob.negatedKeywords.addAll(negated);
+            boolean fresh = mob.summonedThisTurn && !mob.attackedThisTurn;
+            if (fresh && before.contains(Keyword.SPRINT) && !mob.has(Keyword.SPRINT)) mob.ready = false;
+            if (fresh && !before.contains(Keyword.SPRINT) && mob.has(Keyword.SPRINT) && !mob.frozen && !mob.skippedAttackFromFreeze) mob.ready = true;
+            for (Keyword k : CardCatalog.NEGATABLE) {
+                if (before.contains(k) && !mob.has(k))
+                    event(MatchEvent.Type.STATUS, side, mob.id, mob.card, MatchEvent.STATUS_NEGATED, k.ordinal(), null);
+                else if (!before.contains(k) && mob.has(k)) {
+                    int status = k == Keyword.SHIELD ? MatchEvent.STATUS_SHIELD : k == Keyword.SPRINT ? MatchEvent.STATUS_SPRINT : k == Keyword.IGNORE_SHIELD ? MatchEvent.STATUS_IGNORE_SHIELD : MatchEvent.STATUS_RANGED;
+                    event(MatchEvent.Type.STATUS, side, mob.id, mob.card, status, mob.ready ? 1 : 0, null);
+                }
+            }
+        }
     }
 
     public int heroAttackOf(int side) {
@@ -777,6 +1013,15 @@ public class Match {
                 return "Sprint can only attack mobs or blocks on its first turn";
             }
         }
+        if (attackerId == HERO && !target.isNone() && !target.hero() && target.side() == side && heroRepairs(side)) {
+            Minion block = player(side).minion(target.minionId());
+            if (block == null || block.isDead() || !block.has(Keyword.BLOCK)) return "Repair only works on your own blocks";
+            if (block.health >= block.maxHealth) return "that block isn't damaged";
+            return null;
+        }
+        if (attackerId == HERO && target.hero() && toolHas(player(side).tool, Keyword.THROW)) {
+            return "a thrown trident needs a mob to stick in";
+        }
         if (target.isNone() || !inPlay(target.side()) || !isEnemy(side, target.side())) {
             return "pick an enemy";
         }
@@ -785,13 +1030,12 @@ public class Match {
         if (!target.hero() && defender == null) {
             return "pick an enemy";
         }
-        boolean enemyHasShield = enemy.board.stream().anyMatch(m -> m.has(Keyword.SHIELD));
         boolean ignoresShield = attackerId == HERO
                 ? player(side).tool != null && Cards.get(player(side).tool.card.id()).keywords().contains(Keyword.IGNORE_SHIELD)
                 : player(side).minion(attackerId).has(Keyword.IGNORE_SHIELD);
-        if (!ignoresShield && enemyHasShield && (defender == null || !defender.has(Keyword.SHIELD))) {
-            return "a mob with Shield must be attacked first";
-        }
+        String guarded = ignoresShield ? null : shieldStops(enemy.board, defender);
+        if (guarded != null) return guarded;
+        // Blocks sit behind the front row, Shield or not.
         if (defender != null && defender.has(Keyword.BLOCK)
                 && enemy.board.stream().anyMatch(m -> !m.isDead() && !m.has(Keyword.BLOCK))) {
             boolean ranged = attackerId == HERO ? player(side).tool != null && player(side).tool.ranged
@@ -801,12 +1045,58 @@ public class Match {
         return null;
     }
 
+    // Row-limited Shield. A front-row mob with Shield guards everything. A block with Shield guards only the
+    // hero and the other blocks: front-row mobs stay open, and it still needs the front row cleared (or Ranged).
+    // defender == null means the hero. Returns why the attack is blocked, or null.
+    public static String shieldStops(List<Minion> board, Minion defender) {
+        boolean shieldMob = false, shieldBlock = false;
+        for (Minion m : board) {
+            if (!m.has(Keyword.SHIELD)) continue;
+            if (m.has(Keyword.BLOCK)) shieldBlock = true; else shieldMob = true;
+        }
+        boolean defenderBlock = defender != null && defender.has(Keyword.BLOCK);
+        boolean defenderShield = defender != null && defender.has(Keyword.SHIELD);
+        if (shieldMob && !(defenderShield && !defenderBlock)) return "a mob with Shield must be attacked first";
+        if (shieldBlock && (defender == null || defenderBlock && !defenderShield)) return "a block with Shield must be attacked first";
+        return null;
+    }
+
+    // An equipped tool with Repair lets the hero heal its own damaged blocks instead of attacking.
+    public boolean heroRepairs(int side) {
+        Tool tool = player(side).tool;
+        return tool != null && Cards.get(tool.card.id()).keywords().contains(Keyword.REPAIR);
+    }
+
+    // The hero's attack spent mending a friendly block: heals by the hero's Attack, costs 1 Durability, no hit back.
+    private void repair(int side, Target target) {
+        MatchPlayer me = this.players[side];
+        Tool tool = me.tool;
+        Minion block = me.minion(target.minionId());
+        int power = heroAttackOf(side);
+        me.heroAttacked = true;
+        event(MatchEvent.Type.ATTACK, side, HERO, tool.card, power, MatchEvent.ATTACK_REPAIR, target);
+        log(me.name + " repairs " + name(block.card) + ".", tool.card);
+        heal(target, power, false);
+        tool.uses--;
+        if (tool.uses <= 0) {
+            log(me.name + "'s " + name(tool.card) + " breaks.", tool.card);
+            event(MatchEvent.Type.BREAK, side, HERO, tool.card, 0, 0, null);
+            me.tool = null;
+        }
+        resolveDeaths();
+        checkWinner();
+    }
+
     public int retaliationOf(Minion defender) {
         return defender.has(Keyword.BLOCK) ? 0 : attackOf(defender);
     }
 
     public void attack(int side, int attackerId, Target target) {
         if (whyCantAttack(side, attackerId, target) != null) {
+            return;
+        }
+        if (attackerId == HERO && target.side() == side) {
+            repair(side, target);
             return;
         }
         MatchPlayer me = this.players[side];
@@ -825,6 +1115,9 @@ public class Match {
         }
         event(MatchEvent.Type.ATTACK, side, attackerId, icon, power, 0, target);
         boolean killedAttackTarget = false;
+        // A Throw tool is thrown from range: no hit back, and it sticks in a mob that survives.
+        boolean throwing = hero && toolHas(tool, Keyword.THROW) && !target.hero();
+        Minion thrownAt = null;
         if (target.hero()) {
             log(who + " hits " + enemy.name + " for " + power + ".", icon);
             int healthBefore = enemy.health;
@@ -836,8 +1129,9 @@ public class Match {
             }
         } else {
             Minion defender = enemy.minion(target.minionId());
-            log(who + " attacks " + name(defender.card) + ".", icon);
-            int hitBack = retaliationOf(defender);
+            log(who + (throwing ? " throws " + name(tool.card) + " at " : " attacks ") + name(defender.card) + ".", icon);
+            int hitBack = throwing ? 0 : retaliationOf(defender);
+            if (throwing) thrownAt = defender;
             int healthBefore = defender.health;
             boolean killedByHit = damage(defender, power, attacker);
             killedAttackTarget = killedByHit;
@@ -867,6 +1161,8 @@ public class Match {
                 me.tool = null;
             }
         }
+        if (throwing && thrownAt != null && me.tool == tool && !thrownAt.isDead() && enemy.board.contains(thrownAt))
+            impale(side, tool, target.side(), thrownAt);
         resolveDeaths();
         // Wait for retaliation, thorns and Death effects. Only the original, still-present attacker
         // qualifies; a Totem revival or transformed replacement is a different mob.
@@ -989,6 +1285,7 @@ public class Match {
     }
 
     void clearAppliedEffects(Minion mob) {
+        if (mob.potions != null) mob.potions.clear();
         boolean lostSprint = mob.grantedKeywords.contains(Keyword.SPRINT);
         mob.frozen = mob.withered = mob.invulnerable = mob.totem = false;
         if (mob.skippedAttackFromFreeze && !mob.attackedThisTurn) mob.ready = true;
@@ -1006,8 +1303,9 @@ public class Match {
     }
 
     void grantKeyword(Minion minion, Keyword keyword) {
-        if (minion == null || minion.isDead() || minion.has(keyword) || minion.has(Keyword.BLOCK) && keyword == Keyword.SHIELD) return;
+        if (minion == null || minion.isDead() || minion.has(keyword)) return;
         minion.grantedKeywords.add(keyword);
+        if (minion.negatedKeywords.contains(keyword)) return; // Kept, but switched off while an enemy negates it.
         if (keyword == Keyword.SPRINT && minion.summonedThisTurn && !minion.attackedThisTurn
                 && !minion.frozen && !minion.skippedAttackFromFreeze) minion.ready = true;
         int status = keyword == Keyword.SHIELD ? MatchEvent.STATUS_SHIELD : keyword == Keyword.SPRINT ? MatchEvent.STATUS_SPRINT : keyword == Keyword.IGNORE_SHIELD ? MatchEvent.STATUS_IGNORE_SHIELD : MatchEvent.STATUS_RANGED;
@@ -1024,6 +1322,7 @@ public class Match {
         replacement.attackedThisTurn = old.attackedThisTurn;
         // Transform cannot refresh a spent attack, but the new form may have Sprint.
         replacement.ready = !old.attackedThisTurn && (!old.summonedThisTurn || replacement.has(Keyword.SPRINT));
+        returnImpaled(side, old);
         player(side).board.set(player(side).board.indexOf(old), replacement);
         event(MatchEvent.Type.TRANSFORM, side, replacement.id, replacement.card, attackOf(replacement), replacement.health, null);
         refreshAuras();
@@ -1069,6 +1368,7 @@ public class Match {
         if (side < 0) {
             return;
         }
+        returnImpaled(side, minion);
         this.players[side].board.remove(minion);
         if (commandUnit(side, minion.id)) {
             publicNotice(player(side).name + "’s " + name(minion.card) + " returned to command."); refreshAuras(); return;
@@ -1090,6 +1390,7 @@ public class Match {
         if (side < 0) {
             return;
         }
+        returnImpaled(side, minion);
         this.players[side].board.remove(minion);
         event(MatchEvent.Type.REMOVE, side, minion.id, minion.card, 0, 0, null);
         refreshAuras();
@@ -1130,6 +1431,7 @@ public class Match {
                     this.players[side].board.remove(minion);
                     log(name(minion.card) + " dies.", minion.card);
                     event(MatchEvent.Type.DEATH, side, minion.id, minion.card, 0, 0, null);
+                    returnImpaled(side, minion);
                     CardEffects.onDrop(this, side, minion);
                     if (!over && player(side).trialsFoe != null) TrialsOpponentRule.onDeath(this, side, minion);
                     if (minion.totem) {

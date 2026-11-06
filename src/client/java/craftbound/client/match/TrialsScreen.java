@@ -66,7 +66,7 @@ public final class TrialsScreen extends Screen {
         }
     }
     private static final Gson GSON=new Gson();
-    private static final int MUTED=0xFF735A40, LINE=0xFFC7AB7C, CREAM=0xFFFFF2D7, GREEN=0xFF325B44;
+    private static final int MUTED=0xFF735A40, LINE=0xFFC7AB7C, CREAM=0xFFFFF2D7, GREEN=0xFF325B44, OPEN_GOLD=0xFFF0B429;
     private static final long TRAVEL_MILLIS=550;
     private final Screen returnTo;
     private final BlockPos table;
@@ -87,6 +87,8 @@ public final class TrialsScreen extends Screen {
     private double zoom=1;
     private boolean fitOverview;
     private Double zoomCenterY,zoomCenterX;
+    // Mouse-wheel zoom keeps the parchment point under the cursor still: its offset inside the map viewport.
+    private Double zoomAnchorY,zoomAnchorX;
     private boolean draggingMap;
     private Node previewNode, travelFrom, travelTo;
     private String pendingTravel;
@@ -644,7 +646,8 @@ public final class TrialsScreen extends Screen {
     public int[] mapViewport() { return new int[]{mapLeft,mapTop,mapRight-mapLeft,mapBottom-mapTop}; }
     private int baseMapHeight() { return Math.max(0,run.roomCount-1)*68+100; }
     private double minimumZoom() { return Math.min(0.5,Math.max(0.025,(mapBottom-mapTop-10.0)/baseMapHeight())); }
-    private void zoomMap(double next) {
+    private void zoomMap(double next) { zoomMap(next,(mapRight-mapLeft)/2.0,(mapBottom-mapTop)/2.0); }
+    private void zoomMap(double next,double anchorX,double anchorY) {
         if(!isMap()||waiting||travelling())return;
         next=Math.clamp(next,minimumZoom(),2);
         // The last minus step must reveal the whole route, just like Fit.
@@ -652,8 +655,9 @@ public final class TrialsScreen extends Screen {
         if(next<=minimumZoom()+0.001){fitMap();return;}
         if(Math.abs(next-zoom)<0.001)return;
         fitOverview=false;
-        zoomCenterY=(mapScroll+(mapBottom-mapTop)/2.0)/mapHeight;
-        zoomCenterX=(mapScrollX+(mapRight-mapLeft)/2.0)/mapWidth;
+        zoomCenterY=(mapScroll+anchorY)/mapHeight;
+        zoomCenterX=(mapScrollX+anchorX)/mapWidth;
+        zoomAnchorY=anchorY;zoomAnchorX=anchorX;
         zoom=next;focusMap=false;rebuildWidgets();
     }
     private void fitMap() {
@@ -683,9 +687,10 @@ public final class TrialsScreen extends Screen {
         }
         if(resizeCenter!=null) { mapScroll=Math.round(resizeCenter)-(mapBottom-mapTop)/2;resizeCenter=null; }
         if(zoomCenterY!=null) {
-            mapScroll=(int)Math.round(zoomCenterY*mapHeight)-(mapBottom-mapTop)/2;
-            mapScrollX=(int)Math.round(zoomCenterX*mapWidth)-(mapRight-mapLeft)/2;
-            zoomCenterY=null;zoomCenterX=null;
+            double anchorY=zoomAnchorY!=null?zoomAnchorY:(mapBottom-mapTop)/2.0,anchorX=zoomAnchorX!=null?zoomAnchorX:(mapRight-mapLeft)/2.0;
+            mapScroll=(int)Math.round(zoomCenterY*mapHeight-anchorY);
+            mapScrollX=(int)Math.round(zoomCenterX*mapWidth-anchorX);
+            zoomCenterY=null;zoomCenterX=null;zoomAnchorY=null;zoomAnchorX=null;
         }
         if(fitOverview){mapScroll=0;mapScrollX=0;}
         mapScroll=Math.clamp(mapScroll,0,maxMapScroll());
@@ -695,7 +700,7 @@ public final class TrialsScreen extends Screen {
         zoomOut.setTooltip(Tooltip.create(Component.literal("Zoom out. Keep clicking to see the whole route.")));
         Button zoomIn=button(mapLeft+23,bodyTop,19,"+",()->zoomMap(zoom*1.3));
         zoomIn.active=zoom<1.999;
-        zoomIn.setTooltip(Tooltip.create(Component.literal("Zoom in for room details. Drag empty parchment to pan.")));
+        zoomIn.setTooltip(Tooltip.create(Component.literal("Zoom in for room details. Mouse wheel zooms too; drag the parchment to pan.")));
         button(mapLeft+46,bodyTop,27,"Fit",this::fitMap)
                 .setTooltip(Tooltip.create(Component.literal("Show every path from the start to the boss.")));
         button(mapLeft+77,bodyTop,47,"Current",()->{
@@ -787,7 +792,8 @@ public final class TrialsScreen extends Screen {
             boolean taken=("DONE".equals(node.status)||"CURRENT".equals(node.status))&&
                     ("DONE".equals(target.status)||"CURRENT".equals(target.status));
             boolean open="OPEN".equals(target.status)&&("CURRENT".equals(node.status)||"DONE".equals(node.status));
-            int color=target==previewNode&&open?GREEN:open?0xFF6A8258:taken?0xFF8C6D3F:0xFFAA987B;
+            // Routes you can take now are gold, so they don't blur into the green Camp rooms.
+            int color=target==previewNode&&open?OPEN_GOLD:open?0xFFC08A2A:taken?0xFF8C6D3F:0xFFAA987B;
             path(g,from,a,to,b,0xFFDDC9A5,zoom<0.55?2:5,false);
             path(g,from,a,to,b,color,zoom<0.55?1:taken||open?2:1,!taken&&!open);
         }
@@ -820,12 +826,26 @@ public final class TrialsScreen extends Screen {
         int accent=switch(node.kind){case "BOSS"->0xFF783C35;case "ELITE"->0xFF94662E;case "REST"->GREEN;
             case "SHOP"->0xFF497D70;case "EVENT"->0xFF75537E;default->0xFF5E665C;};
         int pulse=size>=14&&open&&Math.sin(now()/390.0)>0.4?1:0;
+        float wave=(float)(0.5+0.5*Math.sin(now()/260.0));
+        int ring=size>=14?3:2;
+        // A glowing gold halo behind rooms you can travel to next.
+        if(open)g.fill(xx-ring-2,yy-ring-2,xx+size+ring+2,yy+size+ring+2,MatchArt.alpha(0xFFFFD45A,0.30F+0.35F*wave));
         g.fill(xx-1,yy+2,xx+size+1,yy+size+2,0xFFB5A180);
         g.fill(xx,yy,xx+size,yy+size,done?0xFFCEBC96:here?0xFFFFE3A0:open?0xFFF7ECCF:0xFFE3D3B4);
         g.outline(xx,yy,size,size,accent);
-        if(size>=14&&(open||picked||hovered||here))
-            g.outline(xx-2-pulse,yy-2-pulse,size+4+pulse*2,size+4+pulse*2,here?0xFFAC792D:picked||open?GREEN:WOOD);
-        if(size<14&&(picked||hovered))g.outline(xx-1,yy-1,size+2,size+2,GREEN);
+        if(open) {
+            // Thick gold ring with a dark edge, a white inner line when selected, and a bobbing arrow above.
+            g.outline(xx-ring-pulse,yy-ring-pulse,size+(ring+pulse)*2,size+(ring+pulse)*2,0xFF6B430E);
+            g.outline(xx-ring+1-pulse,yy-ring+1-pulse,size+(ring-1+pulse)*2,size+(ring-1+pulse)*2,OPEN_GOLD);
+            if(ring>2)g.outline(xx-ring+2-pulse,yy-ring+2-pulse,size+(ring-2+pulse)*2,size+(ring-2+pulse)*2,OPEN_GOLD);
+            if(picked||hovered)g.outline(xx-1,yy-1,size+2,size+2,0xFFFFFFFF);
+            if(size>=10) {
+                int ay=yy-ring-7-Math.round(wave*2);
+                for(int i=0;i<4;i++)g.fill(cx-4+i,ay+i,cx+4-i,ay+i+1,i==0?0xFF6B430E:OPEN_GOLD);
+            }
+        } else if(size>=14&&(picked||hovered||here))
+            g.outline(xx-2,yy-2,size+4,size+4,here?0xFFAC792D:picked?GREEN:WOOD);
+        else if(size<14&&(picked||hovered))g.outline(xx-1,yy-1,size+2,size+2,GREEN);
         if(mystery(node)||size<8) {
             String glyph=mystery(node)?"?":switch(node.kind){case "SHOP"->"S";case "REST"->"C";case "ELITE"->"E";case "BOSS"->"!";default->"B";};
             float scale=Math.min(1,(size-2)/9F);
@@ -911,7 +931,7 @@ public final class TrialsScreen extends Screen {
     }
     private String hint() {
         if(page==Page.DECK)return "Scroll down to browse. Identical cards stack; upgrades stay separate. Click to inspect.";
-        if(isMap())return "Scroll: move. Drag empty parchment: pan. + / -: zoom. Fit: whole route.";
+        if(isMap())return "Wheel: zoom. Left-drag: pan. Fit: whole route.";
         if(page!=Page.JOURNEY)return "";
         return switch(run.phase){
             case CLASS->"Choose one class, then draft its starter deck.";
@@ -1108,8 +1128,9 @@ public final class TrialsScreen extends Screen {
         if(info&&vertical!=0){
             detailScroll=Math.clamp(detailScroll-(int)Math.round(vertical*22),0,detailMax);return true;
         }
-        if(isMap()&&insideMap(xx,yy)&&(vertical!=0||horizontal!=0)){
-            panMap(0,(int)Math.round(-(vertical!=0?vertical:horizontal)*45));return true;
+        if(isMap()&&insideMap(xx,yy)&&vertical!=0){
+            // The wheel zooms around the cursor; left-drag pans.
+            zoomMap(zoom*Math.pow(1.15,vertical),xx-mapLeft,yy-mapTop);return true;
         }
         if(!(page==Page.DECK||page==Page.JOURNEY&&deckOffers())||vertical==0||!insideDeck(xx,yy))
             return super.mouseScrolled(xx,yy,horizontal,vertical);

@@ -80,7 +80,7 @@ public final class CardFaceChecks {
    if(capture.items!=1 || capture.fills<12)throw new AssertionError("Incomplete face "+id);
    if(!capture.text.contains(Cards.name(id).getString()))throw new AssertionError("Printed name changed "+id);
    if(!capture.text.contains("#"+Cards.collectorNumber(id)))throw new AssertionError("Missing collector number "+id);
-   if(!capture.text.contains(CardRenderer.kindLabel(card).getString()))throw new AssertionError("Missing type "+id);
+   if(!capture.text.contains(CardRenderer.kindLabel(id,card).getString()))throw new AssertionError("Missing type "+id);
    String body=String.join("",capture.text).replace(" ","");
    if(!body.contains(Cards.text(id).getString().replace(" ","")))throw new AssertionError("Missing ability text "+id);
    if(!capture.pose.equals(new org.joml.Matrix3x2f()))throw new AssertionError("Unbalanced layout pose");

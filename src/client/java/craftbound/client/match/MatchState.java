@@ -38,6 +38,12 @@ final class MatchState {
         boolean invulnerable;
         boolean block;
         boolean litTnt, detonated;
+        // Uses left for a card with limited uses (Cake), or -1.
+        int usesLeft = -1;
+        // A thrown tool (Trident) stuck in this mob, or null.
+        Identifier impaled;
+        // Potions with lasting effects on this mob, and their Brewing Stand upgrade bits.
+        List<Potion> potions = List.of();
 
         CardDefinition card() {
             return Cards.get(this.id);
@@ -66,6 +72,9 @@ final class MatchState {
             mob.invulnerable = this.invulnerable;
             mob.block = this.block;
             mob.litTnt = this.litTnt;
+            mob.usesLeft = this.usesLeft;
+            mob.impaled = this.impaled;
+            mob.potions = this.potions;
             mob.detonated = this.detonated;
             return mob;
         }
@@ -77,6 +86,8 @@ final class MatchState {
         Identifier id;
         boolean enchanted;
         TrialTraining training = TrialTraining.NONE;
+        // Brewing Stand upgrades (craftbound.card.Brew bits); 0 for an ordinary card.
+        int brew;
         boolean playable;
         String target = "NONE";
 
@@ -86,6 +97,7 @@ final class MatchState {
             card.id = this.id;
             card.enchanted = this.enchanted;
             card.training = this.training;
+            card.brew = this.brew;
             card.playable = this.playable;
             card.target = this.target;
             return card;
@@ -206,6 +218,8 @@ final class MatchState {
     }
 
     // One step to animate. mid is Match.HERO (0) for a hero; targetSide is -1 when nothing was aimed at.
+    record Potion(Identifier id, int brew) {}
+
     record Event(String type, int side, int mid, Identifier card, boolean enchanted, int amount, int extra,
                  int targetSide, boolean targetHero, int targetMid, int originSide, int originMid, TrialTraining training) {
         Event(String type, int side, int mid, Identifier card, boolean enchanted, int amount, int extra,
@@ -215,6 +229,10 @@ final class MatchState {
         boolean aimed() {
             return this.targetSide >= 0;
         }
+    }
+
+    static int readBrew(JsonObject object) {
+        return object.has("brew") ? object.get("brew").getAsInt() : 0;
     }
 
     static TrialTraining readTraining(JsonObject object) {
@@ -326,6 +344,7 @@ final class MatchState {
                     card.id = Identifier.parse(c.get("id").getAsString());
                     card.enchanted = c.get("ench").getAsBoolean();
                     card.training = readTraining(c);
+                    card.brew = readBrew(c);
                     card.playable = c.get("playable").getAsBoolean();
                     card.target = c.get("target").getAsString();
                     side.hand.add(card);
@@ -373,6 +392,17 @@ final class MatchState {
         mob.totem = m.get("totem").getAsBoolean();
         mob.invulnerable = m.get("invulnerable").getAsBoolean();
         mob.litTnt = craftbound.card.CardCatalog.hasTntFuse(mob.id);
+        mob.usesLeft = m.has("usesLeft") ? m.get("usesLeft").getAsInt() : -1;
+        mob.impaled = m.has("impaled") ? Identifier.tryParse(m.get("impaled").getAsString()) : null;
+        if (m.has("potions")) {
+            List<Potion> potions = new ArrayList<>();
+            for (var element : m.getAsJsonArray("potions")) {
+                var p = element.getAsJsonObject();
+                Identifier id = Identifier.tryParse(p.get("id").getAsString());
+                if (id != null && Cards.get(id) != null) potions.add(new Potion(id, p.has("brew") ? p.get("brew").getAsInt() : 0));
+            }
+            mob.potions = List.copyOf(potions);
+        }
         mob.block = m.get("block").getAsBoolean();
         return mob;
     }
@@ -415,6 +445,7 @@ final class MatchState {
                 card.id = Identifier.parse(entry.get("id").getAsString());
                 card.enchanted = entry.get("ench").getAsBoolean();
                 card.training = readTraining(entry);
+                card.brew = readBrew(entry);
                 cards.add(card);
             }
             state.choice = new Choice(c.get("action").getAsString(), c.get("owner").getAsInt(), c.get("victim").getAsInt(),

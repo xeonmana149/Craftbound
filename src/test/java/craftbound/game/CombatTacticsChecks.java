@@ -59,12 +59,12 @@ final class CombatTacticsChecks {
         m=duel(5);unit(m,0,2,2);threat=unit(m,1,3,2);
         m.equip(1,new CardRef(id("iron_sword"),false));m.player(1).frozen=true;
         MatchAI.step(m,0);
-        ok(!threat.isDead() && m.player(1).health==face-2,"A frozen enemy hero cannot contribute tool damage next turn");
+        ok(threat.isDead() && m.player(1).health==face,"A favorable trade can still be correct without weapon lethal");
 
         m=duel(5);Minion guard=unit(m,0,0,2);guard.grantedKeywords.add(Keyword.SHIELD);
-        unit(m,0,2,1);threat=unit(m,1,6,2);
+        unit(m,0,6,1);threat=unit(m,1,6,2);
         MatchAI.step(m,0);
-        ok(!threat.isDead() && m.player(1).health==face-2,"A lone attacker must spend its swing on Shield");
+        ok(!threat.isDead() && m.player(1).health==face-6,"A lone attacker must spend its swing on Shield");
         m=duel(5);guard=unit(m,0,0,2);guard.grantedKeywords.add(Keyword.SHIELD);
         unit(m,0,2,1);threat=unit(m,1,6,2);threat.grantedKeywords.add(Keyword.IGNORE_SHIELD);
         MatchAI.step(m,0);
@@ -81,6 +81,46 @@ final class CombatTacticsChecks {
         m=duel(4);m.equip(0,new CardRef(id("iron_sword"),false));threat=unit(m,1,7,2);
         MatchAI.step(m,0);
         ok(!m.over && m.player(0).health==4,"Do not trade the hero into fatal retaliation");
+
+        m=duel(30);
+        Minion champion=unit(m,0,6,5), recruit=unit(m,0,2,1);
+        threat=unit(m,1,5,2);
+        MatchAI.step(m,0);
+        ok(threat.isDead() && recruit.isDead() && champion.ready,"Use the cheap body to trade up before lethal threatens");
+
+        m=duel(30);
+        recruit=unit(m,0,2,2);champion=unit(m,0,6,2);champion.ready=false;
+        threat=unit(m,1,2,2);
+        MatchAI.step(m,0);
+        ok(recruit.isDead() && threat.isDead() && !champion.isDead(),"Take an even trade to protect a more valuable exhausted ally");
+
+        m=duel(30);
+        unit(m,0,2,1);unit(m,0,2,1);threat=unit(m,1,8,4);
+        MatchAI.step(m,0);MatchAI.step(m,0);
+        ok(threat.isDead() && m.player(1).health==face,"Combine attackers to remove a big threat while at full health");
+
+        m=duel(30);m.player(1).health=7;
+        mine=unit(m,0,5,3);unit(m,1,3,1);
+        MatchAI.step(m,0);
+        ok(!mine.isDead() && m.player(1).health==2,"Keep pressure instead of sacrificing a finisher to a small mob");
+
+        m=duel(30);unit(m,0,3,4);Minion engine=mob(m,1,"dispenser");
+        MatchAI.step(m,0);
+        ok(engine.isDead(),"Remove a reachable repeat-damage block while there is no frontline");
+
+        m=duel(30);m.player(0).xp=2;
+        m.player(0).hand.add(new CardRef(id("furnace"),false));
+        m.player(0).hand.add(new CardRef(id("arrow"),false));
+        giant=unit(m,1,8,7);threat=unit(m,1,5,2);
+        MatchAI.step(m,0);
+        ok(threat.isDead() && giant.health==7 && m.player(0).xp==1,"Spend cheap removal to finish a threat instead of buying a block or chipping the largest mob");
+
+        m=duel(30);m.player(0).xp=2;
+        m.player(0).hand.add(new CardRef(id("furnace"),false));
+        m.player(0).hand.add(new CardRef(id("villager"),false));
+        unit(m,1,2,3);
+        MatchAI.step(m,0);
+        ok(m.player(0).board.getFirst().card.id().equals(id("villager")),"Develop a frontline before a support block when behind on board");
     }
     private CombatTacticsChecks() {}
 }

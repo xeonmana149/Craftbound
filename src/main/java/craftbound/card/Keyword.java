@@ -5,7 +5,9 @@ import net.minecraft.network.chat.Component;
 
 // Rules words that appear in card text. Hovering one on a card explains it.
 public enum Keyword {
-    SHIELD, SPRINT, RANGED, SPAWN, DROP, BLOCK, CLEANSE, IGNORE_SHIELD, BAD_OMEN, WITHER;
+    SHIELD, SPRINT, RANGED, SPAWN, DROP, BLOCK, CLEANSE, IGNORE_SHIELD, BAD_OMEN, WITHER, REPAIR,
+    // Trident: Throw on the tool, Loyalty and Channeling on enchantments.
+    THROW, LOYALTY, CHANNELING;
 
     // Tags the keyword's letters in card text, so the inspect screen can find where the word was drawn.
     private static final String INSERTION_PREFIX = "craftbound:keyword/";
@@ -17,6 +19,17 @@ public enum Keyword {
 
     public Component description() {
         return Component.translatable("keyword.craftbound." + name().toLowerCase(Locale.ROOT) + ".desc");
+    }
+
+    /** A one-line version for hover notes; the full rule shows when a pinned note is hovered. */
+    public Component shortDescription() {
+        String key = "keyword.craftbound." + name().toLowerCase(Locale.ROOT) + ".short";
+        return net.minecraft.locale.Language.getInstance().has(key) ? Component.translatable(key) : description();
+    }
+
+    /** Whether the full rule says more than the short line. */
+    public boolean hasMore() {
+        return net.minecraft.locale.Language.getInstance().has("keyword.craftbound." + name().toLowerCase(Locale.ROOT) + ".short");
     }
 
     /** Add the concrete outcome when a status refers to another card. */

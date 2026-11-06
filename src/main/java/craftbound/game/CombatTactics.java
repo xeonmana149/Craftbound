@@ -28,7 +28,43 @@ final class CombatTactics {
         return true;
     }
 
-    private record Swing(int id,int damage,int counter,int valueLost) {}
+    private record Swing(int id, int damage, int counter, int valueLost, int tradeCost) {}
+
+    /** Value of keeping this piece for another turn, including support blocks that have no attack. */
+    static int boardValue(Match match, Minion mob) {
+        var entry = CardCatalog.entry(mob.card.id());
+        int attack = mob.has(Keyword.BLOCK) ? 0 : match.attackOf(mob);
+        int value = 3 * attack + Math.min(mob.health, 8);
+        if (entry.hasAura()) value += 6;
+        if (mob.has(Keyword.SHIELD)) value += 3;
+        for (var effect : entry.effects()) {
+            switch (effect.trigger()) {
+                case START_TURN, END_TURN, ACTIVATE, ON_KILL, CARD_ADDED, ITEM_PLAYED, HEALED, AFTER_ATTACK,
+                        AFTER_SURVIVING_KILL, DAMAGE_DEALT -> value += 4;
+                case DROP -> value -= 2; // Its owner also gets the death effect.
+                default -> {}
+            }
+        }
+        if (attack == 0 && value == Math.min(mob.health, 8)) return 1;
+        return Math.max(1, value);
+    }
+    // Removing a cheap attacker now can save a more valuable allied piece from an easy trade next turn.
+    private static int exposedAllyValue(Match match, MatchPlayer allies, Minion threat, boolean guarded) {
+        if (threat.frozen || threat.has(Keyword.BLOCK)) return 0;
+        int hit = match.attackOf(threat);
+        int best = 0;
+        boolean hasFront = allies.board.stream().anyMatch(m -> !m.has(Keyword.BLOCK));
+        for (Minion ally : allies.board) {
+            if (ally.invulnerable || ally.totem || ally.afterArmor(hit) < ally.health) continue;
+            if (guarded && !threat.has(Keyword.IGNORE_SHIELD) && Match.shieldStops(allies.board, ally) != null) continue;
+            if (ally.has(Keyword.BLOCK) && hasFront && !threat.has(Keyword.RANGED)) continue;
+            int gain = boardValue(match, ally);
+            if (threat.afterArmor(match.retaliationOf(ally)) >= threat.health) gain -= boardValue(match, threat);
+            best = Math.max(best, gain);
+        }
+        return Math.min(12, best);
+    }
+
     private record Trade(int first,Target target,int margin,int cost,int swings) {
         boolean betterThan(Trade other) {
             if (other==null) return true;
@@ -41,14 +77,16 @@ final class CombatTactics {
         }
     }
 
-    static boolean defend(Match match,int side) {
+    static boolean pickTrade(Match match,int side) {
         MatchPlayer me=match.player(side);
         int enemySide=match.opponentSide(side);
         Incoming board=new Incoming(match,enemySide,null);
-        if (board.total<me.health) return false;
         List<Minion> shields=me.board.stream().filter(m->!m.isDead() && m.has(Keyword.SHIELD)).toList();
-        int before=me.health-board.faceDamage(shields,0,0);
-        if (before>0) return false;
+        int incoming = board.total >= me.health ? board.faceDamage(shields,0,0) : board.total;
+        int before = me.health - incoming;
+        boolean defensive = before <= 0;
+        // Face damage is more valuable when the opposing hero is close to dying.
+        int faceWeight = match.player(enemySide).health <= 8 ? 3 : 1;
 
         List<Integer> ids=new ArrayList<>();
         for (Minion attacker : me.board) if (attacker.canAttack() && match.attackOf(attacker)>0) ids.add(attacker.id);
@@ -58,11 +96,16 @@ final class CombatTactics {
         // With no guarding Shields or overlapping enemy auras, saved damage from separate kills adds up.
         // Allocate attackers across victims so two small trades can beat spending every attack on one kill.
         List<Minion> enemies=match.player(enemySide).board;
-        boolean independent=shields.isEmpty() && enemies.stream().noneMatch(m->CardCatalog.entry(m.card.id()).hasAura());
-        Trade[] plans=new Trade[1<<ids.size()];
+        boolean independent=defensive && shields.isEmpty() && enemies.stream().noneMatch(m->CardCatalog.entry(m.card.id()).hasAura());
+        Trade[] plans = independent ? new Trade[1<<ids.size()] : null;
+        int bestBoardGain = 0;
         Trade best=null;
         for (Minion target : enemies) {
             if (target.isDead() || target.invulnerable || target.totem) continue;
+            if (!defensive && target.withered && target.afterArmor(1) >= target.health) continue;
+            int targetValue = boardValue(match, target);
+            if (target.frozen && !target.has(Keyword.SHIELD)) targetValue /= 2;
+            if (!defensive) targetValue += exposedAllyValue(match, me, target, !shields.isEmpty());
             Target aim=Target.mob(enemySide,target.id);
             int retaliation=match.retaliationOf(target);
             Swing[] swings=new Swing[ids.size()];
@@ -76,12 +119,21 @@ final class CombatTactics {
                 if (hit<=0 || mob==null && retaliation>=me.health) continue;
                 int counter=mob==null ? retaliation : mob.invulnerable ? 0 : mob.afterArmor(retaliation);
                 int cost=mob==null ? counter : counter>=mob.health && !mob.totem ? power+mob.health : 0;
-                swings[i]=new Swing(id,hit,counter,cost);
+                int tradeCost;
+                if (mob == null) {
+                    // Pay life for tempo while healthy. Value each point more when the hero is vulnerable.
+                    tradeCost = counter * (me.health - counter <= Math.max(6, incoming) ? 5 : 1);
+                } else {
+                    tradeCost = counter >= mob.health && !mob.totem ? boardValue(match, mob) : Math.min(counter, mob.health);
+                }
+                // A Sprint mob on its first turn cannot spend this swing on face.
+                if (mob == null || !mob.summonedThisTurn) tradeCost += power * faceWeight;
+                swings[i]=new Swing(id,hit,counter,cost,tradeCost);
                 legal|=1<<i;
                 availableDamage+=hit;
             }
             if (availableDamage<target.health) continue;
-            Incoming after=new Incoming(match,enemySide,target);
+            Incoming after = null;
             int[] shieldBits=new int[ids.size()];
             for (int i=0;i<ids.size();i++) for (int g=0;g<shields.size();g++)
                 if (swings[i]!=null && shields.get(g).id==ids.get(i) && swings[i].counter>0) shieldBits[i]=1<<g;
@@ -89,7 +141,7 @@ final class CombatTactics {
             Arrays.fill(forecasts,-1);
             Trade[] earlier=independent ? plans.clone() : null;
             for (int mask=legal;mask!=0;mask=(mask-1)&legal) {
-                int dealt=0, smallest=Integer.MAX_VALUE, first=-1, life=me.health, cost=0, hitShields=0;
+                int dealt=0, smallest=Integer.MAX_VALUE, first=-1, life=me.health, cost=0, tradeCost=0, hitShields=0;
                 for (int bits=mask;bits!=0;bits &= bits-1) {
                     int i=Integer.numberOfTrailingZeros(bits);
                     Swing s=swings[i];
@@ -97,11 +149,24 @@ final class CombatTactics {
                     if (s.damage<smallest) { smallest=s.damage; first=s.id; }
                     if (s.id==Match.HERO) life-=s.counter;
                     cost+=s.valueLost;
+                    tradeCost+=s.tradeCost;
                     hitShields|=shieldBits[i];
                 }
                 // Do not reserve extra swings that could have gone into a second threat.
                 if (dealt<target.health || dealt-smallest>=target.health) continue;
-                if (forecasts[hitShields]<0) forecasts[hitShields]=after.faceDamage(shields,hitShields,retaliation);
+                if (defensive || (board.total >= life && (hitShields != 0 || life < me.health))) {
+                    if (after == null) after = new Incoming(match, enemySide, target);
+                    if (forecasts[hitShields] < 0) forecasts[hitShields] = after.faceDamage(shields, hitShields, retaliation);
+                    if (!defensive && life <= forecasts[hitShields]) continue;
+                }
+                if (!defensive) {
+                    int gain = targetValue - tradeCost;
+                    if (gain > bestBoardGain) {
+                        bestBoardGain = gain;
+                        best = new Trade(first, aim, 0, tradeCost, Integer.bitCount(mask));
+                    }
+                    continue;
+                }
                 int margin=life-forecasts[hitShields], gain=margin-before;
                 if (gain<=0) continue;
                 var trade=new Trade(first,aim,margin,cost,Integer.bitCount(mask));

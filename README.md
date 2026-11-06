@@ -10,7 +10,9 @@ Craftbound is a Minecraft card game played at a card table. Bring a binder to br
 | Alternate Modes > Commander | A four-player free-for-all. |
 | Alternate Modes > The Trials | Draft 10 borrowed cards, then explore a scrolling expedition map. Commit to a branch for a few rooms before the next crossroads; all paths converge on the guardian. Branches have different lengths: a shorter route reaches stronger foes sooner, while a longer route offers more preparation. Manage Health and Emeralds, train individual cards, and earn class cosmetics on your first clear. |
 
-**Running multiplayer:** Install Fabric for Minecraft 26.3, Fabric API for 26.3, and the same playable Craftbound jar on the server and each client. For a fresh server, copy your Workshop catalogue from `run/config/craftbound/cards.json` in this project to `config/craftbound/cards.json` in the server folder. The server sends its catalogue to joining clients. Keep the server's current file when updating an existing installation unless you intend to replace its cards.
+**Releasing:** run `./gradlew releaseJar`. It writes `build/release/craftbound-<version>.jar` with your current Workshop cards (`run/config/craftbound/cards.json`) and Trials route (`trials.json`) built in, so players and servers need only the jar. Upload that file to Modrinth. The Workshop does this for you after every save; its status line says when the jar is ready.
+
+**Running multiplayer:** Install Fabric for Minecraft 26.3, Fabric API for 26.3, and the same release jar on the server and each client. The server sends its card set to joining clients. On first launch the mod writes `config/craftbound/cards.json` and `trials.json` from the jar. When a newer jar ships, those files update automatically unless the owner edited them (the old copy is kept as `.previous`).
 
 ## Editing The Trials
 
@@ -34,4 +36,4 @@ For setup instructions, please see the [Fabric Documentation page](https://docs.
 
 ## License
 
-This template is available under the CC0 license. Feel free to learn from it and incorporate it in your own projects.
+All rights reserved. The source is public for reference only; see [LICENSE](LICENSE). Download the mod from its official release page.

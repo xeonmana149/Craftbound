@@ -85,11 +85,22 @@ public class CardRenderer {
 
     static List<HoverRegion> drawTrial(CardCanvas canvas, Font font, Identifier id, boolean enchanted,
                                       TrialTraining training, int x, int y, float scale) {
-        return drawFace(canvas, font, id, enchanted, x, y, scale, -1, -1, training);
+        return drawFace(canvas, font, id, enchanted, x, y, scale, -1, -1, training, 0);
+    }
+
+    /** A copy in a match hand: Trials training plus Brewing Stand upgrades (craftbound.card.Brew bits). */
+    public static List<HoverRegion> drawTrial(GuiGraphicsExtractor graphics, Font font, Identifier id, boolean enchanted,
+                                               TrialTraining training, int brew, int x, int y, float scale) {
+        return drawFace(new CardCanvas.Gui(graphics), font, id, enchanted, x, y, scale, -1, -1, training, brew);
     }
 
     private static List<HoverRegion> drawFace(CardCanvas g, Font font, Identifier id, boolean enchanted,
                                               int x, int y, float scale, int liveAttack, int liveUses, TrialTraining training) {
+        return drawFace(g, font, id, enchanted, x, y, scale, liveAttack, liveUses, training, 0);
+    }
+
+    private static List<HoverRegion> drawFace(CardCanvas g, Font font, Identifier id, boolean enchanted,
+                                              int x, int y, float scale, int liveAttack, int liveUses, TrialTraining training, int brew) {
         List<HoverRegion> regions = new ArrayList<>();
         CardDefinition card = id == null ? null : Cards.get(id);
         if (card == null) {
@@ -162,7 +173,7 @@ public class CardRenderer {
             g.fill(WIDTH - 10, boxTop, WIDTH - 8, boxBottom, PARCHMENT_DARK);
             g.fill(8, boxBottom - 2, WIDTH - 8, boxBottom, PARCHMENT_DARK);
         }
-        var layout = textLayout(font, id, card, painted, liveTool ? liveAttack : -1, liveTool ? liveUses : -1, training);
+        var layout = textLayout(font, id, card, painted, liveTool ? liveAttack : -1, liveTool ? liveUses : -1, training, brew);
         int number = layout.number();
         float textLeft = 12, textScale = layout.scale(), textTop = layout.top();
         g.pose().pushMatrix();
@@ -225,7 +236,7 @@ public class CardRenderer {
 
         // Every kind has a clear label; a Block can also retain its Crop/Aquatic subtype.
         {
-            Component typeName = kindLabel(card);
+            Component typeName = kindLabel(id, card);
             int plateWidth = Math.min(card.isMob() || card.isTool() ? 72 : WIDTH - 20, font.width(typeName) + 8);
             int plateLeft = WIDTH / 2 - plateWidth / 2;
             int plateTop = HEIGHT - 17;
@@ -322,6 +333,18 @@ public class CardRenderer {
                 .append(Cards.styledText(craftbound.card.CardCatalog.description(scripted)));
     }
 
+    // A brewed potion shows its upgraded rules, with the brewed upgrades in green.
+    static Component brewText(Identifier id, int bits) {
+        var entry = craftbound.card.CardCatalog.entry(id);
+        if (entry == null) return Component.empty();
+        var brew = craftbound.card.Brew.fromBits(bits);
+        String text = brew.describe(entry);
+        String head = "Brewed: " + String.join(", ", brew.upgrades().stream().map(u -> u.label).toList()) + ".";
+        if (!text.startsWith(head)) return Cards.styledText(text);
+        return Component.empty().append(Component.literal(head).withStyle(style -> style.withColor(UPGRADE_TEXT)))
+                .append(Cards.styledText(text.substring(head.length())));
+    }
+
     // A trained copy is distinct from its unmodified catalogue card, including in inspection.
     static Component trialText(Identifier id, TrialTraining training) {
         CardDefinition card = Cards.get(id);
@@ -345,7 +368,7 @@ public class CardRenderer {
         return body;
     }
 
-    private record TextKey(Identifier id, boolean painted, int attack, int uses, TrialTraining training) {}
+    private record TextKey(Identifier id, boolean painted, int attack, int uses, TrialTraining training, int brew) {}
     private record KeywordSpan(Keyword keyword, int start, int width, List<Component> tooltip) {}
     private record TextLine(FormattedCharSequence text, int x, int y, List<KeywordSpan> keywords) {}
     private record TextLayout(float scale, float top, List<TextLine> lines, int number, int collectorTotal) {}
@@ -357,14 +380,14 @@ public class CardRenderer {
     static long layoutBuilds() { return layoutBuilds; }
     static int cachedTextLayouts() { return TEXT_LAYOUTS.size(); }
 
-    private static TextLayout textLayout(Font font, Identifier id, CardDefinition card, boolean painted, int attack, int uses, TrialTraining training) {
+    private static TextLayout textLayout(Font font, Identifier id, CardDefinition card, boolean painted, int attack, int uses, TrialTraining training, int brew) {
         long epoch = CardRenderEpoch.current(font);
         if (epoch != textEpoch) { TEXT_LAYOUTS.clear(); textEpoch = epoch; }
-        var key = new TextKey(id, painted, attack, uses, training);
+        var key = new TextKey(id, painted, attack, uses, training, brew);
         TextLayout cached = TEXT_LAYOUTS.get(key);
         if (cached != null) return cached;
         layoutBuilds++;
-        Component body = attack >= 0 ? liveToolText(id, attack, uses) : trialText(id, training);
+        Component body = attack >= 0 ? liveToolText(id, attack, uses) : brew != 0 ? brewText(id, brew) : trialText(id, training);
         int boxTop = painted ? 104 : 96, boxBottom = painted ? 140 : 147;
         int textWidth = WIDTH - 16 - 2 - 8;
         int number = Cards.collectorNumber(id);
@@ -480,6 +503,17 @@ public class CardRenderer {
         if ((item == null || item == Items.AIR) && mob && !itemName.endsWith("_spawn_egg"))
             item = BuiltInRegistries.ITEM.getValue(Identifier.parse(itemName + "_spawn_egg"));
         return new ItemStack(item == null || item == Items.AIR ? Items.PAPER : item);
+    }
+
+    // Actions with an element (Fire, Frost, Ender...) show it in place of "Action", like a spell school.
+    public static Component kindLabel(Identifier id, CardDefinition card) {
+        if (card.kind() == CardKind.ITEM) {
+            var entry = craftbound.card.CardCatalog.entry(id);
+            if (entry != null && entry.potion())
+                return Component.literal(entry.element() == null ? "Potion" : entry.element().displayName() + " Potion");
+            if (entry != null && entry.element() != null) return Component.literal(entry.element().displayName());
+        }
+        return kindLabel(card);
     }
 
     public static Component kindLabel(CardDefinition card) {
@@ -681,7 +715,7 @@ public class CardRenderer {
             drawMiniStat(g, font, x + MINI_WIDTH - 13, y + 30, card.health(), card.isTool() ? USES : HEALTH);
         } else {
             g.fill(x + 5, y + 30, x + MINI_WIDTH - 5, y + 39, PARCHMENT);
-            fitText(g, font, kindLabel(card), x + MINI_WIDTH / 2, y + 31, MINI_WIDTH - 10, TEXT_DARK, true, false);
+            fitText(g, font, kindLabel(id, card), x + MINI_WIDTH / 2, y + 31, MINI_WIDTH - 10, TEXT_DARK, true, false);
         }
         drawMiniStat(g, font, x + 1, y + 1, card.cost(), EMERALD);
         g.fill(x + 2, y + 40, x + MINI_WIDTH - 2, y + MINI_HEIGHT, FRAME_DARK);

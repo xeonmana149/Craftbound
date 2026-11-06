@@ -2,17 +2,21 @@
 // Local Workshop host: one fixed catalogue, authenticated writes, no external packages.
 const http=require("node:http"),fs=require("node:fs"),path=require("node:path"),crypto=require("node:crypto");
 const assets=new Map([["/","index.html"],...["index.html","model.js","editor.js","defaults.js","style.css","card-kinds.css","curve.css","reference.html","foundation-ideas.html","trials.html","trials-ui.js","trials-model.js","trials.css"].map(x=>["/"+x,x])]);
-function createWorkshopServer({catalogue,bundled,assetDir=__dirname,token=crypto.randomBytes(32).toString("hex")}){
+function createWorkshopServer({catalogue,bundled,assetDir=__dirname,token=crypto.randomBytes(32).toString("hex"),release=null}){
  const send=(res,code,body,type="application/json")=>{res.writeHead(code,{"Content-Type":type,"Cache-Control":"no-store","X-Content-Type-Options":"nosniff","Referrer-Policy":"no-referrer"});res.end(type==="application/json"?JSON.stringify(body):body)};
  const ideasFile=path.join(path.dirname(catalogue),'workshop-ideas.json');
  const readIdeas=()=>fs.existsSync(ideasFile)?fs.readFileSync(ideasFile,'utf8'):JSON.stringify({version:1,ideas:[]});
  const revision=text=>crypto.createHash('sha256').update(text).digest('hex');
- const trials=require("./trials-server.cjs").handler({catalogue,resourceDir:path.resolve(__dirname,"../../src/main/resources/craftbound"),token,send});
+ const trials=require("./trials-server.cjs").handler({catalogue,resourceDir:path.resolve(__dirname,"../../src/main/resources/craftbound"),token,send,onSaved:()=>release?.schedule()});
  const server=http.createServer((req,res)=>{
   const origin="http://127.0.0.1:"+server.address().port;
   if(req.headers.host!==new URL(origin).host || req.headers.origin && req.headers.origin!==origin){send(res,403,{error:"Only the local Workshop may access this server."});return}
   const route=new URL(req.url,origin).pathname;
   if(route==="/api/trials")return trials(req,res);
+  if(route==="/api/release"){
+   if(req.headers["x-workshop-token"]!==token){send(res,403,{error:"Open the Workshop using its launcher."});return}
+   send(res,200,release?{enabled:true,...release.state()}:{enabled:false});return;
+  }
   if(route==="/api/ideas"){
    if(req.headers["x-workshop-token"]!==token){send(res,403,{error:"Open the Workshop using its launcher."});return}
    if(req.method==="GET"){try{const text=readIdeas();send(res,200,{data:JSON.parse(text),revision:revision(text)})}catch(e){send(res,500,{error:"Cannot read ideas: "+e.message})}return}
@@ -62,6 +66,7 @@ function createWorkshopServer({catalogue,bundled,assetDir=__dirname,token=crypto
      fs.writeFileSync(temp,JSON.stringify(incoming,null,2)+"\n",{flag:"wx"});
      fs.renameSync(temp,catalogue);temp=null;
      send(res,200,{path:catalogue});
+     release?.schedule();
     }catch(e){send(res,500,{error:"Save failed; your draft is still open. "+e.message})}
     finally{if(temp && fs.existsSync(temp))fs.unlinkSync(temp)}
    });
@@ -82,12 +87,24 @@ if(require.main===module){
  const catalogue=path.join(project,"run/config/craftbound/cards.json");
  const bundled=path.join(project,"src/main/resources/craftbound/cards.json");
  if(!fs.existsSync(catalogue)){fs.mkdirSync(path.dirname(catalogue),{recursive:true});fs.copyFileSync(bundled,catalogue)}
- const {server,token}=createWorkshopServer({catalogue,bundled});
- server.listen(0,"127.0.0.1",()=>{
-  const url="http://127.0.0.1:"+server.address().port+"/#"+token;
-  if(process.argv.includes("--open")){
-   const child=require("node:child_process").spawn("powershell.exe",["-NoProfile","-Command","Start-Process '"+url+"'"],{windowsHide:true,stdio:"ignore"});
-   child.on("error",e=>console.error("Cannot open browser:",e.message));
-  }else console.log(url);
+ // A fixed port and a token saved beside the catalogue keep the same link across restarts, so it can be bookmarked.
+ // Set WORKSHOP_PORT to move it. Delete run/config/craftbound/workshop-token.txt to get a new token.
+ const port=Number(process.env.WORKSHOP_PORT)||47390;
+ const tokenFile=path.join(path.dirname(catalogue),"workshop-token.txt");
+ let token=fs.existsSync(tokenFile)?fs.readFileSync(tokenFile,"utf8").trim():"";
+ if(!/^[0-9a-f]{64}$/.test(token)){token=crypto.randomBytes(32).toString("hex");fs.writeFileSync(tokenFile,token)}
+ const url="http://127.0.0.1:"+port+"/#"+token;
+ const open=()=>{
+  const child=require("node:child_process").spawn("powershell.exe",["-NoProfile","-Command","Start-Process '"+url+"'"],{windowsHide:true,stdio:"ignore"});
+  child.on("error",e=>console.error("Cannot open browser:",e.message));
+ };
+ // Each save rebuilds the player jar (build/release) in the background. Set WORKSHOP_AUTO_RELEASE=0 to turn it off.
+ const release=process.env.WORKSHOP_AUTO_RELEASE==="0"?null:require("./release-builder.cjs").createReleaseBuilder({project});
+ const {server}=createWorkshopServer({catalogue,bundled,token,release});
+ server.on("error",e=>{
+  // Already running (from the launcher or another window): reuse it instead of failing.
+  if(e.code==="EADDRINUSE"){console.log(url+"  (already running)");if(process.argv.includes("--open"))open();return}
+  console.error("Workshop could not start:",e.message);process.exitCode=1;
  });
+ server.listen(port,"127.0.0.1",()=>{console.log(url);if(process.argv.includes("--open"))open()});
 }

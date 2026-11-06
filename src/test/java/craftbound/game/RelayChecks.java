@@ -61,6 +61,13 @@ final class RelayChecks {
         m.events.clear();
         m.event(MatchEvent.Type.GIVE,side,0,new CardRef(id("warden"),false),0,0,Target.NONE);
         ok(!RelayTables.view(m,any).has("publicAttack"),"Private card events cannot produce a public attack trail");
+        ok(!RelayTables.view(m,any).has("publicCast"),"A private event must never be replayed as a public cast");
+        var castCard = new CardRef(id("arrow"), false);
+        m.event(MatchEvent.Type.PLAY,side,Match.HERO,castCard,2,0,Target.mob(otherFoe,12));
+        var cast=RelayTables.view(m,any).getAsJsonObject("publicCast");
+        ok(cast.get("card").getAsString().equals(castCard.id().toString()) && cast.get("from").getAsInt()==side
+                && cast.get("to").getAsInt()==otherFoe && cast.get("target").getAsInt()==12,
+                "A spectator sees the played card and its original target even after resolution");
         m.event(MatchEvent.Type.ATTACK,side,17,new CardRef(id("zombie"),false),2,0,Target.hero(otherFoe));
         var trail=RelayTables.view(m,any).getAsJsonObject("publicAttack");
         ok(trail.size()==4&&trail.get("from").getAsInt()==side&&trail.get("source").getAsInt()==17

@@ -32,7 +32,7 @@ record BoardAttack(End from, End to, String caption) {
         return new BoardAttack(from, to, caption);
     }
 
-    private static End end(JsonObject owner, int side, int mid) {
+    static End end(JsonObject owner, int side, int mid) {
         if (mid == Match.HERO) return new End(side, -1, 0, false, "hero");
         int[] counts = new int[2];
         int slot = -1, kind = 0;

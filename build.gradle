@@ -128,3 +128,20 @@ publishing {
 		// retrieving dependencies.
 	}
 }
+
+// A jar for players and Modrinth: the bundled cards and Trials book are replaced with your current
+// Workshop files, so nobody needs a config folder. Output: build/release/craftbound-<version>.jar.
+def workshopCards = layout.projectDirectory.file('run/config/craftbound/cards.json')
+def workshopTrials = layout.projectDirectory.file('run/config/craftbound/trials.json')
+tasks.register('releaseJar', Zip) {
+    group = 'build'
+    description = 'Builds build/release/craftbound-<version>.jar with your Workshop cards and Trials route inside.'
+    dependsOn tasks.named('jar')
+    archiveFileName = "craftbound-${project.version}.jar"
+    destinationDirectory = layout.buildDirectory.dir('release')
+    inputs.file(workshopCards)
+    inputs.file(workshopTrials)
+    from({ zipTree(tasks.named('jar').get().archiveFile) }) { exclude 'craftbound/cards.json', 'craftbound/trials-bundle.json' }
+    from(workshopCards) { into 'craftbound' }
+    from(workshopTrials) { into 'craftbound'; rename { 'trials-bundle.json' } }
+}

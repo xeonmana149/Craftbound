@@ -22,7 +22,13 @@ public final class TrialsContent {
         var book = current;
         if (book != null) return book;
         synchronized (TrialsContent.class) {
-            if (current == null) current = parse(defaults());
+            if (current == null) {
+                try { current = parse(defaults()); }
+                catch (RuntimeException e) {
+                    Craftbound.LOGGER.error("Bundled Trials route rejected; using the built-in sections", e);
+                    current = parse(sectionDefaults());
+                }
+            }
             return current;
         }
     }
@@ -31,6 +37,13 @@ public final class TrialsContent {
     public static List<TrialCharmSpec> charms() { return book().charms; }
     public static List<TrialsRewards.Reward> rewards() { return book().rewards; }
     static JsonObject defaults() {
+        // A release jar carries the designer's whole Trials book (see the releaseJar Gradle task).
+        try (var bundle = TrialsContent.class.getResourceAsStream("/craftbound/trials-bundle.json")) {
+            if (bundle != null) return JsonParser.parseReader(new InputStreamReader(bundle,StandardCharsets.UTF_8)).getAsJsonObject();
+        } catch (IOException e) { throw new UncheckedIOException(e); }
+        return sectionDefaults();
+    }
+    static JsonObject sectionDefaults() {
         var root = new JsonObject();
         root.addProperty("version",1);
         for (String key : SECTIONS) {
@@ -56,10 +69,7 @@ public final class TrialsContent {
     private static Path path() { return FabricLoader.getInstance().getConfigDir().resolve("craftbound/trials.json"); }
     static void loadLocal() throws IOException {
         var path = path();
-        if (!Files.exists(path)) {
-            Files.createDirectories(path.getParent());
-            Files.writeString(path,GSON.toJson(defaults())+"\n",StandardOpenOption.CREATE_NEW);
-        }
+        craftbound.BundledConfig.refresh(path, GSON.toJson(defaults())+"\n");
         if (Files.size(path)>1_000_000) throw new IOException("trials.json exceeds 1 MB");
         var root = JsonParser.parseString(Files.readString(path)).getAsJsonObject();
         boolean upgraded = upgradeDefaultAct(root);

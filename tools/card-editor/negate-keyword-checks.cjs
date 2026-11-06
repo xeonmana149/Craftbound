@@ -1,0 +1,12 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),M=require('./model.js');
+const source=JSON.parse(fs.readFileSync('src/test/resources/craftbound/test-cards.json','utf8'));
+const data=M.clone(source),c=data.cards.find(x=>x.keywords.includes('BLOCK'));
+c.autoText=true;c.passive='NEGATE_KEYWORD';c.passiveAmount=0;c.negateKeyword='SPRINT';
+assert.deepEqual(M.validate(data,source),[],'Soul Sand style block is valid');
+assert.ok(M.description(c,data).includes('Enemy mobs and blocks lose Sprint while this is in play.'),'Negate keyword wording');
+c.auraKind='BLOCK';c.negateKeyword='SHIELD';assert.ok(M.description(c,data).includes('Enemy blocks lose Shield while this is in play.'),'Blocks-only wording');
+c.auraKind='MOB';c.auraType='UNDEAD';assert.ok(M.description(c,data).includes('Enemy Undead mobs lose Shield'),'Mob type wording');
+c.negateKeyword='BLOCK';assert.ok(M.validate(data,source).some(e=>String(e).includes('Negate keyword needs')),'Only combat keywords can be negated');
+delete c.negateKeyword;assert.ok(M.validate(data,source).length,'Negate keyword needs a keyword');
+assert.ok(M.GUIDE.passive.NEGATE_KEYWORD,'Rule explanation exists');
+console.log('PASS: Negate keyword passive authoring, wording and validation.');

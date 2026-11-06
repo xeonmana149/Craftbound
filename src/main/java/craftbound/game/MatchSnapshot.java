@@ -42,6 +42,7 @@ final class MatchSnapshot {
             p.deck.forEach(MatchSnapshot::checkCard); p.hand.forEach(MatchSnapshot::checkCard);
             for (Minion m : p.board) {
                 checkCard(m.card);
+                if (m.impaled != null) checkCard(m.impaled.card);
                 if (m.timedWeaknesses == null) m.timedWeaknesses = new ArrayList<>();
                 if (!Cards.get(m.card.id()).isMob() || m.id <= 0 || m.id >= s.nextId || !ids.add(m.id))
                     throw new IllegalArgumentException("Invalid saved mob");
@@ -51,6 +52,8 @@ final class MatchSnapshot {
                 p.tool.enchantments.forEach(e -> checkCard(e.card()));
                 p.tool.triggerEnchantments.forEach(MatchSnapshot::checkCard);
             }
+            if (p.brewing == null) p.brewing = new ArrayList<>();
+            p.brewing.forEach(r -> checkCard(r.card()));
             p.eventsSent = 0;
         }
         if (s.players[0].isAi() && s.players[1].isAi()

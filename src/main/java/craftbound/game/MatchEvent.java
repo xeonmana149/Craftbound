@@ -78,7 +78,13 @@ public record MatchEvent(Type type, int side, int mid, CardRef card, int amount,
         HAND_STEAL,
         // side (the hand's owner) shuffles card from position amount into their deck; extra: the controller.
         // Card visible to side and the controller.
-        HAND_SHUFFLE
+        HAND_SHUFFLE,
+        // A Brewing Stand upgraded side's potion at hand position amount; extra: its Brew bits. Card visible to side only.
+        BREW,
+        // side's thrown tool (card) sticks in the target mob (amount 1) or comes out of it (amount 0).
+        IMPALE,
+        // Channeling: lightning strikes the target mob, where side's Trident is stuck, and the mobs beside it.
+        CHANNEL
     }
 
     public static final int STATUS_FROZEN = 1;
@@ -91,4 +97,10 @@ public record MatchEvent(Type type, int side, int mid, CardRef card, int amount,
     public static final int STATUS_SPRINT = 8;
     public static final int STATUS_RANGED = 9;
     public static final int STATUS_IGNORE_SHIELD = 10;
+    // STATUS amount: an enemy passive switched off a keyword; extra is the Keyword ordinal.
+    public static final int STATUS_NEGATED = 11;
+    // STATUS amount: a card with limited uses spent one; extra is how many uses are left (0 = destroyed).
+    public static final int STATUS_USES = 12;
+    // ATTACK extra: the hero is repairing its own block with a Repair tool, not attacking.
+    public static final int ATTACK_REPAIR = 1;
 }

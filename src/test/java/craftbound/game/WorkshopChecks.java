@@ -129,6 +129,13 @@ public class WorkshopChecks {
   var factory=MatchManager.class.getDeclaredMethod("cardMasterDeck",CardClass.class,RandomSource.class);factory.setAccessible(true);
   for(var cls:CardClass.values())if(cls!=CardClass.NEUTRAL)for(int seed=0;seed<250;seed++){
    @SuppressWarnings("unchecked") var deck=(List<CardRef>)factory.invoke(null,cls,RandomSource.create(seed));
+   if(seed==0) {
+    long available=Cards.collectible().stream().map(Cards::get)
+        .filter(c->(c.cardClass()==CardClass.NEUTRAL || c.cardClass()==cls)&&MatchManager.frontliner(c)&&c.cost()<=2)
+        .mapToInt(c->DeckRules.maxCopies(c.rarity())).sum();
+    ok(deck.stream().map(c->Cards.get(c.id())).filter(c->MatchManager.frontliner(c)&&c.cost()<=2).count()>=Math.min(8,available),
+        "Card Master reserves affordable attackers when its class pool supports them");
+   }
    ok(deck.size()==30,"AI deck size");var counts=new HashMap<Identifier,Integer>();
    for(var ref:deck){ok(DeckRules.allowed(ref.id(),cls),"Legal AI class");counts.merge(ref.id(),1,Integer::sum);}
    counts.forEach((id,n)->ok(n<=DeckRules.maxCopies(Cards.get(id).rarity()),"AI copy limit"));
@@ -229,6 +236,16 @@ public class WorkshopChecks {
   SurvivingKillChecks.run();
   DamageHeroChecks.run();
   HandEffectChecks.run();
+  RepairToolChecks.run();
+  KeywordGrantChecks.run();
+  NegateKeywordChecks.run();
+  PickOneChecks.run();
+  ElementBoostChecks.run();
+  RowShieldChecks.run();
+  BrewChecks.run();
+  UsesChecks.run();
+  TridentChecks.run();
+  BundledConfigChecks.run();
   RandomToolChecks.run();
   CommanderChecks.run();
   TrialsChecks.run();
@@ -1182,7 +1199,7 @@ public class WorkshopChecks {
    m=match();pup=mob(m,0,"wolf_pup");play(m,"test_grant_sprint",Target.mob(0,pup.id));
    ok(pup.canAttack()&&m.whyCantAttack(0,pup.id,Target.hero(1))!=null,"Granted Sprint enables board attacks but not same-turn face");
    ore=mob(m,0,"coal_ore");play(m,"test_grant_shield",Target.mob(0,ore.id));
-   ok(!ore.has(Keyword.SHIELD)&&!ore.canAttack(),"Blocks cannot gain Shield");
+   ok(ore.has(Keyword.SHIELD)&&!ore.canAttack(),"Blocks can gain Shield but still cannot attack");
    play(m,"test_grant_ranged",Target.mob(0,pup.id));ok(pup.has(Keyword.RANGED)&&m.retaliationOf(pup)==m.attackOf(pup),"Granted Ranged uses new combat rule");
    var wire=JsonParser.parseString(MatchView.build(m,0,0)).getAsJsonObject().getAsJsonArray("players").get(0).getAsJsonObject().getAsJsonArray("board").get(0).getAsJsonObject();
    ok(wire.get("ranged").getAsBoolean()&&wire.get("sprint").getAsBoolean(),"Dynamic keywords are transmitted");

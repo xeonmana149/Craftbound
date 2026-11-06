@@ -83,7 +83,8 @@ final class TrialsMapScenario {
             ctx.runOnClient(mc -> {
                 var sc = screen(mc.gui.screen());
                 var viewport = sc.mapViewport();
-                if (!sc.mouseScrolled(viewport[0] + viewport[2] / 2.0, viewport[1] + viewport[3] / 2.0, 0, 1))
+                // The wheel zooms (left-drag pans): zooming out eventually shows the whole route.
+                if (!sc.mouseScrolled(viewport[0] + viewport[2] / 2.0, viewport[1] + viewport[3] / 2.0, 0, -1))
                     throw new AssertionError("The map ignored a vertical wheel input");
             });
             ctx.waitTicks(2);
@@ -91,7 +92,7 @@ final class TrialsMapScenario {
         ctx.runOnClient(mc -> {
             var sc = screen(mc.gui.screen());
             if (sc.mapNodeBounds(finalBoss) == null)
-                throw new AssertionError("Scrolling up could not reach the boss");
+                throw new AssertionError("Zooming out with the wheel could not reach the boss");
             clickNode(sc, finalBoss);
             if (button(sc, "Travel").active)
                 throw new AssertionError("Previewing a disconnected boss allowed travel");

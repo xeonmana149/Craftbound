@@ -30,7 +30,12 @@ final class MatchCardHover {
     private Object snapshot;
     private record CardPreview(Identifier id, boolean enchanted, TrialTraining training,
                                int x, int y, int width, float scale,
-                               List<FormattedCharSequence> notes, boolean playable) {}
+                               List<FormattedCharSequence> notes, boolean playable, int brew) {
+        CardPreview(Identifier id, boolean enchanted, TrialTraining training, int x, int y, int width, float scale,
+                    List<FormattedCharSequence> notes, boolean playable) {
+            this(id, enchanted, training, x, y, width, scale, notes, playable, 0);
+        }
+    }
     private CardPreview associatedPreview;
     private boolean handSource;
     private int handPointerX, handPointerY;
@@ -43,6 +48,10 @@ final class MatchCardHover {
     private int associatedWidth, associatedHeight, createdPage;
     private List<CardRenderer.HoverRegion> createdHoverRegions = List.of();
     private int[] createsPane, createsPrevious, createsNext;
+    // Pinned with right-click: keyword notes expand to their full rule when hovered.
+    private boolean pinned;
+
+    void pinned(boolean pinned) { this.pinned = pinned; }
 
     void prepare(Font font, int width, int height, Object snapshot) {
         this.font = font;
@@ -105,7 +114,7 @@ final class MatchCardHover {
                 new ItemStack(BuiltInRegistries.ITEM.getValue(power.icon())), cardClass, cost, used, at[0], at[1], scale);
     }
 
-    void hand(GuiGraphicsExtractor g, Identifier id, boolean enchanted, TrialTraining training,
+    void hand(GuiGraphicsExtractor g, Identifier id, boolean enchanted, TrialTraining training, int brew,
               int centerX, int leftBound, boolean playable, int mouseX, int mouseY) {
         clear();
         handSource = true;
@@ -116,7 +125,7 @@ final class MatchCardHover {
         int w = Math.round(CardRenderer.WIDTH * scale);
         int x = Math.max(leftBound, Math.min(width - w - 90, centerX - w / 2));
         int y = height - Math.round(CardRenderer.HEIGHT * scale) - 4;
-        drawCardPreview(g, new CardPreview(id, enchanted, training, x, y, w, scale, List.of(), playable), mouseX, mouseY);
+        drawCardPreview(g, new CardPreview(id, enchanted, training, x, y, w, scale, List.of(), playable, brew), mouseX, mouseY);
     }
 
     void unit(GuiGraphicsExtractor g, Mob mob, boolean ownersTurn, int[] anchor, int mouseX, int mouseY) {
@@ -191,18 +200,18 @@ final class MatchCardHover {
             int pairWidth = Math.max(preview.width(), w + 8 + tokenWidth);
             int x = Math.max(4, Math.min(preview.x(), this.width - pairWidth - 4));
             preview = new CardPreview(preview.id(), preview.enchanted(), preview.training(),
-                    x, preview.y(), preview.width(), preview.scale(), preview.notes(), preview.playable());
+                    x, preview.y(), preview.width(), preview.scale(), preview.notes(), preview.playable(), preview.brew());
         }
         if (preview.playable()) {
             g.fill(preview.x() - 3, preview.y() - 3, preview.x() + w + 3, preview.y() + h + 3, 0x807DFF5A);
             g.outline(preview.x() - 2, preview.y() - 2, w + 4, h + 4, MatchArt.GLOW);
         }
-        CardRenderer.drawTrial(g, this.font, preview.id(), preview.enchanted(), preview.training(),
+        CardRenderer.drawTrial(g, this.font, preview.id(), preview.enchanted(), preview.training(), preview.brew(),
                 preview.x(), preview.y(), preview.scale());
         if (!preview.notes().isEmpty())
             drawNote(g, preview.notes(), preview.x(), preview.y() + h + 4, preview.width());
         drawCreates(g, preview);
-        drawKeywordNotes(g, preview.id(), preview.training(), preview.x(), preview.y(), preview.width());
+        drawKeywordNotes(g, preview.id(), preview.training(), preview.x(), preview.y(), preview.width(), mouseX, mouseY);
         for (var region : this.createdHoverRegions) {
             if (region.keyword() != null && region.contains(mouseX, mouseY)) {
                 Tooltips.show(g, this.font, region.lines(), mouseX, mouseY);
@@ -266,7 +275,8 @@ final class MatchCardHover {
     }
 
     // All the card's keywords are readable on hover, without having to aim at tiny words on its art.
-    private void drawKeywordNotes(GuiGraphicsExtractor g, Identifier id, TrialTraining training, int cardX, int cardY, int cardWidth) {
+    private void drawKeywordNotes(GuiGraphicsExtractor g, Identifier id, TrialTraining training, int cardX, int cardY, int cardWidth,
+                                  int mouseX, int mouseY) {
         CardDefinition card = Cards.get(id);
         if (card == null || (card.keywords().isEmpty() && training.keyword() == null)) {
             return;
@@ -280,20 +290,35 @@ final class MatchCardHover {
                 : rightSpace >= 140 || rightSpace >= leftSpace;
         int available = Math.max(1, onRight ? rightSpace : leftSpace);
         int boxWidth = Math.min(150, Math.max(90, available));
-        List<List<FormattedCharSequence>> boxes = new ArrayList<>();
-        int totalHeight = 0;
         // Enum order keeps the notes stable even if a card stores its keywords in an unordered set.
+        List<Keyword> shown = new ArrayList<>();
         for (Keyword keyword : Keyword.values()) {
             if (keyword == Keyword.BLOCK) continue;
             if (training.keyword() != keyword && !card.keywords().contains(keyword)) continue;
-            List<FormattedCharSequence> lines = new ArrayList<>();
-            lines.addAll(this.font.split(keyword.displayName().copy().withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD), boxWidth - 8));
-            lines.addAll(this.font.split(keyword.description(card).copy().withStyle(ChatFormatting.GRAY), boxWidth - 8));
-            boxes.add(lines);
-            totalHeight += lines.size() * this.font.lineHeight + 7 + 4;
+            shown.add(keyword);
         }
-        if (boxes.isEmpty()) return;
-        totalHeight -= 4;
+        if (shown.isEmpty()) return;
+        // Short lines first. Pinned, the note under the pointer opens to its full rule.
+        Keyword expanded = null;
+        boolean more = shown.stream().anyMatch(Keyword::hasMore);
+        List<List<FormattedCharSequence>> boxes = keywordBoxes(shown, card, null, boxWidth, more);
+        int totalHeight = boxesHeight(boxes);
+        if (this.pinned) {
+            float probeScale = Math.min(1.0F, Math.min(available / (float) boxWidth, (this.height - 10.0F) / totalHeight));
+            int px = onRight ? rightStart : cardX - gap - (int) Math.ceil(boxWidth * probeScale);
+            int py = Math.max(5, Math.min(cardY, this.height - (int) Math.ceil(totalHeight * probeScale) - 5));
+            float lx = (mouseX - px) / probeScale, ly = (mouseY - py) / probeScale;
+            int cursor = 0;
+            for (int i = 0; i < boxes.size(); i++) {
+                int boxHeight = boxes.get(i).size() * this.font.lineHeight + 7;
+                if (lx >= 0 && lx < boxWidth && ly >= cursor && ly < cursor + boxHeight) { expanded = shown.get(i); break; }
+                cursor += boxHeight + 4;
+            }
+            if (expanded != null) {
+                boxes = keywordBoxes(shown, card, expanded, boxWidth, more);
+                totalHeight = boxesHeight(boxes);
+            }
+        }
         float scale = Math.min(1.0F, Math.min(available / (float) boxWidth, (this.height - 10.0F) / totalHeight));
         int renderedWidth = (int) Math.ceil(boxWidth * scale);
         int renderedHeight = (int) Math.ceil(totalHeight * scale);
@@ -308,6 +333,30 @@ final class MatchCardHover {
             cursor += lines.size() * this.font.lineHeight + 7 + 4;
         }
         g.pose().popMatrix();
+    }
+
+    private List<List<FormattedCharSequence>> keywordBoxes(List<Keyword> keywords, CardDefinition card, Keyword expanded,
+                                                           int boxWidth, boolean more) {
+        List<List<FormattedCharSequence>> boxes = new ArrayList<>();
+        for (Keyword keyword : keywords) {
+            List<FormattedCharSequence> lines = new ArrayList<>();
+            lines.addAll(this.font.split(keyword.displayName().copy().withStyle(ChatFormatting.GOLD, ChatFormatting.BOLD), boxWidth - 8));
+            Component text = keyword == expanded ? keyword.description(card) : keyword.shortDescription();
+            lines.addAll(this.font.split(text.copy().withStyle(ChatFormatting.GRAY), boxWidth - 8));
+            boxes.add(lines);
+        }
+        if (more) {
+            Component hint = Component.literal(this.pinned ? "Hover a note for the full rule." : "Right-click to pin and read more.")
+                    .withStyle(ChatFormatting.DARK_GRAY, ChatFormatting.ITALIC);
+            boxes.getLast().addAll(this.font.split(hint, boxWidth - 8));
+        }
+        return boxes;
+    }
+
+    private int boxesHeight(List<List<FormattedCharSequence>> boxes) {
+        int total = 0;
+        for (var lines : boxes) total += lines.size() * this.font.lineHeight + 7 + 4;
+        return total - 4;
     }
 
     // Where a tool or power card goes: above it for you (the board is above your hero), below it for them.
@@ -371,14 +420,28 @@ final class MatchCardHover {
     // What's going on with a mob that its card doesn't say: frozen, withered, a totem, invulnerable, not ready.
     private List<Component> statuses(Mob mob, boolean ownersTurn) {
         List<Component> lines = new ArrayList<>();
+        if (mob.impaled != null) {
+            var thrown = craftbound.card.CardCatalog.entry(mob.impaled);
+            lines.add(Component.literal((thrown == null ? "A thrown tool" : thrown.name()) + " is stuck in this mob. It goes back to its thrower when this mob leaves the board.").withStyle(ChatFormatting.AQUA));
+        }
+        if (mob.usesLeft >= 0) lines.add(Component.literal(mob.usesLeft + (mob.usesLeft == 1 ? " use left" : " uses left") + " before it is destroyed").withStyle(ChatFormatting.GOLD));
         if (mob.attackDebuff > 0) lines.add(Component.literal("Weakened: −" + mob.attackDebuff + " Attack").withStyle(ChatFormatting.GRAY));
-        if (mob.ignoreShield && !mob.card().keywords().contains(Keyword.IGNORE_SHIELD)) lines.add(Keyword.IGNORE_SHIELD.inline().copy().append(": ").append(Keyword.IGNORE_SHIELD.description()));
-        if (mob.shield && !mob.card().keywords().contains(Keyword.SHIELD)) lines.add(Keyword.SHIELD.inline().copy().append(": ").append(Keyword.SHIELD.description()));
-        if (mob.sprint && !mob.card().keywords().contains(Keyword.SPRINT)) lines.add(Keyword.SPRINT.inline().copy().append(": ").append(Keyword.SPRINT.description()));
-        if (mob.ranged && !mob.card().keywords().contains(Keyword.RANGED)) lines.add(Keyword.RANGED.inline().copy().append(": ").append(Keyword.RANGED.description()));
+        for (var potion : mob.potions) {
+            var entry = CardCatalog.entry(potion.id());
+            if (entry == null) continue;
+            var brew = craftbound.card.Brew.fromBits(potion.brew());
+            var line = Component.literal("Under ").append(Cards.name(potion.id()).copy().withStyle(ChatFormatting.BOLD));
+            if (!brew.none()) line.append(Component.literal(" (brewed: " + String.join(", ", brew.upgrades().stream().map(u -> u.label).toList()) + ")")
+                    .withStyle(ChatFormatting.GREEN));
+            lines.add(line.withStyle(ChatFormatting.LIGHT_PURPLE));
+        }
+        if (mob.ignoreShield && !mob.card().keywords().contains(Keyword.IGNORE_SHIELD)) lines.add(Keyword.IGNORE_SHIELD.inline().copy().append(": ").append(Keyword.IGNORE_SHIELD.shortDescription()));
+        if (mob.shield && !mob.card().keywords().contains(Keyword.SHIELD)) lines.add(Keyword.SHIELD.inline().copy().append(": ").append(Keyword.SHIELD.shortDescription()));
+        if (mob.sprint && !mob.card().keywords().contains(Keyword.SPRINT)) lines.add(Keyword.SPRINT.inline().copy().append(": ").append(Keyword.SPRINT.shortDescription()));
+        if (mob.ranged && !mob.card().keywords().contains(Keyword.RANGED)) lines.add(Keyword.RANGED.inline().copy().append(": ").append(Keyword.RANGED.shortDescription()));
         if (mob.frozen) lines.add(Component.translatable("match_ui.craftbound.status.frozen").withStyle(ChatFormatting.AQUA));
         if (mob.withered) lines.add(Keyword.WITHER.displayName().copy().append(": ")
-                .append(Keyword.WITHER.description().copy().withStyle(style -> style.withBold(false))).withStyle(ChatFormatting.GRAY));
+                .append(Keyword.WITHER.shortDescription().copy().withStyle(style -> style.withBold(false))).withStyle(ChatFormatting.GRAY));
         if (mob.totem) lines.add(Component.translatable("match_ui.craftbound.status.totem").withStyle(ChatFormatting.GOLD));
         if (mob.invulnerable) lines.add(Component.translatable("match_ui.craftbound.status.invulnerable").withStyle(ChatFormatting.YELLOW, ChatFormatting.BOLD));
         if (!mob.faceReady && mob.card().keywords().contains(Keyword.SPRINT))

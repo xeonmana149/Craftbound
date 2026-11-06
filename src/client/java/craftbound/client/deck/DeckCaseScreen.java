@@ -83,6 +83,8 @@ public class DeckCaseScreen extends Screen {
     private final craftbound.client.match.TableScreen tableMenu;
     private CardClass browseClass = CardClass.NEUTRAL;
     private boolean confirmDelete;
+    private DeckFormat browseFormat = DeckFormat.DUEL;
+    private final java.util.EnumMap<DeckFormat, int[]> formatTabs = new java.util.EnumMap<>(DeckFormat.class);
     private int hubScroll;
     private int[] newDeckButton, fileCardsButton, deleteDeckButton;
     private final List<String> hubDeckIds = new ArrayList<>();
@@ -213,7 +215,9 @@ public class DeckCaseScreen extends Screen {
     }
 
     private DeckCaseScreen pageFor(String deckId) {
-        return new DeckCaseScreen(hand, deckId, holderLocation, tableMenu);
+        var next = new DeckCaseScreen(hand, deckId, holderLocation, tableMenu);
+        next.browseFormat = format();
+        return next;
     }
 
     private ItemStack holder() {
@@ -223,7 +227,7 @@ public class DeckCaseScreen extends Screen {
     private DeckFormat format() {
         if (tableMenu != null) return tableMenu.deckFormat();
         var entry = savedDeckId==null ? null : craftbound.deck.BinderDecks.get(holder()).find(savedDeckId);
-        return entry==null ? DeckFormat.DUEL : entry.deck().format();
+        return entry == null ? browseFormat : entry.deck().format();
     }
     private int deckTarget() { return format().size(); }
     private int copyLimit(Identifier id) { return format()==DeckFormat.COMMANDER ? 1 : DeckRules.maxCopies(Cards.get(id).rarity()); }
@@ -492,6 +496,7 @@ public class DeckCaseScreen extends Screen {
         this.masteryButton = null;
         this.rulesButton = null; this.filtersButton = null;
         this.newDeckButton = this.fileCardsButton = this.deleteDeckButton = null;
+        formatTabs.clear();
         this.hubDeckIds.clear();
         this.hubDeckSpots.clear();
         this.curveTooltip = null;
@@ -886,8 +891,9 @@ public class DeckCaseScreen extends Screen {
 
     private Identifier drawSavedDecks(GuiGraphicsExtractor g, int mouseX, int mouseY) {
         var saved = craftbound.deck.BinderDecks.get(holder());
-        var entries=tableMenu==null?saved.entries():saved.entries().stream().filter(e->e.deck().format()==format()).toList();
-        String count=tableMenu==null?Integer.toString(entries.size()):entries.size()+"/"+craftbound.deck.SavedDecks.LIMIT;
+        DeckFormat selected = format();
+        var entries = saved.entries().stream().filter(e -> e.deck().format() == selected).toList();
+        String count = entries.size() + "/" + craftbound.deck.SavedDecks.LIMIT;
         Component heading = Component.literal("My Decks · " + count);
         int headingWidth = headingWidth();
         boolean stacked = font.width(heading) > headingWidth;
@@ -895,6 +901,18 @@ public class DeckCaseScreen extends Screen {
                 listX, tabsY + 4, headingWidth, GOLD, false);
         if (stacked) g.text(font, count, listX, tabsY + 15, 0xFFE8D6B0, false);
         int top = tabsY + (stacked ? 27 : 20);
+        if (tableMenu == null) {
+            int x = listX;
+            for (DeckFormat category : DeckFormat.values()) {
+                // Reserve the remaining width for the longer Commander label, even at small GUI sizes.
+                int w = category == DeckFormat.COMMANDER ? listX + listWidth - x : listWidth / 4;
+                int[] tab = drawSmallButton(g, Component.literal(category.title), x, top, w, mouseX, mouseY);
+                formatTabs.put(category, tab);
+                if (category == selected) g.fill(x + 1, top + 12, x + w - 1, top + 14, GOLD);
+                x += w + 1;
+            }
+            top += 17;
+        }
         int height = Math.max(28, footerY - top - 6);
         this.listArea = new int[]{this.listX, top, listWidth, height};
         g.fill(this.listX, top, this.listX + listWidth, top + height, WOOD_DARK);
@@ -918,7 +936,7 @@ public class DeckCaseScreen extends Screen {
         }
         if (entries.isEmpty()) {
             int y = top + 6;
-            for (var line : this.font.split(Component.literal("Create a deck, choose its class, then add cards from your collection."), listWidth - 12)) {
+            for (var line : this.font.split(Component.literal(selected == DeckFormat.COMMANDER ? "Choose New Deck to pick your commander." : "Choose New Deck to start a " + selected.title + " deck."), listWidth - 12)) {
                 g.text(this.font, line, this.listX + 6, y, 0xFFE8D6B0); y += 11;
             }
         }
@@ -1385,6 +1403,17 @@ public class DeckCaseScreen extends Screen {
         DeckContents deck = deck();
 
         if (event.button() == InputConstants.MOUSE_BUTTON_LEFT && overview()) {
+            for (var tab : formatTabs.entrySet()) {
+                if (inside(tab.getValue(), mouseX, mouseY)) {
+                    if (browseFormat != tab.getKey()) {
+                        browseFormat = tab.getKey();
+                        hubScroll = 0;
+                        hubDeckSpots.clear();
+                        playPaperSound(1.04F, .45F);
+                    }
+                    return true;
+                }
+            }
             for (int i = 0; i < this.hubDeckSpots.size(); i++) if (inside(this.hubDeckSpots.get(i), mouseX, mouseY)) {
                 this.minecraft.gui.setScreen(pageFor(this.hubDeckIds.get(i)));
                 return true;

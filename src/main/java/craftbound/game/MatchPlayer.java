@@ -33,6 +33,9 @@ public class MatchPlayer {
     public int hunger = 0;
     public final List<CardRef> deck;
     public final List<CardRef> hand = new ArrayList<>();
+    // Potions brewed with Duration: each runs again at the start of this player's next turn, then is gone.
+    public record BrewRepeat(CardRef card, Target aim) {}
+    public List<BrewRepeat> brewing = new ArrayList<>();
     public final List<Minion> board = new ArrayList<>();
     // The tool the hero holds, or null.
     public Tool tool;

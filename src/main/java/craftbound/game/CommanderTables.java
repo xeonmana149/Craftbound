@@ -150,7 +150,7 @@ public final class CommanderTables {
             case MatchActionPayload.PLAY,CAST -> {
                 String issue=a==CAST?m.whyCantCommand(s):m.whyCantPlay(s,i);if(issue!=null)return issue;
                 CardRef ref=a==CAST?m.leaders[s]:m.player(s).hand.get(i);
-                var kind=CardEffects.targetKind(ref.id());var choices=m.validTargets(s,kind,ref.id());
+                var kind=CardEffects.targetKind(ref);var choices=m.validTargets(s,kind,ref.id());
                 if(!t.isNone() && !choices.contains(t) || t.isNone() && !choices.isEmpty())return "Choose a valid target.";
                 if(a==CAST)m.cast(s,t);else m.playCard(s,i,t);
             }
@@ -299,7 +299,7 @@ public final class CommanderTables {
     }
     private static String key(Target t){return t.side()+":"+(t.hero()?0:t.minionId());}
     private static void addCardTargets(CommanderMatch m,int viewer,JsonObject moves,String key,CardRef card){
-        var list=new JsonArray();for(var t:m.validTargets(viewer,CardEffects.targetKind(card.id()),card.id()))list.add(key(t));moves.add(key,list);
+        var list=new JsonArray();for(var t:m.validTargets(viewer,CardEffects.targetKind(card),card.id()))list.add(key(t));moves.add(key,list);
     }
     private CommanderTables(){}
 }

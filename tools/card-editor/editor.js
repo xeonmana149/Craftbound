@@ -2,7 +2,7 @@
 const M=CardModel, $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,x=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[x]));
 const classColors={"NEUTRAL":"#756B62","FIGHTER":"#A83749","BUILDER":"#3C63B5","FARMER":"#528D32","FISHERMAN":"#208E9E","ALCHEMIST":"#8051B5","MINER":"#B18B22","CHEF":"#CF713A","TAMER":"#AD558A","REDSTONER":"#B14428"};
 const colors={COMMON:"#a9b3aa",RARE:"#68a1ee",EPIC:"#c77ce2",LEGENDARY:"#f2bd60"};
-const rulesHtml=text=>esc(text).replace(/\b((?:After|When|At the end of|At the start of)[^.:\n]+(?=:)|At the end of your turn|After your hero attacks|After your hero deals attack damage|After your tool kills a mob or block|After this destroys a mob or block|After this kills a mob or block|After this deals damage|After attacking|When attacked|Your tool gains|After attack|End turn|Activate|Death|Activate|Play|Ignore Shield|Shield|Sprint|Ranged|Spawn|Drop|Cleanse|Harvest|On kill|Card added|Action played|Mined|Healed|Well Fed)\b/g,word=>word==="Cleanse"?'<strong title="Removes all buffs and debuffs. Printed abilities remain.">Cleanse</strong>':'<strong>'+word+'</strong>');
+const rulesHtml=text=>esc(text).replace(/\b((?:After|When|At the end of|At the start of)[^.:\n]+(?=:)|At the end of your turn|After your hero attacks|After your hero deals attack damage|After your tool kills a mob or block|After this destroys a mob or block|After this kills a mob or block|After this deals damage|After attacking|When attacked|Your tool gains|After attack|End turn|Activate|Death|Activate|Play|Ignore Shield|Shield|Sprint|Ranged|Spawn|Drop|Cleanse|Repair|Harvest|On kill|Card added|Action played|Mined|Healed|Well Fed)\b/g,word=>word==="Cleanse"?'<strong title="Removes all buffs and debuffs. Printed abilities remain.">Cleanse</strong>':'<strong>'+word+'</strong>');
 const key="craftbound-card-workshop-v1:"+ (CRAFTBOUND_DEFAULTS.workshopEpoch||"legacy");
 let data=M.clone(CRAFTBOUND_DEFAULTS), baseline=M.clone(CRAFTBOUND_DEFAULTS), selected=data.cards.find(c=>!c.deleted&&!c.token)?.id||"";
 let handle=null, fileName="", dirty=false, view="cards", recovery=false, draftTimer;
@@ -20,8 +20,39 @@ const card=()=>cardOverride?.id===selected&&data.cards.includes(cardOverride)?ca
 const locked=c=>baseline.cards.some(x=>x.id===c.id);
 try { const saved=JSON.parse(localStorage.getItem(key)||"null");for(const id of saved?.autoIds||[])if(data.cards.some(c=>c.id===id&&!locked(c)))autoIds.add(id); } catch {}
 function status(s,error=false){$("status").textContent=s;$("status").classList.toggle("error",error)}
+// After a save the Workshop host rebuilds the player jar; show its progress after the save message.
+let releaseTimer=null;
+function watchRelease(){
+ clearTimeout(releaseTimer);
+ const base=$("status").textContent.replace(/ · Release jar.*$/,"");
+ const poll=async()=>{
+  try{
+   const r=await (await fetch("/api/release",{headers:{"X-Workshop-Token":workshopToken}})).json();
+   if(!r.enabled)return;
+   const tail=r.status==="ready"?" · Release jar ready: "+r.jar:r.status==="failed"?" · "+r.message:" · Release jar building…";
+   status(base+tail,r.status==="failed");
+   if(r.status==="queued"||r.status==="building")releaseTimer=setTimeout(poll,2000);
+  }catch{}
+ };
+ releaseTimer=setTimeout(poll,500);
+}
 function options(values,value,labels={}){return values.map(v=>'<option value="'+esc(v)+'"'+(v===value?' selected':'')+'>'+esc(labels[v]??M.title(v))+'</option>').join("")}
 function field(label,key,value,type="text",extra=""){return '<label>'+esc(label)+'<input data-field="'+key+'" type="'+type+'" value="'+esc(value)+'" '+extra+'></label>'}
+// The optional "If ..." boost on number effects. Its inputs use data-boost, not data-field, because they edit f.boost.
+function boostFields(f){
+ const b=f.boost||{},whens=M.BOOST_WHEN.filter(w=>!(w.startsWith("TARGET_")&&["DRAW","GAIN_XP"].includes(f.action)));
+ const pickBox=(label,key,values,value,labels={})=>'<label>'+esc(label)+'<select data-boost="'+key+'">'+options(values,value,labels)+'</select>'+(key==="when"&&b.when?'<span class="hint">'+esc(M.GUIDE.boost[b.when]||"")+'</span>':"")+'</label>';
+ let out='<div class="fields two">'+pickBox("Boost (optional)","when",[""].concat(whens),b.when||"",{"":"No boost",YOU_CONTROL:"If you control…",ENEMY_CONTROLS:"If an enemy controls…",ANYONE_CONTROLS:"If either side controls…",TARGET_IS:"Against targets that are…",TARGET_FROZEN:"Against Frozen targets",TARGET_WITHERED:"Against Withered targets",TARGET_DAMAGED:"Against damaged targets"});
+ if(!b.when)return out+'</div>';
+ out+=pickBox("Boost by","how",M.BOOST_HOW,b.how||"DOUBLE",{DOUBLE:"Double it",TRIPLE:"Triple it",PLUS:"Add a bonus"})+'</div>';
+ if(b.how==="PLUS")out+='<div class="fields two"><label>Bonus<input data-boost="amount" type="number" min="1" max="20" value="'+esc(b.amount??1)+'"></label></div>';
+ if(["YOU_CONTROL","ENEMY_CONTROLS","ANYONE_CONTROLS","TARGET_IS"].includes(b.when)){
+  const cardsOnBoard=data.cards.filter(x=>x.kind==="MOB"&&(!x.deleted||x.id===b.card));
+  out+='<div class="fields two">'+pickBox("Specific card","card",[""].concat(cardsOnBoard.map(x=>x.id)),b.card||"",Object.assign({"":"Any matching card"},Object.fromEntries(cardsOnBoard.map(x=>[x.id,x.name]))))
+   +(b.card?"":pickBox("Card kind","kind",["MOB","BLOCK","BOTH"],b.kind||"BOTH",{MOB:"Mob",BLOCK:"Block",BOTH:"Mob or block"})+pickBox("Mob type","type",M.TYPES,b.type||"",{"":"Any type"}))+'</div>';
+ }
+ return out+'<p class="muted">Boosts change this effect\'s number when the condition is met; card text shows it in brackets.</p>';
+}
 function select(label,key,values,value,extra="",labels={}){return '<label>'+esc(label)+'<select data-field="'+key+'" '+extra+'>'+options(values,value,labels)+'</select>'+(M.GUIDE[key]?'<span class="hint">'+esc(M.GUIDE[key][value]||"")+'</span>':'')+'</label>'}
 function remember(){clearTimeout(draftTimer);draftTimer=setTimeout(()=>{try{localStorage.setItem(key,JSON.stringify({data,baseline,autoIds:[...autoIds]}))}catch{status("Browser draft could not be saved. Save your JSON file.",true)}},250)}
 function changed(){refreshAnimations();dirty=true;remember();renderList();renderPreview();renderValidation();$("heading").textContent=card()?.name||"Card details";$("dirty").textContent="Unsaved changes";if(view==="balance")renderCharts()}
@@ -163,12 +194,17 @@ function renderCard(){
  '<div class="fields">'+select("Class","class",M.CLASSES,c.class)+select("Rarity","rarity",M.RARITIES,c.rarity)+select("Card kind","displayKind",old?(c.kind==="MOB"?["MOB","BLOCK"]:[c.kind]):["MOB","BLOCK","ITEM","TOOL","ENCHANTMENT"],displayKind)+'</div>'+
  '<div class="fields">'+field("XP cost","cost",c.cost,"number",'min="0" max="10" step="1"')+field("Attack","attack",c.attack,"number",'min="0" max="100" step="1" '+(["ITEM","ENCHANTMENT"].includes(c.kind)||displayKind==="BLOCK"?"disabled":""))+field(c.kind==="TOOL"?"Durability":"Health","health",c.health,"number",'min="'+(["ITEM","ENCHANTMENT"].includes(c.kind)?0:1)+'" max="100" step="1" '+(["ITEM","ENCHANTMENT"].includes(c.kind)?"disabled":""))+'</div>'+
  '<div class="fields two">'+select("Mob type","type",M.TYPES,c.type,c.kind!=="MOB"?"disabled":"",{"ANIMAL":"Animal / passive mobs"})+field("Minecraft artwork item or mob ID","art",c.art,"text",'maxlength="120" placeholder="minecraft:zombie_spawn_egg or minecraft:zombie"')+'</div>'+
+ '<div class="fields two">'+select("Element","element",[""].concat(M.ELEMENTS),c.element||"","",{"":"None"})+'</div>'+
+ (c.kind==="ITEM"?'<label class="check" title="'+esc(M.GUIDE.brew.POTION)+'"><input data-field="potion" type="checkbox" '+(c.potion?"checked":"")+'>Potion — a Brewing Stand can upgrade it in your hand</label>':'')+
+ (c.kind==="MOB"?'<div class="fields two"><label title="'+esc(M.GUIDE.card.USES)+'">Uses before destroyed (0 = no limit)<input data-field="uses" type="number" min="0" max="20" value="'+(c.uses||0)+'"></label></div>':'')+
  '<label class="check"><input data-field="autoArt" type="checkbox" '+(c.autoArt===true?"checked":"")+'>Match artwork to card name automatically</label>'+
  '<label class="check"><input data-field="token" type="checkbox" '+(c.token?"checked ":"")+(old?"disabled":"")+'>Generated token — excluded from boosters and collection totals</label><section id="tokenUsage" class="token-usage" hidden></section>'+
- '<section class="form-section"><h2>Keywords</h2><div class="keywords">'+M.KEYWORDS.filter(k=>k!=="BLOCK"&&(displayKind!=="BLOCK"||k!=="SHIELD")).map(k=>'<label class="check"><input data-keyword="'+k+'" type="checkbox" '+(c.keywords.includes(k)?"checked ":"")+(c.kind!=="MOB"&&(c.kind!=="TOOL"||!["RANGED","IGNORE_SHIELD"].includes(k))?"disabled":"")+'>'+M.title(k)+'</label>').join("")+'</div></section>'+
- '<section class="form-section"><div class="section-line"><h2>Effects</h2><button id="addEffect" '+(c.effects.length>=16?"disabled":"")+'>＋ Add effect</button></div><p class="muted">Pick when the rule fires, what it does, and who it affects. Steps resolve from top to bottom. Save useful combinations in My mechanics below.</p><details id="mechanicGuide"><summary>Browse rule explanations</summary><div class="fields two"><label>Section<select><option value="trigger">When</option><option value="action">What happens</option><option value="target">Affects</option><option value="passive">Passive abilities</option></select></label><label>Find a rule<input type="search" placeholder="e.g. heal, damage or block"></label></div><dl></dl></details><div id="effects"></div></section>'+
- '<section class="form-section"><div class="fields two">'+select("Passive ability","passive",c.kind==="MOB"?M.PASSIVES:["NONE"],c.passive,"",{AURA_ATTACK:"Aura: Attack",AURA_STATS:"Aura: Attack and Health"})+field(["AURA_ATTACK","AURA_STATS"].includes(c.passive)?"Aura Attack bonus":"Passive amount","passiveAmount",c.passiveAmount,"number",'min="0" max="100" '+(c.passive==="NONE"?"disabled":""))+'</div>'+
- '<div class="fields two">'+(c.passive==="AURA_STATS"?field("Aura Health bonus","auraHealth",c.auraHealth??0,"number",'min="0" max="100"'):"")+select("Aura affects","auraKind",["MOB","BLOCK","BOTH"],c.auraKind||"MOB",!["AURA_ATTACK","AURA_STATS"].includes(c.passive)?"disabled":"",{MOB:"Other friendly mobs",BLOCK:"Other friendly blocks",BOTH:"Other friendly mobs and blocks"})+select("Aura affects this mob type","auraType",M.TYPES,c.auraType||"",!["AURA_ATTACK","AURA_STATS"].includes(c.passive)?"disabled":"",{"":"All mob types"})+'</div>'+
+ '<section class="form-section"><h2>Keywords</h2><div class="keywords">'+M.KEYWORDS.filter(k=>k!=="BLOCK").map(k=>'<label class="check" title="'+esc(M.GUIDE.keyword[k]||"")+'"><input data-keyword="'+k+'" type="checkbox" '+(c.keywords.includes(k)?"checked ":"")+(M.keywordAllowed(c.kind,k)?"":"disabled")+'>'+M.title(k)+'</label>').join("")+'</div></section>'+
+ '<section class="form-section"><div class="section-line"><h2>Effects</h2><button id="addEffect" '+(c.effects.length>=16?"disabled":"")+'>＋ Add effect</button></div><p class="muted">Pick when the rule fires, what it does, and who it affects. Steps resolve from top to bottom. Save useful combinations in My mechanics below.</p><details id="mechanicGuide"><summary>Browse rule explanations</summary><div class="fields two"><label>Section<select><option value="trigger">When</option><option value="action">What happens</option><option value="target">Affects</option><option value="passive">Passive abilities</option><option value="keyword">Keywords</option><option value="chooser">Who picks (hand effects)</option><option value="element">Elements</option><option value="boost">Boosts (If…)</option><option value="brew">Potions and brewing</option><option value="card">Card limits</option></select></label><label>Find a rule<input type="search" placeholder="e.g. heal, damage or block"></label></div><dl></dl></details><div id="effects"></div></section>'+
+ '<section class="form-section"><div class="fields two">'+select("Passive ability","passive",c.kind==="MOB"?M.PASSIVES:["NONE"],c.passive,"",{AURA_ATTACK:"Aura: Attack",AURA_STATS:"Aura: Attack and Health",NEGATE_KEYWORD:"Negate keyword"})+field(["AURA_ATTACK","AURA_STATS"].includes(c.passive)?"Aura Attack bonus":"Passive amount","passiveAmount",c.passiveAmount,"number",'min="0" max="100" '+(["NONE","NEGATE_KEYWORD"].includes(c.passive)||c.passive==="AMPLIFY_ELEMENT"&&(c.ampHow||"DOUBLE")!=="PLUS"?"disabled":""))+'</div>'+
+ (c.passive==="AMPLIFY_ELEMENT"?'<div class="fields two">'+select("Element boosted","ampElement",M.ELEMENTS,c.ampElement||"FIRE")+select("Boost by","ampHow",M.BOOST_HOW,c.ampHow||"DOUBLE","",{DOUBLE:"Double damage",TRIPLE:"Triple damage",PLUS:"+Passive amount damage"})+'</div>':"")+
+ (c.passive==="NEGATE_KEYWORD"?'<div class="fields two">'+select("Keyword enemies lose","negateKeyword",M.NEGATABLE,c.negateKeyword||"SPRINT")+'</div><p class="muted">While this is on the board, the enemies picked below lose this keyword, even if it is printed, trained or granted. It comes back when this leaves play.</p>':"")+
+ '<div class="fields two">'+(c.passive==="AURA_STATS"?field("Aura Health bonus","auraHealth",c.auraHealth??0,"number",'min="0" max="100"'):"")+(c.passive==="NEGATE_KEYWORD"?select("Negate affects","auraKind",["MOB","BLOCK","BOTH"],c.auraKind||"BOTH","",{MOB:"Enemy mobs",BLOCK:"Enemy blocks",BOTH:"Enemy mobs and blocks"})+select("Negate affects this mob type","auraType",M.TYPES,c.auraType||"","",{"":"All mob types"}):select("Aura affects","auraKind",["MOB","BLOCK","BOTH"],c.auraKind||"MOB",!["AURA_ATTACK","AURA_STATS"].includes(c.passive)?"disabled":"",{MOB:"Other friendly mobs",BLOCK:"Other friendly blocks",BOTH:"Other friendly mobs and blocks"})+select("Aura affects this mob type","auraType",M.TYPES,c.auraType||"",!["AURA_ATTACK","AURA_STATS"].includes(c.passive)?"disabled":"",{"":"All mob types"}))+'</div>'+
  (["AURA_ATTACK","AURA_STATS"].includes(c.passive)?'<p class="muted">Affects your other matching cards while this source is on the board. Choose mobs, blocks, or both. Blocks can receive Health only: set Attack to 0. The source never buffs itself, and the bonus ends when it leaves play.</p>':"")+
  '<label class="check"><input data-field="autoText" type="checkbox" '+(c.autoText?"checked":"")+'>Automatic description from effects</label><label style="margin-top:12px">Card description<textarea data-field="text" maxlength="1200" '+(c.autoText?"disabled":"")+'>'+esc(M.description(c,data))+'</textarea><span class="hint">'+(c.autoText?"Generated from the actual rules.":"Custom wording only. Enable automatic text to keep it in sync with rules.")+'</span></label></section><details id="ruleLibrary" class="form-section"></details>'+animationPanel(c);
  $("cardForm").querySelectorAll("[data-field]").forEach(el=>{
@@ -188,16 +224,23 @@ function renderCard(){
    }
    else if(key==="displayKind"){
     c.kind=v==="BLOCK"?"MOB":v;
-    c.keywords=c.keywords.filter(k=>k!=="BLOCK"&&(c.kind==="MOB"||c.kind==="TOOL"&&["RANGED","IGNORE_SHIELD"].includes(k)));
-    if(v==="BLOCK"){c.keywords=c.keywords.filter(k=>k!=="SHIELD");c.keywords.push("BLOCK");c.attack=0}
+    c.keywords=c.keywords.filter(k=>M.keywordAllowed(c.kind,k));
+    if(v==="BLOCK"){c.keywords.push("BLOCK");c.attack=0}
     if(["ITEM","ENCHANTMENT"].includes(c.kind)){c.attack=0;c.health=0}else if(!c.health)c.health=1;
     if(c.kind!=="MOB"){c.type="";c.passive="NONE"}
+    if(c.kind!=="ITEM")delete c.potion;
+    if(c.kind!=="MOB")delete c.uses;
    }else if(key==="art"){c.art=v;c.autoArt=false;$("cardForm").querySelector('[data-field="autoArt"]').checked=false;}else c[key]=v;
    if(key==="passive"&&v==="AURA_STATS"&&c.auraHealth===undefined)c.auraHealth=1;
-   if(["passive","passiveAmount","auraHealth","auraType","auraKind"].includes(key)){c.autoText=true;updateDescription()}
+   if(key==="passive"){if(v==="NEGATE_KEYWORD"){c.negateKeyword=c.negateKeyword||"SPRINT";c.auraKind="BOTH"}else delete c.negateKeyword}
+   if(key==="passive"){if(v==="AMPLIFY_ELEMENT"){c.ampElement=c.ampElement||"FIRE";c.ampHow=c.ampHow||"DOUBLE"}else{delete c.ampElement;delete c.ampHow}}
+   if(key==="element"&&!v)delete c.element;
+   if(key==="potion"&&!v)delete c.potion;
+   if(key==="uses"){c.uses=Number(v)||0;if(!c.uses)delete c.uses;c.autoText=true;updateDescription()}
+   if(["passive","passiveAmount","auraHealth","auraType","auraKind","negateKeyword","element","ampElement","ampHow"].includes(key)){c.autoText=true;updateDescription()}
    if(key==="autoArt"){M.autoArtwork(c);$("cardForm").querySelector('[data-field="art"]').value=c.art;}
    changed();
-   if(["displayKind","autoText","passive","token"].includes(key))renderCard();
+   if(["displayKind","autoText","passive","token","ampHow","potion"].includes(key))renderCard();
   });
  });
  $("cardForm").querySelectorAll("[data-keyword]").forEach(el=>el.onchange=()=>{c.keywords=c.keywords.filter(k=>k!==el.dataset.keyword);if(el.checked)c.keywords.push(el.dataset.keyword);c.autoText=true;changed();updateDescription();renderEffects()});
@@ -207,7 +250,7 @@ function renderCard(){
 function renderEffects(){
  const c=card();
  $("effects").innerHTML=c.effects.map((f,i)=>{
-  const generator=["DRAW","GAIN_XP","GAIN_MAX_XP","GIVE","GIVE_RANDOM","GIVE_RANDOM_CLASS","SUMMON","ENCHANT_TOOL","UPGRADE_TOOL"].includes(f.action);
+  const generator=["DRAW","GAIN_XP","GAIN_MAX_XP","GIVE","GIVE_RANDOM","GIVE_RANDOM_CLASS","SUMMON","ENCHANT_TOOL","UPGRADE_TOOL","PICK_ONE","BREW_POTION"].includes(f.action);
   const deckChoice=f.action==="CHOOSE_FROM_DECK";
   const heroGroup=M.TEAM_HERO_TARGETS.includes(f.target);
   const aims=M.targetOptions(f.action);
@@ -227,17 +270,19 @@ function renderEffects(){
   (["UPGRADE_TOOL","ENCHANT_TOOL"].includes(f.action)?'<p class="muted">Set either bonus to 0 to leave that stat unchanged. For an Anvil or other block, use Improve equipped tool. Enchant tool is for Enchantment cards.</p>':"")+
   (f.trigger==="DAMAGE_DEALT"?'<p class="muted">Affects the character actually damaged; no extra targeting click. Choose Damaged mob or hero to include hero hits. Prevented damage does not trigger this. Non-Ranged mobs also deal retaliation damage while defending.</p>':"")+
   (reference?'<div class="fields two">'+select("Card to create","card",["",...Object.keys(labels)],f.card,"",{"":"Choose a card…",...labels})+(["TRANSFORM","BAD_OMEN"].includes(f.action)?"":field("Copies","amount",f.amount,"number",'min="1" max="10"'))+'</div>':
+  f.action==="PICK_ONE"?'<label>Cards to choose from (Ctrl-click 2 or 3)<select data-field="pool" multiple size="6">'+data.cards.filter(x=>!x.deleted||(f.pool||[]).includes(x.id)).map(x=>'<option value="'+esc(x.id)+'" '+((f.pool||[]).includes(x.id)?"selected":"")+'>'+esc(x.name+" · "+x.id)+'</option>').join("")+'</select></label><p class="muted">When this triggers you see these cards and pick one; it goes into your hand. Make the options as tokens so they never show up in packs.</p>':
   f.action==="GIVE_RANDOM"?'<label>Catch / loot table (Ctrl-click to select several)<select data-field="pool" multiple size="6">'+data.cards.filter(x=>!x.deleted||(f.pool||[]).includes(x.id)).map(x=>'<option value="'+esc(x.id)+'" '+((f.pool||[]).includes(x.id)?"selected":"")+'>'+esc(x.name+" · "+x.id)+'</option>').join("")+'</select></label>'+field("Random cards to give","amount",f.amount,"number",'min="1" max="10"'):
   pick?'<div class="fields two">'+select("Who picks the card","chooser",M.HAND_CHOOSERS,f.chooser||"YOU","",{YOU:"You choose (you see their hand)",OPPONENT:"Opponent chooses",RANDOM:"Random"})+field("Cards","amount",f.amount,"number",'min="1" max="10"')+'</div><p class="muted">The picker gets 30 seconds, then a random card is taken. In Commander and team matches picks are always random. Stolen cards are lost if your hand is full. Nothing happens if their hand is empty.</p>':
   deckChoice?field("Different choices to offer","amount",f.amount,"number",'min="1" max="3"')+'<p class="muted">Choose and draw one real card from your deck. Set Eligible board cards to Blocks only for Blueprint Chest. Repeated copies of a card offer one choice. Up to 3 options; fewer if fewer match. Unchosen cards stay in the deck. The choice is private and lasts 30 seconds.</p>':
   f.action==="RETURN_AND_COPY"?field("Extra copies (besides the returned card)","amount",f.amount,"number",'min="1" max="10"')+'<p class="muted">Choose a target on the board; no fixed card ID is needed. One extra copy makes two cards for a normal friendly target. Keeps Enchanted and Trials upgrades, but resets combat buffs, damage and statuses. Normal token/commander return rules apply. Excess cards are lost when your hand is full.</p>':
   f.action==="REVEAL_HAND"?'<p class="muted">Shows you the opponent’s hand for a few seconds. Only you see it.</p>':
-  f.action==="GRANT_KEYWORD"?select("Keyword to grant","keyword",["SHIELD","SPRINT","RANGED","IGNORE_SHIELD"],f.keyword||"SHIELD"):
+  f.action==="GRANT_KEYWORD"?select("Keyword to grant","keyword",["SHIELD","SPRINT","RANGED","IGNORE_SHIELD","RANDOM"],f.keyword||"SHIELD","",{RANDOM:"Random (one it doesn't have)"}):
   ["BUFF","ENCHANT_TOOL","UPGRADE_TOOL"].includes(f.action)?'<div class="fields two">'+field(f.action==="BUFF"?"Attack change (negative weakens)":"Bonus attack","attack",f.attack,"number",'min="'+(f.action==="BUFF"?-100:0)+'" max="100"')+field(f.action!=="BUFF"?"Bonus durability":"Bonus health","health",f.health,"number",'min="0" max="100"')+'</div>':
   ["DAMAGE","HEAL","WELL_FED","DRAW","GAIN_XP","GAIN_MAX_XP","GIVE_RANDOM_CLASS","WEAKEN_UNTIL_NEXT_TURN"].includes(f.action)?'<div class="fields two">'+field("Amount","amount",f.amount,"number",'min="1" max="'+(generator?10:100)+'"')+'</div>':"")+
   (f.action==="BUFF"?select("Also grant keyword","keyword",["","SHIELD","SPRINT","RANGED","IGNORE_SHIELD"],f.keyword||"","",{"":"None"})+'<p class="muted">The stat bonus and keyword affect the same target in this effect. Random targets are selected once. The keyword lasts while that card stays on the board.</p>':"")+
   (counted?'<div class="fields">'+select("Multiply for each","countScope",M.COUNT_SCOPES,f.countScope||"NONE","",{NONE:"Fixed amount",FRIENDLY:"Friendly board",ENEMY:"Enemy board",ALL:"Both boards"})+select("Count card kind","countKind",["MOB","BLOCK","BOTH"],f.countKind||"BOTH")+select("Count only this type","countType",M.TYPES,f.countType||"")+'</div><label class="check"><input data-field="countExcludeSelf" type="checkbox" '+(f.countExcludeSelf?"checked":"")+'>Do not count this card</label>':"")+
   (M.OBSERVED.includes(f.trigger)?'<div class="fields two">'+select("Watch whose event?","eventScope",M.EVENT_SCOPES,f.eventScope||(f.trigger==="HEALED"?"SELF":"FRIENDLY"))+select("Triggering card type","eventType",M.TYPES,f.eventType||"")+'</div><p class="muted">'+({CARD_ADDED:"Includes draws and generated/returned cards that enter hand; burned cards do not count.",ITEM_PLAYED:"Fires after an Action resolves (not Tools or Enchantments).",MINED:"Fires after friendly Ore is mined and its Drop pays out.",HEALED:"Fires only when Health actually increases. Self watches this mob (or your hero for a tool)."})[f.trigger]+'</p>':"")+
+  (M.BOOSTABLE.includes(f.action)?boostFields(f):"")+
   '<label class="check"><input data-exclude type="checkbox" '+(f.excludeSelf?"checked ":"")+(generator||deckChoice||heroGroup||hand||f.action==="BAD_OMEN"?"disabled":"")+'>Exclude this card itself</label></article>';
  }).join("")||'<p class="muted">No triggered effects. This card uses its stats and keywords.</p>';
  $("effects").querySelectorAll("[data-effect]").forEach(article=>{
@@ -247,6 +292,7 @@ function renderEffects(){
    el.addEventListener(el.tagName==="SELECT"||el.type==="checkbox"?"change":"input",()=>{
     const key=el.dataset.field;f[key]=key==="pool"?Array.from(el.selectedOptions,o=>o.value):el.type==="checkbox"?el.checked:el.type==="number"?(el.value===""?null:Number(el.value)):el.value;
     if(key==="action"){
+     if(!M.BOOSTABLE.includes(f.action)||["DRAW","GAIN_XP"].includes(f.action)&&f.boost?.when?.startsWith("TARGET_"))delete f.boost;
      f.card="";f.type="";f.excludeSelf=false;delete f.pool;delete f.keyword;delete f.countScope;delete f.countKind;delete f.countType;delete f.countExcludeSelf;
      f.boardKind=f.action==="BUFF"&&f.attack!==0?"MOB":"BOTH";
      if(M.TEAM_HERO_TARGETS.includes(f.target)&&!M.targetOptions(f.action).includes(f.target))f.target="ENEMY_MOBS";
@@ -255,9 +301,10 @@ function renderEffects(){
      if(f.action==="WEAKEN_UNTIL_NEXT_TURN"){f.boardKind="MOB";f.attack=0;}
      if(f.action==="CHOOSE_FROM_DECK"){f.target="SELF";f.boardKind="BLOCK";f.amount=3;f.attack=0;f.health=0;}
      if(f.action==="RETURN_AND_COPY"){f.target="CHOSEN_FRIENDLY";f.boardKind="BLOCK";f.amount=1;f.attack=0;f.health=0;}
-     if(f.action==="GIVE_RANDOM")f.pool=[];
+     if(f.action==="GIVE_RANDOM"||f.action==="PICK_ONE")f.pool=[];
+     if(f.action==="PICK_ONE")f.amount=1;
      if(f.action==="MINE"){f.target="CHOSEN_FRIENDLY";f.boardKind="BLOCK";f.type="ORE"}
-     if(["DRAW","GAIN_XP","GAIN_MAX_XP","GIVE","GIVE_RANDOM","GIVE_RANDOM_CLASS","SUMMON","ENCHANT_TOOL","UPGRADE_TOOL"].includes(f.action)){f.target="SELF";f.amount=Math.min(f.amount||1,10)}
+     if(["DRAW","GAIN_XP","GAIN_MAX_XP","GIVE","GIVE_RANDOM","GIVE_RANDOM_CLASS","SUMMON","ENCHANT_TOOL","UPGRADE_TOOL","PICK_ONE","BREW_POTION"].includes(f.action)){f.target="SELF";f.amount=Math.min(f.amount||1,10)}
      else if(f.action==="DESTROY_TOOL")f.target="ENEMY_HERO";
      else if(f.target==="SELF"&&c.kind!=="MOB"&&f.action!=="CHOOSE_FROM_DECK")f.target="CHOSEN_FRIENDLY";
      if(M.HAND_ACTIONS.includes(f.action)){f.target="ENEMY_HERO";f.boardKind="BOTH";f.amount=1;if(M.HAND_PICKS.includes(f.action))f.chooser=f.chooser||"YOU";else delete f.chooser}
@@ -270,7 +317,7 @@ function renderEffects(){
       other.target=f.target;if(f.target==="CHOSEN_CHARACTER")other.type="";
      }
     }
-    if(key==="keyword"&&f.keyword&&(f.keyword!=="SHIELD"||f.action==="GRANT_KEYWORD"))f.boardKind="MOB";
+    if(key==="keyword"&&f.keyword&&!["SHIELD","RANDOM"].includes(f.keyword))f.boardKind="MOB";
     if(key==="target"&&f.target==="CHOSEN_CHARACTER")f.type="";
     if(f.target==="RANDOM_MOB")f.boardKind="MOB";
     if(f.target==="RANDOM_BLOCK")f.boardKind="BLOCK";
@@ -283,6 +330,13 @@ function renderEffects(){
     if(["action","trigger","target","keyword","countScope"].includes(key))renderEffects();
    });
   });
+  article.querySelectorAll("[data-boost]").forEach(el=>el.addEventListener(el.tagName==="SELECT"?"change":"input",()=>{
+   const k=el.dataset.boost;
+   if(k==="when"){if(!el.value)delete f.boost;else f.boost=Object.assign({card:"",type:"",kind:"BOTH",how:"DOUBLE"},f.boost||{},{when:el.value})}
+   else if(f.boost){f.boost[k]=k==="amount"?(el.value===""?null:Number(el.value)):el.value;if(k==="how"&&el.value==="PLUS"&&!f.boost.amount)f.boost.amount=1;if(k==="how"&&el.value!=="PLUS")delete f.boost.amount}
+   c.autoText=true;changed();updateDescription();
+   if(k!=="amount")renderEffects();
+  }));
   article.querySelector("[data-exclude]").onchange=e=>{f.excludeSelf=e.target.checked;c.autoText=true;changed();updateDescription()};
   article.querySelector("[data-remove]").onclick=()=>{c.effects.splice(i,1);c.autoText=true;changed();renderCard()};
  });
@@ -313,7 +367,7 @@ function renderTokenUsage(){
  });
 }
 function renderCardPreview(c,container){
- container.innerHTML='<div class="preview-card kind-'+M.kind(c).toLowerCase()+' '+(c.rarity==='LEGENDARY'?'legendary':'')+'" style="--rarity:'+colors[c.rarity]+';--class-color:'+classColors[c.class]+'"><div class="preview-cost">'+esc(c.cost)+'</div><div class="preview-name"><span>'+esc(c.name)+'</span></div><div class="preview-art"><div class="preview-glyph">'+(c.kind==="TOOL"?"⚒":["ITEM","ENCHANTMENT"].includes(c.kind)?"✦":c.keywords.includes("BLOCK")?"▣":"◆")+'</div><small>'+esc(c.art||"Minecraft artwork")+'</small></div><div class="preview-gem"></div><div class="preview-text">'+rulesHtml(M.description(c,data))+'</div><div class="preview-bottom">'+(M.kind(c)==="BLOCK"||["ITEM","ENCHANTMENT"].includes(c.kind)?"":'<span class="stat">'+esc(c.attack)+'</span>')+'<span class="family">'+esc(M.title(c.class))+'<br>'+esc(M.kind(c)==="BLOCK"?"Block"+(c.type?" · "+M.title(c.type):""):c.kind==="MOB"&&c.type?M.title(c.type):M.title(M.kind(c)))+'</span>'+(["ITEM","ENCHANTMENT"].includes(c.kind)?"":'<span class="stat health">'+esc(c.health)+'</span>')+'</div></div>';
+ container.innerHTML='<div class="preview-card kind-'+M.kind(c).toLowerCase()+' '+(c.rarity==='LEGENDARY'?'legendary':'')+'" style="--rarity:'+colors[c.rarity]+';--class-color:'+classColors[c.class]+'"><div class="preview-cost">'+esc(c.cost)+'</div><div class="preview-name"><span>'+esc(c.name)+'</span></div><div class="preview-art"><div class="preview-glyph">'+(c.kind==="TOOL"?"⚒":["ITEM","ENCHANTMENT"].includes(c.kind)?"✦":c.keywords.includes("BLOCK")?"▣":"◆")+'</div><small>'+esc(c.art||"Minecraft artwork")+'</small></div><div class="preview-gem"></div><div class="preview-text">'+rulesHtml(M.description(c,data))+'</div><div class="preview-bottom">'+(M.kind(c)==="BLOCK"||["ITEM","ENCHANTMENT"].includes(c.kind)?"":'<span class="stat">'+esc(c.attack)+'</span>')+'<span class="family">'+esc(M.title(c.class))+'<br>'+esc(M.kind(c)==="BLOCK"?"Block"+(c.type?" · "+M.title(c.type):""):c.kind==="MOB"&&c.type?M.title(c.type):c.kind==="ITEM"&&c.potion?(c.element?M.title(c.element)+" Potion":"Potion"):c.kind==="ITEM"&&c.element?M.title(c.element):M.title(M.kind(c)))+'</span>'+(["ITEM","ENCHANTMENT"].includes(c.kind)?"":'<span class="stat health">'+esc(c.health)+'</span>')+'</div></div>';
  const banner=container.querySelector(".preview-name");
  if(banner.clientWidth){
   const size=parseFloat(getComputedStyle(banner).fontSize);
@@ -322,10 +376,10 @@ function renderCardPreview(c,container){
   if(titleWidth>available && available>0)banner.style.fontSize=(size*available/titleWidth)+"px";
  }
  const shortRules=M.description(c,data).trim();
- if(/^(?:Ignore Shield|Shield|Sprint|Ranged|Cleanse)\.?(?:\s+(?:Ignore Shield|Shield|Sprint|Ranged|Cleanse)\.?)?$/.test(shortRules)){
+ if(/^(?:Ignore Shield|Shield|Sprint|Ranged|Cleanse|Repair)\.?(?:\s+(?:Ignore Shield|Shield|Sprint|Ranged|Cleanse|Repair)\.?)?$/.test(shortRules)){
   const box=container.querySelector(".preview-text");
   box.classList.add("keyword-only");
-  box.innerHTML=shortRules.match(/Ignore Shield|Shield|Sprint|Ranged|Cleanse/g).map(word=>'<span>'+rulesHtml(word+".")+'</span>').join("");
+  box.innerHTML=shortRules.match(/Ignore Shield|Shield|Sprint|Ranged|Cleanse|Repair/g).map(word=>'<span>'+rulesHtml(word+".")+'</span>').join("");
  }
 }
 let associatedSource="",associatedIndex=0;
@@ -339,7 +393,7 @@ function renderAssociatedCards(c){
  const link=links[associatedIndex];
  const details=link?link.effects.map(f=>{
   const when=f.trigger==="PLAY"&&c.kind==="MOB"?"Spawn":f.trigger==="DROP"?"Death":M.title(f.trigger);
-  const action={SUMMON:"Summons",GIVE:"Adds to hand",TRANSFORM:"Transforms into",GIVE_RANDOM:"Possible random card"}[f.action];
+  const action={SUMMON:"Summons",GIVE:"Adds to hand",TRANSFORM:"Transforms into",GIVE_RANDOM:"Possible random card",PICK_ONE:"Can be picked"}[f.action];
   return when+' · '+action+(f.action!=="TRANSFORM"?' ×'+f.amount:'');
  }):[];
  panel.innerHTML='<h2>Associated cards</h2>'+(dynamic?'<p class="muted">Random class card: the pool depends on the hero playing this card. No fixed result; excludes Neutral cards and tokens.</p>':'')+
@@ -473,6 +527,7 @@ async function saveFile(as=false){
    if(dirty)remember();else try{localStorage.removeItem(key)}catch{}
    $("dirty").textContent=dirty?"Unsaved changes":"Saved · cards.json";
    renderCard();status("Saved directly to "+activePath+". Run /craftbound cards reload between matches.");
+   if(localWorkshop)watchRelease();
   }catch(e){
    if(!localWorkshop)activeSaveHandle=null;
    status(e.name==="AbortError"?"Save cancelled. Your draft is still here; Minecraft's cards.json was not changed.":e.message,true);

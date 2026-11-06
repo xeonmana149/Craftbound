@@ -31,12 +31,9 @@ public final class CardCatalogService {
 
     public static void loadLocal() throws IOException {
         Path path = path();
-        if (!Files.exists(path)) {
-            Files.createDirectories(path.getParent());
-            // CREATE_NEW never overwrites an existing designer file.
-            Files.writeString(path, new com.google.gson.GsonBuilder().setPrettyPrinting().create()
-                    .toJson(com.google.gson.JsonParser.parseString(CardCatalog.builtin().json())), StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
-        }
+        // Writes the bundled cards if missing, and updates an untouched copy when a newer jar bundles new cards.
+        craftbound.BundledConfig.refresh(path, new com.google.gson.GsonBuilder().setPrettyPrinting().create()
+                .toJson(com.google.gson.JsonParser.parseString(CardCatalog.builtin().json())));
         if (Files.size(path) > 1_000_000) throw new IOException("cards.json is too large");
         var next = CardCatalog.parse(Files.readString(path, StandardCharsets.UTF_8));
         CardCatalog.validateReplacement(CardCatalog.builtin(), next);

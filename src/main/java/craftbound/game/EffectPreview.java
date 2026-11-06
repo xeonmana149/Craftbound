@@ -101,7 +101,7 @@ public final class EffectPreview {
                 case BUFF -> e.attack() != 0 || e.health() > 0
                         || e.keyword() != null && definition != null && !definition.keywords().contains(e.keyword());
                 case WELL_FED -> target.maxHealth() < 1000;
-                case GRANT_KEYWORD -> definition != null && !definition.keywords().contains(e.keyword());
+                case GRANT_KEYWORD -> definition != null && (e.randomKeyword() || !definition.keywords().contains(e.keyword()));
                 case TRANSFORM -> definition != null && !target.card().equals(e.card());
                 case TOTEM -> !target.totem();
                 case INVULNERABLE -> !target.invulnerable();

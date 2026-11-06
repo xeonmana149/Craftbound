@@ -1,0 +1,16 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),M=require('./model.js');
+const source=JSON.parse(fs.readFileSync('src/test/resources/craftbound/test-cards.json','utf8'));
+const data=M.clone(source),c=data.cards.find(x=>x.keywords.includes('BLOCK'));
+const ids=data.cards.filter(x=>x.token&&!x.deleted).slice(0,4).map(x=>x.id);
+assert.ok(ids.length>=4,'Fixture has tokens to offer');
+c.autoText=true;
+const pick=pool=>({...M.effect(),trigger:'END_TURN',action:'PICK_ONE',target:'SELF',boardKind:'BOTH',type:'',amount:1,excludeSelf:false,card:'',pool});
+c.effects=[pick(ids.slice(0,3))];
+assert.deepEqual(M.validate(data,source),[],'Cauldron-style Pick one is valid');
+const names=ids.slice(0,3).map(id=>data.cards.find(x=>x.id===id).name).join(', ');
+assert.ok(M.description(c,data).includes('Pick one of ['+names+'] to add to your hand'),'Pick one wording');
+assert.ok(M.associatedCards(data,c).some(l=>l.id===ids[0]),'Options show as linked cards');
+c.effects=[pick(ids.slice(0,1))];assert.ok(M.validate(data,source).some(e=>String(e).includes('2 or 3')),'Needs at least two options');
+c.effects=[pick(ids)];assert.ok(M.validate(data,source).some(e=>String(e).includes('2 or 3')),'At most three options');
+c.effects=[pick([ids[0],ids[0]])];assert.ok(M.validate(data,source).some(e=>String(e).includes('2 or 3')),'Options must differ');
+console.log('PASS: Pick one authoring, wording, linked cards and option limits.');

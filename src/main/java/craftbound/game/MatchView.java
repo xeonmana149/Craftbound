@@ -38,15 +38,20 @@ public class MatchView {
             for (String line : match.publicBattleLog) history.add(line);
             root.add("publicLog", history);
             if(withLog) {
-                // Four-seat screens receive the resolved board, plus public attack endpoints for the trail.
-                for(MatchEvent event:match.events.reversed()){
-                    if(event.type()!=MatchEvent.Type.ATTACK || event.target()==null || event.target().isNone())continue;
-                    JsonObject path=new JsonObject();
-                    path.addProperty("from",event.side());path.addProperty("source",event.mid());
-                    path.addProperty("to",event.target().side());
-                    path.addProperty("target",event.target().hero()?Match.HERO:event.target().minionId());
-                    root.add("publicAttack",path);
-                    break;
+                // Only resolved, public plays and attacks reach the four-seat effect layer.
+                for (MatchEvent event : match.events.reversed()) {
+                    boolean play = event.type() == MatchEvent.Type.PLAY;
+                    if ((!play && event.type() != MatchEvent.Type.ATTACK) || event.target() == null || event.target().isNone()) continue;
+                    String key = play ? "publicCast" : "publicAttack";
+                    if (root.has(key)) continue;
+                    JsonObject path = new JsonObject();
+                    path.addProperty("from", event.side());
+                    path.addProperty("source", event.mid());
+                    path.addProperty("to", event.target().side());
+                    path.addProperty("target", event.target().hero() ? Match.HERO : event.target().minionId());
+                    if (play) path.addProperty("card", event.card().id().toString());
+                    root.add(key, path);
+                    if (root.has("publicCast") && root.has("publicAttack")) break;
                 }
             }
         }
@@ -112,7 +117,7 @@ public class MatchView {
                     c.addProperty("ench", card.enchanted());
                 writeTraining(c, card);
                     c.addProperty("playable", match.whyCantPlay(side, i) == null);
-                    c.addProperty("target", CardEffects.targetKind(card.id()).name());
+                    c.addProperty("target", CardEffects.targetKind(card).name());
                     hand.add(c);
                 }
                 p.add("hand", hand);
@@ -141,6 +146,18 @@ public class MatchView {
                 m.addProperty("withered", minion.withered);
                 m.addProperty("totem", minion.totem);
                 m.addProperty("invulnerable", minion.invulnerable);
+                if (minion.usesLeft() >= 0) m.addProperty("usesLeft", minion.usesLeft());
+                if (!minion.activePotions().isEmpty()) {
+                    JsonArray potions = new JsonArray();
+                    for (var mark : minion.activePotions()) {
+                        JsonObject potionJson = new JsonObject();
+                        potionJson.addProperty("id", mark.id());
+                        potionJson.addProperty("brew", mark.brew());
+                        potions.add(potionJson);
+                    }
+                    m.add("potions", potions);
+                }
+                if (minion.impaled != null) m.addProperty("impaled", minion.impaled.card.id().toString());
                 board.add(m);
             }
             p.add("board", board);
@@ -258,6 +275,7 @@ public class MatchView {
 
     private static void writeTraining(JsonObject json, CardRef card) {
         if (card != null && card.training() != TrialTraining.NONE) json.addProperty("training", card.training().name());
+        if (card != null && !card.brew().none()) json.addProperty("brew", card.brew().bits());
     }
 
     private static JsonObject event(MatchEvent event, int viewer) {
@@ -268,7 +286,7 @@ public class MatchView {
         // You only see the cards the other player draws once they play them. Hand effects show the
         // moved card only to the two players involved (a discard is public).
         boolean hidden = switch (event.type()) {
-            case DRAW -> event.side() != viewer;
+            case DRAW, BREW -> event.side() != viewer;
             case HAND_REVEAL, HAND_STEAL -> viewer != event.side() && (event.target() == null || viewer != event.target().side());
             case HAND_SHUFFLE -> viewer != event.side() && viewer != event.extra();
             default -> false;

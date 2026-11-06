@@ -3,15 +3,16 @@
 	"id": "craftbound",
 	"version": "${version}",
 	"name": "Craftbound",
-	"description": "This is an example description! Tell everyone what your mod is about!",
+	"description": "A collectible card game inside Minecraft: build decks from mobs, blocks, tools and potions, then duel friends, the AI, or brave the roguelike Trials.",
 	"authors": [
-		"Me!"
+		"ZeElectron"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://github.com/xeonmana149/Craftbound",
+		"sources": "https://github.com/xeonmana149/Craftbound",
+		"issues": "https://github.com/xeonmana149/Craftbound/issues"
 	},
-	"license": "CC0-1.0",
+	"license": "All-Rights-Reserved",
 	"icon": "assets/craftbound/icon.png",
 	"environment": "*",
 	"entrypoints": {

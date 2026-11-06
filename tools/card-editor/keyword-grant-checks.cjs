@@ -1,0 +1,17 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),M=require('./model.js');
+const source=JSON.parse(fs.readFileSync('src/test/resources/craftbound/test-cards.json','utf8'));
+const data=M.clone(source),c=data.cards.find(c=>c.id==='craftbound:bone_meal');
+c.autoText=true;
+const grant=keyword=>({...M.effect(),trigger:'PLAY',action:'GRANT_KEYWORD',target:'CHOSEN_FRIENDLY',boardKind:'BOTH',type:'',keyword,excludeSelf:false,card:''});
+c.effects=[grant('RANDOM')];
+assert.deepEqual(M.validate(data,source),[],'Random grant is valid on mobs and blocks');
+assert.ok(M.description(c,data).includes("a random keyword it doesn't have"),'Random grant wording');
+c.effects=[grant('SPRINT')];
+assert.ok(M.validate(data,source).some(e=>String(e).includes('require mobs only')),'Sprint grants still need mobs only');
+c.effects=[{...grant('RANDOM'),action:'BUFF',attack:1}];
+assert.ok(M.validate(data,source).length,'Buff cannot grant a random keyword');
+const wall=data.cards.find(x=>x.keywords.includes('BLOCK'));
+wall.keywords=[...wall.keywords,'SHIELD'];c.effects=[grant('SHIELD')];
+assert.deepEqual(M.validate(data,source),[],'Blocks can print Shield');
+assert.ok(M.prepareCatalog?M.prepareCatalog(M.clone(data)).cards.find(x=>x.id===wall.id).keywords.includes('SHIELD'):true,'Loading keeps Shield on blocks');
+console.log('PASS: Random keyword grant authoring, wording, Buff rejection and Shield blocks.');

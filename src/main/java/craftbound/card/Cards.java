@@ -10,7 +10,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
 public class Cards {
-    private static final java.util.regex.Pattern RULE_WORDS = java.util.regex.Pattern.compile("\\b((?:After|When|At the end of|At the start of)[^.:\\n]+(?=:)|At the end of your turn|After your hero attacks|After your hero deals attack damage|After your tool kills a mob or block|After this destroys a mob or block|After this kills a mob or block|After this deals damage|After attacking|When attacked|Your tool gains|After attack|End turn|Death|Activate|Play|Ignore Shield|Shield|Sprint|Ranged|Spawn|Drop|Cleanse|(?i:Bad Omen|Wither(?:ed)?)|Harvest|On kill|Card added|Action played|Mined|Healed|Well Fed)\\b");
+    private static final java.util.regex.Pattern RULE_WORDS = java.util.regex.Pattern.compile("\\b((?:After|When|At the end of|At the start of)[^.:\\n]+(?=:)|At the end of your turn|After your hero attacks|After your hero deals attack damage|After your tool kills a mob or block|After this destroys a mob or block|After this kills a mob or block|After this deals damage|After attacking|When attacked|Your tool gains|After attack|End turn|Death|Activate|Play|Ignore Shield|Shield|Sprint|Ranged|Spawn|Drop|Cleanse|Repair|Throw|Loyalty|Channeling|(?i:Bad Omen|Wither(?:ed)?)|Harvest|On kill|Card added|Action played|Mined|Healed|Well Fed)\\b");
     public static final Identifier EXCAVATED_PICKAXE = Identifier.parse("craftbound:excavated_pickaxe");
     public static final Identifier WOLF_PUP = Identifier.parse("craftbound:wolf_pup");
     public static final Identifier COAL_SEAM = Identifier.parse("craftbound:coal_seam");

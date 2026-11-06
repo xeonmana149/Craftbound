@@ -333,7 +333,7 @@ public final class RelayTables {
                     } finally {m.focus[side]=previous;}
                     card.add("rivals",rivals);
                     if(rivals.isEmpty())card.addProperty("reason",issue);
-                    else moves.add("play"+i,keys(m.validTargets(side,CardEffects.targetKind(ref.id()),ref.id())));
+                    else moves.add("play"+i,keys(m.validTargets(side,CardEffects.targetKind(ref),ref.id())));
                 }
             }
         }

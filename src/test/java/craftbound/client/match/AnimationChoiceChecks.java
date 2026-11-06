@@ -45,6 +45,9 @@ public final class AnimationChoiceChecks {
                     int duration = MatchScreen.castAnimationDuration(id);
                     require(fx == CardCatalog.CastFx.PLAIN ? duration == 0 : duration > 0,
                             "A selected cast must actually reserve a PLAY beat on " + id);
+                    if (fx == CardCatalog.CastFx.EGG)
+                        require(duration == EggCastAnimation.FLIGHT && duration < 250,
+                                "Egg damage must wait only for the fast flight, not the fading impact");
                     if (fx == CardCatalog.CastFx.EYE_OF_ENDER)
                         require(duration >= EyeOfEnderAnimation.DURATION_MS,
                                 "Results or choices cannot overtake the Eye on " + id);

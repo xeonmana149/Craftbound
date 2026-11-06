@@ -4,9 +4,17 @@
 const CLASSES = ["NEUTRAL","FIGHTER","BUILDER","FARMER","FISHERMAN","ALCHEMIST","MINER","CHEF","TAMER","REDSTONER"];
 const TYPES = ["","ANIMAL","UNDEAD","ARTHROPOD","VILLAGER","ILLAGER","ENDER","NETHER","GOLEM","SLIME","CROP","AQUATIC","ORE","TAMEABLE"];
 const RARITIES = ["COMMON","RARE","EPIC","LEGENDARY"];
-const KEYWORDS = ["SHIELD","SPRINT","RANGED","SPAWN","DROP","BLOCK","IGNORE_SHIELD"];
+const KEYWORDS = ["SHIELD","SPRINT","RANGED","SPAWN","DROP","BLOCK","IGNORE_SHIELD","REPAIR","THROW","LOYALTY","CHANNELING"];
+// Which kinds may carry each non-mob keyword. Mobs take every keyword except these tool/enchantment ones.
+const TOOL_KEYWORDS = ["RANGED","IGNORE_SHIELD","REPAIR","THROW"], ENCHANT_KEYWORDS = ["LOYALTY","CHANNELING"];
+function keywordAllowed(kind,k){
+ if(k==="BLOCK")return false;
+ if(kind==="TOOL")return TOOL_KEYWORDS.includes(k);
+ if(kind==="ENCHANTMENT")return ENCHANT_KEYWORDS.includes(k);
+ return kind==="MOB"&&!["REPAIR","THROW",...ENCHANT_KEYWORDS].includes(k);
+}
 const TRIGGERS = ["PLAY","DROP","END_TURN","AFTER_ATTACK","DAMAGE_DEALT","ATTACKED","HARVEST","ON_KILL","CARD_ADDED","ITEM_PLAYED","MINED","HEALED","DISMANTLE","START_TURN","ACTIVATE","AFTER_SURVIVING_KILL"];
-const ACTIONS = ["BUFF","DAMAGE","HEAL","DRAW","CHOOSE_FROM_DECK","GAIN_XP","SUMMON","GIVE","BOUNCE","RETURN_AND_COPY","TOTEM","INVULNERABLE","FREEZE","WITHER","TOOL_DAMAGE","DESTROY_TOOL","ENCHANT_TOOL","CLEANSE","MINE","GRANT_KEYWORD","GIVE_RANDOM","WELL_FED","TRANSFORM","GAIN_MAX_XP","DESTROY","WEAKEN_UNTIL_NEXT_TURN","GIVE_RANDOM_CLASS","UPGRADE_TOOL","BAD_OMEN","REVEAL_HAND","DISCARD_FROM_HAND","STEAL_FROM_HAND","SHUFFLE_FROM_HAND"];
+const ACTIONS = ["BUFF","DAMAGE","HEAL","DRAW","CHOOSE_FROM_DECK","GAIN_XP","SUMMON","GIVE","BOUNCE","RETURN_AND_COPY","TOTEM","INVULNERABLE","FREEZE","WITHER","TOOL_DAMAGE","DESTROY_TOOL","ENCHANT_TOOL","CLEANSE","MINE","GRANT_KEYWORD","GIVE_RANDOM","WELL_FED","TRANSFORM","GAIN_MAX_XP","DESTROY","WEAKEN_UNTIL_NEXT_TURN","GIVE_RANDOM_CLASS","UPGRADE_TOOL","BAD_OMEN","REVEAL_HAND","DISCARD_FROM_HAND","STEAL_FROM_HAND","SHUFFLE_FROM_HAND","PICK_ONE","BREW_POTION"];
 // Hand effects act on the enemy hero's hand. Discard/Steal/Shuffle also say who picks the card.
 const HAND_ACTIONS=["REVEAL_HAND","DISCARD_FROM_HAND","STEAL_FROM_HAND","SHUFFLE_FROM_HAND"];
 const HAND_PICKS=["DISCARD_FROM_HAND","STEAL_FROM_HAND","SHUFFLE_FROM_HAND"];
@@ -28,7 +36,22 @@ function targetOptions(action) {
  return canAffectHero(action)?TARGETS:TARGETS.filter(t=>!TEAM_HERO_TARGETS.includes(t));
 }
 const canAffectHero=action=>["DAMAGE","HEAL","WELL_FED","CLEANSE","FREEZE","DESTROY_TOOL","TOOL_DAMAGE","BAD_OMEN",...HAND_ACTIONS].includes(action);
-const PASSIVES = ["NONE","AURA_ATTACK","AURA_STATS","ARMOR","GRAZER","BATTLE_HARDENED","SCHOOLING"];
+const PASSIVES = ["NONE","AURA_ATTACK","AURA_STATS","ARMOR","GRAZER","BATTLE_HARDENED","SCHOOLING","NEGATE_KEYWORD","AMPLIFY_ELEMENT"];
+// Elements tag any card; Boosts are an optional "If ..." on number effects. Kept in step with CardCatalog.java.
+const ELEMENTS = ["FIRE","FROST","WITHER","POISON","LIGHTNING","EXPLOSIVE","WATER","MAGIC","ENDER"];
+const BOOST_WHEN = ["YOU_CONTROL","ENEMY_CONTROLS","ANYONE_CONTROLS","TARGET_IS","TARGET_FROZEN","TARGET_WITHERED","TARGET_DAMAGED"];
+const BOOST_HOW = ["DOUBLE","TRIPLE","PLUS"];
+const BOOSTABLE = ["DAMAGE","TOOL_DAMAGE","HEAL","WELL_FED","BUFF","WEAKEN_UNTIL_NEXT_TURN","DRAW","GAIN_XP"];
+function boostText(b,catalog){
+ if(!b||!b.when)return "";
+ const change={DOUBLE:"doubled",TRIPLE:"tripled",PLUS:"+"+b.amount}[b.how||"DOUBLE"];
+ const k=b.kind||"BOTH",noun={MOB:"mob",BLOCK:"block",BOTH:"mob or block"}[k],plural={MOB:"mobs",BLOCK:"blocks",BOTH:"mobs or blocks"}[k];
+ const typed=b.type?title(b.type)+" ":"",named=b.card?(catalog.cards.find(x=>x.id===b.card)?.name||b.card.split(":").pop()):null;
+ const one=named!==null?named:("AEIOU".includes((typed+noun)[0])?"an ":"a ")+typed+noun;
+ const condition={YOU_CONTROL:"if you control "+one,ENEMY_CONTROLS:"if an enemy controls "+one,ANYONE_CONTROLS:"if "+one+" is in play",TARGET_IS:"against "+(named!==null?named:typed+plural),TARGET_FROZEN:"against Frozen targets",TARGET_WITHERED:"against Withered targets",TARGET_DAMAGED:"against damaged targets"}[b.when];
+ return " ("+change+" "+condition+")";
+}
+const NEGATABLE = ["SHIELD","SPRINT","RANGED","IGNORE_SHIELD"];
 const OBSERVED=["CARD_ADDED","ITEM_PLAYED","MINED","HEALED"];
 const COUNT_SCOPES=["NONE","FRIENDLY","ENEMY","ALL"];
 const EVENT_SCOPES=["SELF","FRIENDLY","ENEMY","ANY"];
@@ -40,7 +63,7 @@ const clone=x=>JSON.parse(JSON.stringify(x));
 function associatedCards(catalog,source) {
  const links=new Map();
  for(const effect of source.effects||[]){
-  const ids=["SUMMON","GIVE","TRANSFORM","BAD_OMEN"].includes(effect.action)?[effect.card]:effect.action==="GIVE_RANDOM"?(effect.pool||[]):[];
+  const ids=["SUMMON","GIVE","TRANSFORM","BAD_OMEN"].includes(effect.action)?[effect.card]:["GIVE_RANDOM","PICK_ONE"].includes(effect.action)?(effect.pool||[]):[];
   for(const id of new Set(ids.filter(Boolean))){
    if(!links.has(id))links.set(id,{id,card:catalog.cards.find(c=>c.id===id)||null,effects:[]});
    links.get(id).effects.push(effect);
@@ -146,13 +169,15 @@ const effect=()=>({trigger:"PLAY",action:"BUFF",target:"FRIENDLY_MOBS",boardKind
 const kind=c=>c.keywords.includes("BLOCK") ? "BLOCK" : c.kind;
 function description(c,catalog) {
  if(!c.autoText)return c.text;
- const parts=c.keywords.filter(k=>!["SPAWN","DROP","CLEANSE","BLOCK"].includes(k)).map(k=>title(k)+".");
+ const parts=(c.element&&c.kind!=="ITEM"?[title(c.element)+"."]:[]).concat(c.keywords.filter(k=>!["SPAWN","DROP","CLEANSE","BLOCK"].includes(k)).map(k=>title(k)+"."));
  if(c.passive==="ARMOR")parts.push("Reduce incoming damage by "+c.passiveAmount+".");
  if(["AURA_ATTACK","AURA_STATS"].includes(c.passive)){
   const health=c.passive==="AURA_STATS"?(c.auraHealth||0):0;
   const stats=c.passiveAmount===0?"+"+health+" Health":health===0?"+"+c.passiveAmount+" Attack":"+"+c.passiveAmount+" Attack and +"+health+" Health";
   parts.push("Your other "+(c.auraType?title(c.auraType)+" ":"")+({MOB:"mobs",BLOCK:"blocks",BOTH:"mobs and blocks"}[c.auraKind||"MOB"])+" have "+stats+".");
  }
+ if(c.passive==="AMPLIFY_ELEMENT"&&c.ampElement)parts.push("Your "+title(c.ampElement)+" effects deal "+({TRIPLE:"triple",PLUS:"+"+c.passiveAmount}[c.ampHow]||"double")+" damage.");
+ if(c.passive==="NEGATE_KEYWORD"&&c.negateKeyword)parts.push("Enemy "+(c.auraType?title(c.auraType)+" ":"")+({MOB:"mobs",BLOCK:"blocks",BOTH:"mobs and blocks"}[c.auraKind||"BOTH"])+" lose "+title(c.negateKeyword)+" while this is in play.");
  if(c.passive==="GRAZER")parts.push("At the end of your turn, if you control a Crop, restore "+c.passiveAmount+" Health to this mob.");
  if(c.passive==="BATTLE_HARDENED")parts.push("After this survives damage, gain +"+c.passiveAmount+" Attack. Once per turn.");
  if(c.passive==="SCHOOLING")parts.push("After you play another Aquatic mob, this gains +"+c.passiveAmount+" Attack until the end of the turn.");
@@ -166,10 +191,12 @@ function description(c,catalog) {
    DAMAGE:()=>`Deal ${f.amount} damage to ${t}`,
    HEAL:()=>`Restore ${f.amount} Health to ${t}`,
    WELL_FED:()=>`Well Fed: restore ${f.amount} Health to ${t}; excess healing increases maximum Health`,
-   GRANT_KEYWORD:()=>`Give ${t} ${title(f.keyword)}`,
+   GRANT_KEYWORD:()=>`Give ${t} ${f.keyword==="RANDOM"?"a random keyword it doesn't have":title(f.keyword)}`,
    TRANSFORM:()=>`Transform ${t} into ${ref}`,
    GIVE_RANDOM:()=>`Add ${f.amount} random ${f.amount===1?"card":"cards"} from [${(f.pool||[]).map(id=>catalog.cards.find(c=>c.id===id)?.name||id).join(", ")}] to your hand`,
    CHOOSE_FROM_DECK:()=>`Choose one of up to ${f.amount} different ${f.type?title(f.type)+" ":""}${{BLOCK:"blocks",MOB:"mobs",BOTH:"mobs or blocks"}[f.boardKind]} from your deck and draw it`,
+   BREW_POTION:()=>`Brew a potion in your hand: add Potency, Duration or Lingering`,
+   PICK_ONE:()=>`Pick one of [${(f.pool||[]).map(id=>catalog.cards.find(c=>c.id===id)?.name||id).join(", ")}] to add to your hand`,
    GIVE_RANDOM_CLASS:()=>`Add ${f.amount===1?"a random card":f.amount+" random cards"} from your class to your hand`,
    BAD_OMEN:()=>`Give ${t} Bad Omen`,
    CLEANSE:()=>`Cleanse ${t}`,
@@ -195,7 +222,7 @@ function description(c,catalog) {
   let trigger=triggerText(c,f)+(f.gate&&f.gate!=="ALWAYS"?", "+(GATES[f.gate]||"unknown condition").toLowerCase():"");
   if(c.kind==="ENCHANTMENT"&&f.trigger!=="PLAY")trigger="Your tool gains: "+trigger;
   const count=f.countScope&&f.countScope!=="NONE"?" for each "+(f.countScope==="ALL"?"":f.countScope.toLowerCase()+" ")+(f.countType?title(f.countType)+" ":"")+({MOB:"mob",BLOCK:"block",BOTH:"mob or block"}[f.countKind||"BOTH"])+(f.countExcludeSelf?" other than this":""):"";
-  const action=(actions[f.action]?.()||"?")+count;
+  const action=(actions[f.action]?.()||"?")+count+boostText(f.boost,catalog);
   if(trigger && trigger===previousTrigger){
    const next=action.startsWith("Well Fed")?action:action[0].toLowerCase()+action.slice(1);
    parts[parts.length-1]=parts[parts.length-1].slice(0,-1)+", then "+next+".";
@@ -206,6 +233,7 @@ function description(c,catalog) {
    ?"Your tool gains: After this destroys a mob or block, "+action[0].toLowerCase()+action.slice(1)+"."
    :(trigger?trigger+": ":"")+action+".");
  }
+ if(c.uses>0)parts.push(c.uses===1?"After 1 use, this is destroyed.":"After "+c.uses+" uses, this is destroyed.");
  return parts.join(" ");
 }
 function triggerText(c,f) {
@@ -278,13 +306,25 @@ function validate(data,previous,detailed=false) {
   if(spell&&(c.attack!==0||c.health!==0))fail(id,"Actions and Enchantments have 0 attack and health","attack");
   if(c.type&&c.kind!=="MOB")fail(id,"Only mobs have a type","type");
   if(c.kind==="ENCHANTMENT"&&c.class==="NEUTRAL")fail(id,"Enchantments must belong to a class","class");
-  if(c.kind==="ENCHANTMENT"&&!c.effects?.some(e=>e.action==="ENCHANT_TOOL"||e.trigger!=="PLAY"))fail(id,"An enchantment needs a tool stat bonus or an attached triggered ability","effects");
+  if(c.kind==="ENCHANTMENT"&&!c.keywords?.some(k=>ENCHANT_KEYWORDS.includes(k))&&!c.effects?.some(e=>e.action==="ENCHANT_TOOL"||e.trigger!=="PLAY"))fail(id,"An enchantment needs a tool stat bonus or an attached triggered ability","effects");
   if(c.passive!=="NONE"&&c.kind!=="MOB")fail(id,"Passives require a mob","passive");
+  if(c.element)pick(c,"element",ELEMENTS,id);
+  if(c.potion&&c.kind!=="ITEM")fail(id,"Only Actions can be potions","potion");
+  if(c.uses!==undefined&&c.uses!==0){
+   if(!Number.isInteger(c.uses)||c.uses<0||c.uses>20)fail(id,"Uses must be 0 to 20","uses");
+   else if(c.kind!=="MOB")fail(id,"Only mobs and blocks can have limited uses","uses");
+   else if(!(c.effects||[]).some(f=>f.trigger!=="PLAY"&&f.trigger!=="DROP"))fail(id,"Limited uses need a triggered ability (not Spawn or Drop) to count","uses");
+  }
+  if(c.passive==="AMPLIFY_ELEMENT"){if(!ELEMENTS.includes(c.ampElement))fail(id,"Amplify element needs an element","ampElement");if(c.ampHow!==undefined)pick(c,"ampHow",BOOST_HOW,id);if(c.ampHow==="PLUS"&&!(c.passiveAmount>=1))fail(id,"Amplify +damage needs an amount of at least 1","passiveAmount")}
+  if(c.passive==="NEGATE_KEYWORD"&&!NEGATABLE.includes(c.negateKeyword))fail(id,"Negate keyword needs Shield, Sprint, Ranged or Ignore Shield","negateKeyword");
   if(!Array.isArray(c.keywords)||c.keywords.some(k=>!KEYWORDS.includes(k))||new Set(c.keywords).size!==c.keywords.length){fail(id,"Invalid or duplicate keywords","keywords");continue}
   if(c.keywords.includes("BLOCK")&&(c.kind!=="MOB"||c.attack!==0))fail(id,"Blocks need 0 attack","attack");
   if(c.keywords.includes("BLOCK")&&["BATTLE_HARDENED","SCHOOLING"].includes(c.passive))fail(id,"Attack-growth passives require a non-block mob","passive");
-  if(c.kind!=="MOB"&&c.keywords.some(k=>!["RANGED","IGNORE_SHIELD"].includes(k)))fail(id,"Tools support Ranged and Ignore Shield","keywords");
-  if(spell&&c.keywords.length)fail(id,"Actions and Enchantments cannot have combat keywords","keywords");
+  if(c.kind!=="MOB"&&c.keywords.some(k=>![...TOOL_KEYWORDS,...ENCHANT_KEYWORDS].includes(k)))fail(id,"Tools support Ranged, Ignore Shield, Repair and Throw; other combat keywords need a mob","keywords");
+  if(c.kind!=="TOOL"&&c.keywords.includes("REPAIR"))fail(id,"Repair is a tool keyword","keywords");
+  if(c.kind!=="TOOL"&&c.keywords.includes("THROW"))fail(id,"Throw is a tool keyword","keywords");
+  if(c.kind!=="ENCHANTMENT"&&c.keywords.some(k=>ENCHANT_KEYWORDS.includes(k)))fail(id,"Loyalty and Channeling are enchantment keywords","keywords");
+  if(spell&&c.keywords.some(k=>c.kind!=="ENCHANTMENT"||!ENCHANT_KEYWORDS.includes(k)))fail(id,"Actions and Enchantments cannot have combat keywords","keywords");
   if(!Array.isArray(c.effects)||c.effects.length>16){fail(id,"Expected at most 16 effects","effects");continue}
   let chosen;
   for(const [index,f] of c.effects.entries()) {
@@ -305,7 +345,7 @@ function validate(data,previous,detailed=false) {
    const aimed=String(f.target).startsWith("CHOSEN");
    if(f.action==="RETURN_AND_COPY"&&f.amount>10)fail(id,"Return and copy allows at most 10 extra copies","amount");
    if(f.action==="CHOOSE_FROM_DECK"&&(f.target!=="SELF"||f.excludeSelf||f.amount>3))fail(id,"Choose from deck uses Self, 1–3 options, and no exclude-self filter","amount");
-   const generator=["DRAW","GAIN_XP","GAIN_MAX_XP","GIVE","GIVE_RANDOM","GIVE_RANDOM_CLASS","SUMMON","ENCHANT_TOOL","UPGRADE_TOOL"].includes(f.action);
+   const generator=["DRAW","GAIN_XP","GAIN_MAX_XP","GIVE","GIVE_RANDOM","GIVE_RANDOM_CLASS","SUMMON","ENCHANT_TOOL","UPGRADE_TOOL","PICK_ONE","BREW_POTION"].includes(f.action);
    if(generator&&(f.target!=="SELF"||f.type||f.excludeSelf))fail(id,"Draw/XP/Give/Summon target Self with no mob filters","target");
    if(generator&&f.amount>10)fail(id,"Draw/XP/Give/Summon amount cannot exceed 10","amount");
    if(["GIVE","SUMMON","TRANSFORM","BAD_OMEN"].includes(f.action)) {
@@ -322,14 +362,26 @@ function validate(data,previous,detailed=false) {
    if(["HARVEST","DISMANTLE","DROP","ATTACKED"].includes(f.trigger)&&c.kind!=="MOB")fail(id,"This trigger requires a mob or block","trigger");
    if(f.trigger==="HARVEST"&&c.type!=="CROP")fail(id,"Harvest requires a Crop","trigger");
    if(f.trigger==="DISMANTLE"&&!c.keywords.includes("BLOCK"))fail(id,"Dismantle requires a block","trigger");
-   if((f.action==="GRANT_KEYWORD"||f.action==="BUFF"&&f.keyword)&&!["SHIELD","SPRINT","RANGED","IGNORE_SHIELD"].includes(f.keyword))fail(id,"Choose Shield, Sprint, Ranged or Ignore Shield","keyword");
-   if(f.keyword&&f.keyword!=="SHIELD"&&f.boardKind!=="MOB")fail(id,"Sprint/Ranged/Ignore Shield grants require mobs only","boardKind");
+   if((f.action==="GRANT_KEYWORD"||f.action==="BUFF"&&f.keyword)&&!["SHIELD","SPRINT","RANGED","IGNORE_SHIELD"].concat(f.action==="GRANT_KEYWORD"?["RANDOM"]:[]).includes(f.keyword))fail(id,"Choose Shield, Sprint, Ranged or Ignore Shield","keyword");
+   if(f.keyword&&!["SHIELD","RANDOM"].includes(f.keyword)&&f.boardKind!=="MOB")fail(id,"Sprint/Ranged/Ignore Shield grants require mobs only","boardKind");
    if(!["BUFF","GRANT_KEYWORD"].includes(f.action)&&f.keyword)fail(id,"Only Buff and Grant keyword use keyword","keyword");
    if(f.pool!==undefined&&(!Array.isArray(f.pool)||f.pool.length>32))fail(id,"Expected at most 32 pool entries","pool");
-   if(f.action==="GIVE_RANDOM"){
-    if(!Array.isArray(f.pool)||!f.pool.length)fail(id,"Random Give needs a card pool","pool");
+   if(f.action==="PICK_ONE"&&Array.isArray(f.pool)&&(f.pool.length<2||f.pool.length>3||new Set(f.pool).size!==f.pool.length))fail(id,"Pick one needs 2 or 3 different cards to choose from","pool");
+   if(["GIVE_RANDOM","PICK_ONE"].includes(f.action)){
+    if(!Array.isArray(f.pool)||!f.pool.length)fail(id,f.action==="PICK_ONE"?"Pick one needs cards to choose from":"Random Give needs a card pool","pool");
     else for(const ref of f.pool)if(typeof ref!=="string"||!data.cards.some(x=>x.id===ref&&(c.deleted||!x.deleted)))fail(id,"Unknown pool card: "+ref,"pool");
-   }else if(f.pool?.length)fail(id,"Only Random Give uses a card pool","pool");
+   }else if(f.pool?.length)fail(id,"Only Random Give and Pick one use a card list","pool");
+   if(f.boost){
+    const b=f.boost;
+    if(!BOOSTABLE.includes(f.action))fail(id,"Boosts work on Damage, Tool damage, Heal, Well Fed, Buff, Weaken, Draw and Gain XP","boost");
+    else if(!BOOST_WHEN.includes(b.when))fail(id,"Choose when the boost applies","boost");
+    else if(b.when.startsWith("TARGET_")&&["DRAW","GAIN_XP"].includes(f.action))fail(id,"Target conditions need an action that hits targets","boost");
+    if(b.how!==undefined&&!BOOST_HOW.includes(b.how))fail(id,"Unknown boost","boost");
+    if(b.how==="PLUS"&&!(Number.isInteger(b.amount)&&b.amount>=1&&b.amount<=20))fail(id,"Boost bonus must be 1 to 20","boost");
+    if(b.type&&!TYPES.includes(b.type))fail(id,"Unknown boost mob type","boost");
+    if(b.kind&&!["MOB","BLOCK","BOTH"].includes(b.kind))fail(id,"Unknown boost card kind","boost");
+    if(b.card&&!data.cards.some(x=>x.id===b.card))fail(id,"Unknown boost card: "+b.card,"boost");
+   }
    if(f.countScope!==undefined)pick(f,"countScope",COUNT_SCOPES,id);
    if(f.countKind!==undefined)pick(f,"countKind",["MOB","BLOCK","BOTH"],id);
    if(f.countType!==undefined)pick(f,"countType",TYPES,id);
@@ -431,7 +483,6 @@ function prepareCatalog(data) {
  // Old drafts need the restored Fighter token, not a reset of authored collectible cards.
  if(!data.cards.some(c=>c.id==="craftbound:crafted_sword"))data.cards.push(clone({"id": "craftbound:crafted_sword", "name": "Wooden Sword", "text": "", "autoText": true, "kind": "TOOL", "class": "FIGHTER", "rarity": "COMMON", "cost": 0, "attack": 1, "health": 1, "type": "", "keywords": [], "token": true, "art": "minecraft:wooden_sword", "passive": "NONE", "passiveAmount": 1, "effects": []}));
  for(const c of data.cards){
-  if(c.keywords.includes("BLOCK"))c.keywords=c.keywords.filter(k=>k!=="SHIELD");
   autoArtwork(c);
  }
  return data;
@@ -450,6 +501,37 @@ function mergeSavedDraft(draft,baseline,saved) {
  return prepareCatalog(draft);
 }
 const GUIDE={"trigger":{"PLAY":"Runs when played from hand. On a mob the printed timing is Spawn.","DROP":"Runs when this board card dies. Returning it to hand does not count.","END_TURN":"Runs as its controller ends their turn, while this card is in play.","START_TURN":"Runs as its controller starts their turn. A block played now must survive the opponent’s turn.","AFTER_ATTACK":"After this attacker finishes its attack. Use Attack target to affect the same character.","DAMAGE_DEALT":"After this deals actual damage. Prevented damage does not count.","ATTACKED":"When this is attacked; the attacker is the character involved.","HARVEST":"When a Crop is harvested. Simply killing it is not a harvest.","ON_KILL":"When this source kills a mob or block. Unlike a surviving kill, it need not survive combat.","CARD_ADDED":"Watch a card enter a hand. Use the event filters to select whose hand and which type.","ITEM_PLAYED":"Watch a player play an Action card. Choose whose Actions count.","MINED":"Watch an Ore block be mined. Ordinary destruction is not mining.","HEALED":"After health is actually restored. Choose whether to watch this character or a side.","DISMANTLE":"Retired trigger. Use another timing for new designs.","ACTIVATE":"Runs when an ability activates this friendly block, such as the Redstoner power. Playing it does not activate it.","AFTER_SURVIVING_KILL":"Only after this mob attacks, kills its target and stays alive. Retaliation kills while defending do not count."},"action":{"BUFF":"Change Attack and/or Health. You can grant a combat keyword in the same buff.","DAMAGE":"Deal the specified amount to each eligible target.","HEAL":"Restore missing Health. Normal healing cannot raise maximum Health.","DRAW":"Move cards from your deck to your hand.","CHOOSE_FROM_DECK":"Offer up to three different mobs or blocks from your deck, then draw the one you choose. Filter by card kind and optional mob type. Duplicate IDs occupy one option. The selected real copy keeps Enchanted and Trials upgrades; unchosen cards stay in the deck. Fewer matches means fewer choices; none means no effect. A full hand loses the drawn card. Private choice with a 30-second random fallback.","GAIN_XP":"Gain spendable XP now; this does not increase your maximum.","SUMMON":"Put the selected board card into play, space permitting. It is not played from hand.","GIVE":"Create the selected card in your hand without drawing from your deck.","BOUNCE":"Return the board card to its owner’s hand instead of destroying it.","RETURN_AND_COPY":"Return the selected board card, then add extra copies of that same card to your hand. Amount 1 means one extra copy. Keeps Enchanted and Trials upgrades; combat buffs, damage and statuses reset. The return follows normal token/commander rules; copies are still created. Excess cards are lost if your hand is full.","TOTEM":"Give the target a Totem of Undying so it returns after death.","INVULNERABLE":"Prevent damage until the start of its owner’s next turn.","FREEZE":"Stop the affected character from attacking on its next attack turn.","WITHER":"Apply recurring damage to a board target; heroes cannot be Withered.","TOOL_DAMAGE":"Use the Attack of your equipped tool as the damage amount.","DESTROY_TOOL":"Remove the opposing hero’s equipped tool.","ENCHANT_TOOL":"Attach an enchantment to your tool. Choose stat bonuses or add triggered effects.","CLEANSE":"Remove buffs and debuffs. Printed abilities remain.","MINE":"Mine an eligible friendly Ore block and resolve its mining payoff.","GRANT_KEYWORD":"Give the target a combat keyword, such as Shield or Sprint.","GIVE_RANDOM":"Create cards in your hand from a list you choose.","WELL_FED":"Heal the target; excess healing increases its maximum Health.","TRANSFORM":"Replace the target’s form with the chosen board card.","GAIN_MAX_XP":"Increase your maximum XP rather than just granting spendable XP.","DESTROY":"Destroy each eligible board card regardless of its Health. This is not damage.","WEAKEN_UNTIL_NEXT_TURN":"Lower Attack until the end of the affected mob’s controller’s next turn.","GIVE_RANDOM_CLASS":"Create a random collectible from your own class. Neutral cards and tokens are excluded.","UPGRADE_TOOL":"Improve Attack, Durability, or both on your equipped tool.","BAD_OMEN":"Mark the enemy hero. Their next mob played from hand summons the specified mob for you."},"target":{"SELF":"The source itself. Draw, summon and hand-generation actions use the controller automatically.","FRIENDLY_MOBS":"All matching board cards on your side. Use Eligible board cards to select mobs or blocks.","ENEMY_MOBS":"All matching board cards across from you. For TNT select Blocks only.","ALL_MOBS":"Every matching board card on either side; heroes are excluded.","FRIENDLY_HERO":"Your hero only.","ENEMY_HERO":"One opposing hero. In Team Duos this is the rival whose field you select.","EACH_ENEMY_HERO":"Apply once to each opposing hero. Dealing 2 damage to each costs the opposing team 4 Health in Team Duos.","EACH_HERO":"Apply once per hero, including you and your partner in Team Duos.","RANDOM_FRIENDLY_MOB":"One eligible friendly board card; never a hero.","RANDOM_ENEMY":"One eligible enemy; may include the enemy hero when supported.","RANDOM_FRIENDLY":"One eligible ally; may include your hero when supported.","RANDOM_BLOCK":"One eligible block on either side.","RANDOM_MOB":"One eligible mob on either side; never a block or hero.","RANDOM_HERO":"One eligible hero at random.","CHOSEN_FRIENDLY":"The friendly board card selected for the effect.","CHOSEN_ENEMY":"The enemy board card selected for the effect.","CHOSEN_ANY":"A board card on either side. With a damage trigger it uses the character involved instead of asking again.","CHOSEN_CHARACTER":"An eligible board card or hero on either side. The action still determines what is legal.","EVENT":"Use the character involved in the triggering event; after an attack, this is the attack target.","KILLER":"The enemy mob responsible for killing this card. If none exists, the effect does nothing."},"passive":{"NONE":"No built-in passive. Triggered effects still work.","ARMOR":"Reduce each incoming hit by the passive amount.","AURA_ATTACK":"While this is in play, your other matching mobs gain Attack. They lose the bonus when the aura ends.","AURA_STATS":"Give other friendly mobs, blocks, or both a continuous bonus. Blocks can receive Health only. The source never buffs itself, and the bonus ends when it leaves play.","GRAZER":"At the end of your turn, heal this mob if you control a Crop.","BATTLE_HARDENED":"Once per turn, after this mob survives damage, it gains Attack.","SCHOOLING":"After you play another Aquatic mob, this gains Attack for the rest of the turn."}};
+// Rule explanations for everything added after the original guide. guide-checks.cjs fails if a
+// keyword, trigger, action, target, passive or hand chooser has no explanation here.
+GUIDE.action.GRANT_KEYWORD="Give the target a combat keyword: Shield, Sprint, Ranged or Ignore Shield, or Random for one it doesn't already have. Cards that already have the keyword can't be targeted. Blocks can only get Shield.";
+GUIDE.action.REVEAL_HAND="Show you the opponent's hand for a few seconds. Only you see it.";
+GUIDE.action.DISCARD_FROM_HAND="Remove cards from the opponent's hand. Who picks decides whether you choose, they choose, or it's random.";
+GUIDE.action.STEAL_FROM_HAND="Move cards from the opponent's hand into yours. Who picks decides whether you choose, they choose, or it's random.";
+GUIDE.action.SHUFFLE_FROM_HAND="Shuffle cards from the opponent's hand back into their deck. Who picks decides whether you choose, they choose, or it's random.";
+GUIDE.passive.NEGATE_KEYWORD="While this is on the board, the enemy mobs, blocks or both you pick (optionally only one mob type) lose the chosen keyword (Shield, Sprint, Ranged or Ignore Shield), even if printed, trained or granted. A Sprint mob played while it is out can't attack that turn. The keyword comes back when this leaves play.";
+GUIDE.negateKeyword={SHIELD:"Enemy Shields stop forcing attacks.",SPRINT:"Enemy mobs can't attack the turn they are played.",RANGED:"Enemy mobs can't hit blocks behind your mobs.",IGNORE_SHIELD:"Enemy mobs must respect your Shields again."};
+GUIDE.card={USES:"Uses (mobs and blocks): each time one of the card's triggered abilities runs (for example At the end of your turn), it spends a use. When the last use is spent it is destroyed, and its Drop effects still happen. Spawn and Drop don't count as uses. A counter on the board shows how many are left. Example: Cake, At the end of your turn heal a random friendly mob, 4 uses."};
+GUIDE.action.BREW_POTION="Brewing Stand: you choose a potion in your hand (an Action with Potion ticked), then choose one upgrade it does not have yet and that would change it: Potency, Duration or Lingering. Each upgrade can be added once, so a potion can be brewed up to 3 times. Usually used At the end of your turn on a block. You have 30 seconds for each pick, then it is picked at random. The computer opponent and team tables brew at random.";
+GUIDE.brew={POTION:"Tick Potion on an Action to make it a potion. Its type label says Potion (or e.g. Fire Potion), and Brewing Stands can upgrade it in your hand.",POTENCY:"+1 to each of the potion's numbers that is above 0: damage, healing, Attack and Health bonuses, cards drawn, XP and so on. Not offered for a potion with no numbers (e.g. one that only grants Sprint).",DURATION:"After you play the potion, it happens again at the start of your next turn, on the same target if it is still on the board. Not offered when repeating would do nothing: keyword grants, Wither, Totem and Transform don't stack, and a destroyed or returned single target is gone.",LINGERING:"The potion no longer needs a target: a chosen enemy becomes all enemy mobs, a chosen friendly mob becomes all your mobs. Harmful effects on any target hit enemies; helpful ones hit your mobs. Only offered when the potion has a chosen target that can be a mob (not for effects with no target, hand effects or tool breaking)."};
+GUIDE.action.PICK_ONE="Offer you 2 or 3 cards you choose here (for example potion tokens). You pick one and it is added to your hand. You have 30 seconds, then one is picked at random. The computer opponent and team tables pick at random. A full hand loses the card.";
+GUIDE.passive.AMPLIFY_ELEMENT="While this is on the board, damage from effects on your cards of the chosen element is doubled, tripled or increased. For example Netherrack: Your Fire effects deal double damage. Bonuses from several sources add up, then the biggest multiplier applies once. Mob and hero attacks are not changed.";
+GUIDE.element={FIRE:"Fire cards: burning, lava, flint and steel, blazes. Amplify element can boost their damage.",FROST:"Frost cards: ice, snow, powder snow, strays. Pairs well with Freeze.",WITHER:"Wither cards: wither roses, wither skeletons, soul fire.",POISON:"Poison cards: spiders, pufferfish, suspicious stew.",LIGHTNING:"Lightning cards: tridents, lightning rods, charged creepers.",EXPLOSIVE:"Explosive cards: TNT, creepers, fire charges.",WATER:"Water cards: drowned, guardians, splash potions.",MAGIC:"Magic cards: enchantments, potions, evokers.",ENDER:"Ender cards: ender pearls, endermen, shulkers, the End."};
+GUIDE.element.LABEL="On an Action, the element replaces the word Action on the type label at the bottom of the card (Fire, Frost, Ender...). Actions with no element still say Action. Other kinds print the element as the first word of their rules text.";
+GUIDE.boost={YOU_CONTROL:"Boosts the effect while you control a matching card. Pick a specific card (e.g. Netherrack), or a card kind and optional mob type.",ENEMY_CONTROLS:"Boosts the effect while any enemy controls a matching card.",ANYONE_CONTROLS:"Boosts the effect while a matching card is on either side.",TARGET_IS:"Boosts the effect only against targets that match the card, kind or mob type you pick. Checked for each target.",TARGET_FROZEN:"Boosts the effect against Frozen targets. Checked for each target.",TARGET_WITHERED:"Boosts the effect against Withered targets. Checked for each target.",TARGET_DAMAGED:"Boosts the effect against targets that are already damaged. Checked for each target."};
+GUIDE.chooser={YOU:"You look at their hand and pick the cards.",OPPONENT:"Your opponent picks which of their cards are affected.",RANDOM:"The cards are picked at random. Nobody sees the hand."};
+GUIDE.keyword={
+ SHIELD:"Enemies must attack this first. On a block, Shield only guards its hero and other blocks: mobs in front can still be attacked, and the block can only be hit once the front row is clear, or by Ranged.",
+ SPRINT:"Can attack enemy mobs and blocks the turn it's played, but not the enemy hero until your next turn.",
+ RANGED:"Can attack blocks behind enemy mobs. Shield still takes priority. On a tool, your hero's attacks are Ranged.",
+ SPAWN:"Marks a rule that happens when you play this card.",
+ DROP:"Marks a rule that happens when this mob dies.",
+ BLOCK:"Set by choosing the Block card kind. Has 0 Attack and stays in the back row. Enemy melee attacks can reach it once your mob row is empty.",
+ IGNORE_SHIELD:"Can attack any enemy even while enemies have Shield. Other attack limits still apply. On a tool, applies to your hero's attacks.",
+ REPAIR:"Tools only. Your hero can use this tool on one of your own damaged blocks to heal it by the tool's Attack, up to its max Health. Uses your hero's attack for the turn and 1 Durability. Nothing hits back. It still attacks enemies normally.",
+ THROW:"Tools only (the Trident). Your hero throws this at an enemy mob instead of hitting it: it reaches the back row and the mob doesn't hit back. If the mob survives, the tool sticks in it and your hero is unarmed until that mob leaves the board (dies, is returned or transformed). Then it comes back to your hero, or to your hand if your hero picked up another tool. It can't be thrown at heroes.",
+ LOYALTY:"Enchantments only, for a Throw tool. When your thrown tool is stuck in a mob, it comes back to your hero at the start of your next turn.",
+ CHANNELING:"Enchantments only, for a Throw tool. At the start of your turn, lightning strikes the mob your tool is stuck in and the mobs on its left and right in the same row, for 2 damage each (Amplify boosts it). With Loyalty too, the lightning strikes first, then the tool comes back."
+};
 const GATES={ALWAYS:"Always",TOOL_EQUIPPED:"If you have a tool",HERO_HURT:"If your hero is hurt",EMPTY_HAND:"If your hand is empty"};
 const FX={
  castFx:{AUTO:"Automatic",PLAIN:"Standard card play",EGG:"Thrown egg",POTION:"Thrown splash potion",EYE_OF_ENDER:"Eye of Ender throw and scan",ARROW:"Arrow projectile",FOX:"Fox dash"},
@@ -487,17 +569,17 @@ function recipe(c,kind,index){
  const list=[];for(let i=index;i<c.effects.length;i++){const step=c.effects[i];if(step.trigger!==f.trigger||eventScope(step)!==eventScope(f)||(step.eventType||"")!==(f.eventType||"")||(step.gate||"ALWAYS")!==(f.gate||"ALWAYS"))break;const copy=clone(step);for(const k of timingKeys)delete copy[k];list.push(copy)}return list;}
  const effects=c.effects.filter(e=>e.trigger!=="PLAY");
  if(c.kind!=="MOB"||(!effects.length&&c.passive==="NONE"))throw Error("Choose a mob or block with a passive or a non-Play effect.");
- return clone({passive:c.passive,passiveAmount:c.passiveAmount,auraType:c.auraType||"",auraKind:c.auraKind||"MOB",auraHealth:c.auraHealth||0,effects});
+ return clone({passive:c.passive,passiveAmount:c.passiveAmount,auraType:c.auraType||"",auraKind:c.auraKind||"MOB",auraHealth:c.auraHealth||0,...(c.negateKeyword?{negateKeyword:c.negateKeyword}:{}),...(c.ampElement?{ampElement:c.ampElement,ampHow:c.ampHow||"DOUBLE"}:{}),effects});
 }
 function applyRecipe(c,r,index){
  const copy=clone(c),f=copy.effects[index],p=clone(r.value);
  if(r.kind==="when"){if(!f)throw Error("Select an effect to receive the timing.");for(const k of timingKeys)delete f[k];Object.assign(f,p);}
  else if(r.kind==="action"){const t=f?timing(f):{trigger:"PLAY"};copy.effects.splice(f?index+1:copy.effects.length,0,...p.map(v=>({...v,...t})));}
- else{if(copy.kind!=="MOB")throw Error("Passive recipes require a mob or block.");if(p.passive!=="NONE"&&copy.passive!=="NONE")throw Error("Remove the existing passive before applying another built-in passive.");if(p.passive!=="NONE")for(const k of ["passive","passiveAmount","auraType","auraKind","auraHealth"])copy[k]=p[k];copy.effects.push(...p.effects);}
+ else{if(copy.kind!=="MOB")throw Error("Passive recipes require a mob or block.");if(p.passive!=="NONE"&&copy.passive!=="NONE")throw Error("Remove the existing passive before applying another built-in passive.");if(p.passive!=="NONE")for(const k of ["passive","passiveAmount","auraType","auraKind","auraHealth","negateKeyword","ampElement","ampHow"])if(p[k]!==undefined)copy[k]=p[k];copy.effects.push(...p.effects);}
  if(copy.effects.length>16)throw Error("This would exceed the 16-effect limit.");
  copy.autoText=true;return copy;
 }
-const api={GUIDE,GATES,FX,animationNotes,recipe,applyRecipe,mergeSavedDraft,inferArt,autoArtwork,prepareCatalog,associatedCards,wordingAdvice,deletionProblem,deleteCard,validationIssues:(data,previous)=>validate(data,previous,true),cardsUsing,TOKEN_SOURCES,xpCurve,TEMPLATES,OBSERVED,COUNT_SCOPES,EVENT_SCOPES,CLASSES,TYPES,RARITIES,KEYWORDS,TRIGGERS,ACTIONS,HAND_ACTIONS,HAND_PICKS,HAND_CHOOSERS,handText,TARGETS,TEAM_HERO_TARGETS,targetOptions,PASSIVES,title,clone,idForName,renameCard,effect,kind,description,validate};
+const api={keywordAllowed,TOOL_KEYWORDS,ENCHANT_KEYWORDS,GUIDE,NEGATABLE,ELEMENTS,BOOST_WHEN,BOOST_HOW,BOOSTABLE,boostText,GATES,FX,animationNotes,recipe,applyRecipe,mergeSavedDraft,inferArt,autoArtwork,prepareCatalog,associatedCards,wordingAdvice,deletionProblem,deleteCard,validationIssues:(data,previous)=>validate(data,previous,true),cardsUsing,TOKEN_SOURCES,xpCurve,TEMPLATES,OBSERVED,COUNT_SCOPES,EVENT_SCOPES,CLASSES,TYPES,RARITIES,KEYWORDS,TRIGGERS,ACTIONS,HAND_ACTIONS,HAND_PICKS,HAND_CHOOSERS,handText,TARGETS,TEAM_HERO_TARGETS,targetOptions,PASSIVES,title,clone,idForName,renameCard,effect,kind,description,validate};
 root.CardModel=api;
 if(typeof module!=="undefined")module.exports=api;
 })(typeof window!=="undefined"?window:globalThis);

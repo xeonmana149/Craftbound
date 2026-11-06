@@ -4,6 +4,8 @@ import craftbound.card.CardClass;
 import craftbound.card.CardDefinition;
 import craftbound.card.Cards;
 import craftbound.card.DeckRules;
+import craftbound.card.Keyword;
+import java.util.function.Predicate;
 import craftbound.component.ModComponents;
 import craftbound.deck.DeckBuilding;
 import craftbound.deck.DeckContents;
@@ -228,9 +230,9 @@ public class MatchManager {
         return classes[player.getRandom().nextInt(classes.length)];
     }
 
-    // Keep the class's identity, then fill a full legal deck with a random selection of Neutral cards.
+    // Build a playable opening and midgame from the current catalogue. Prefer class cards within each band.
     private static List<CardRef> cardMasterDeck(CardClass cardClass, RandomSource random) {
-        List<CardRef> deck = new ArrayList<>();
+        List<CardRef> pool = new ArrayList<>();
         for (Identifier id : Cards.collectible()) {
             CardDefinition card = Cards.get(id);
             if (!DeckRules.allowed(id, cardClass)) {
@@ -238,16 +240,36 @@ public class MatchManager {
             }
             int copies = DeckRules.maxCopies(card.rarity());
             for (int n = 0; n < copies; n++) {
-                deck.add(new CardRef(id, false));
+                pool.add(new CardRef(id, false));
             }
         }
-        if (deck.size() < DeckRules.DECK_SIZE) {
+        if (pool.size() < DeckRules.DECK_SIZE) {
             throw new IllegalStateException("Not enough legal cards for a full Card Master deck: " + cardClass);
         }
-        Collections.shuffle(deck, new java.util.Random(random.nextLong()));
-        // List.sort is stable: each group retains its random order. Match shuffles the final deck for play.
-        deck.sort(Comparator.comparing(ref -> Cards.get(ref.id()).cardClass() == CardClass.NEUTRAL));
-        return new ArrayList<>(deck.subList(0, DeckRules.DECK_SIZE));
+        Collections.shuffle(pool, new java.util.Random(random.nextLong()));
+        pool.sort(Comparator.comparing(ref -> Cards.get(ref.id()).cardClass() == CardClass.NEUTRAL));
+        List<CardRef> deck = new ArrayList<>(DeckRules.DECK_SIZE);
+        takeCards(deck, pool, 8, c -> frontliner(c) && c.cost() <= 2);
+        takeCards(deck, pool, 5, c -> frontliner(c) && c.cost() >= 3 && c.cost() <= 4);
+        takeCards(deck, pool, 14 - deck.size(), MatchManager::frontliner);
+        takeCards(deck, pool, 1, CardDefinition::isTool);
+        takeCards(deck, pool, DeckRules.DECK_SIZE - deck.size(), c -> true);
+        return deck;
+    }
+
+    static boolean frontliner(CardDefinition card) {
+        return card.isMob() && !card.keywords().contains(Keyword.BLOCK) && card.attack() > 0;
+    }
+
+    private static void takeCards(List<CardRef> deck, List<CardRef> pool, int count, Predicate<CardDefinition> eligible) {
+        for (var cards = pool.iterator(); count > 0 && cards.hasNext();) {
+            CardRef card = cards.next();
+            if (eligible.test(Cards.get(card.id()))) {
+                deck.add(card);
+                cards.remove();
+                count--;
+            }
+        }
     }
 
     private static void handleAction(ServerPlayer player, MatchActionPayload payload) {

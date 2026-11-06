@@ -128,6 +128,8 @@ final class HandPickOverlay {
         String victim = state.sides[c.victim()].name, owner = state.sides[c.owner()].name;
         String title = switch (c.action()) {
             case "CHOOSE_FROM_DECK" -> "Choose a card from your deck to draw";
+            case "PICK_ONE" -> "Pick one to add to your hand";
+            case "BREW_POTION" -> c.count() == 1 ? "Brewing Stand: choose a potion to brew" : "Brewing Stand: choose how to brew it";
             case "DISCARD_FROM_HAND" -> own ? "Choose a card to discard" : "Choose a card from " + victim + "'s hand to discard";
             case "STEAL_FROM_HAND" -> own ? "Choose a card to give to " + owner : "Choose a card to steal from " + victim + "'s hand";
             default -> own ? "Choose a card to shuffle into your deck" : "Choose a card from " + victim + "'s hand to shuffle into their deck";
@@ -144,7 +146,7 @@ final class HandPickOverlay {
             int y = hover ? r[1] - 8 : r[1];
             float scale = r[2] / (float) CardRenderer.WIDTH;
             HandCard card = cards.get(i);
-            CardRenderer.drawTrial(g, font, card.id, card.enchanted, card.training, r[0], y, scale);
+            CardRenderer.drawTrial(g, font, card.id, card.enchanted, card.training, card.brew, r[0], y, scale);
             if (hover) g.outline(r[0] - 2, y - 2, r[2] + 4, r[3] + 4, MatchArt.GOLD);
         }
     }

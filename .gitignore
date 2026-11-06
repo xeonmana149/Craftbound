@@ -41,3 +41,6 @@ replay_*.log
 
 # minecraft logs from runs outside run/
 /logs/
+
+# release copies for sharing
+/dist/

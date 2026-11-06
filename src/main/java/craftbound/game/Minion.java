@@ -15,6 +15,8 @@ public class Minion {
     public record TimedWeakness(int amount, int expiresTurn) {}
     public java.util.List<TimedWeakness> timedWeaknesses = new java.util.ArrayList<>();
     public final java.util.Set<Keyword> grantedKeywords = java.util.EnumSet.noneOf(Keyword.class);
+    // Switched off by an enemy Negate keyword passive (e.g. Soul Sand stops Sprint). Recomputed by Match.refreshAuras.
+    public final java.util.Set<Keyword> negatedKeywords = java.util.EnumSet.noneOf(Keyword.class);
     public int temporaryAttack;
     public int lastBattleHardenedTurn = -1;
     // Freeze may have cleared at turn start while the attack is still skipped.
@@ -37,6 +39,33 @@ public class Minion {
     public boolean totem;
     // Fed an Enchanted Golden Apple: takes no damage until its owner's next turn.
     public boolean invulnerable;
+    // Times its triggered abilities have run, for cards with limited uses (Cake: 4 uses, then destroyed).
+    public int usesSpent;
+    // A thrown Trident stuck in this mob, and the side that threw it. It goes back when this leaves the board.
+    public Tool impaled;
+    public int impaledBy;
+    // Potions whose lasting effects this mob is under, with their Brewing Stand upgrades, so the screen can show them.
+    // temporary: the potion only weakened it until a turn ends, so the mark goes once that wears off.
+    public record PotionMark(String id, int brew, boolean temporary) {}
+    public java.util.List<PotionMark> potions = new java.util.ArrayList<>();
+
+    /** Potion marks still in effect. Old snapshots may hold null. */
+    public java.util.List<PotionMark> activePotions() {
+        if (potions == null) return java.util.List.of();
+        boolean weakened = attackDebuff > 0 || timedWeaknesses != null && !timedWeaknesses.isEmpty();
+        return potions.stream().filter(p -> !p.temporary() || weakened).toList();
+    }
+
+    /** What a potion can leave on a mob, besides instant damage or healing. */
+    String lastingState() {
+        return attack + "/" + maxHealth + "/" + attackDebuff + "/" + (timedWeaknesses == null ? 0 : timedWeaknesses.size()) + "/"
+                + grantedKeywords + "/" + frozen + withered + totem + invulnerable;
+    }
+
+    public int usesLeft() {
+        var entry = craftbound.card.CardCatalog.entry(card.id());
+        return entry == null || entry.uses() <= 0 ? -1 : Math.max(0, entry.uses() - usesSpent);
+    }
 
     public Minion(int id, CardRef card) {
         CardDefinition definition = Cards.get(card.id());
@@ -53,7 +82,7 @@ public class Minion {
     }
 
     public boolean has(Keyword keyword) {
-        if (keyword == Keyword.SHIELD && definition().keywords().contains(Keyword.BLOCK)) return false;
+        if (negatedKeywords.contains(keyword)) return false;
         return card.training().keyword() == keyword || grantedKeywords.contains(keyword) || definition().keywords().contains(keyword);
     }
 

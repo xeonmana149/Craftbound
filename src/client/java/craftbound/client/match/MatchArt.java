@@ -95,12 +95,13 @@ final class MatchArt {
 
     // A broad iron rim, with the point below the card so it cannot hide its artwork or stats.
     static void shieldFrame(craftbound.client.card.CardCanvas g, int width, int height) {
-        shieldFill(g, -5, -6, width + 10, height + 16, 8, 0xFF171C20, 0xFF171C20);
-        shieldFill(g, -4, -5, width + 8, height + 14, 7, 0xFFF1F3E7, 0xFF747F83);
-        shieldFill(g, -2, -3, width + 4, height + 10, 5, 0xFF9DA9A7, 0xFF3E4B50);
+        // A thin rectangular metal rim (no pointed bottom), so it stays clear of the hero below.
+        shieldFill(g, -4, -4, width + 8, height + 8, 0, 0xFF171C20, 0xFF171C20);
+        shieldFill(g, -3, -3, width + 6, height + 6, 0, 0xFFF1F3E7, 0xFF747F83);
+        shieldFill(g, -1, -1, width + 2, height + 2, 0, 0xFF9DA9A7, 0xFF3E4B50);
         // Bright rivets distinguish the metal rim from the ordinary block corner braces.
-        g.fill(-4, 1, -2, 3, 0xFFFFFFFF);
-        g.fill(width + 2, 1, width + 4, 3, 0xFFFFFFFF);
+        g.fill(-3, 1, -1, 3, 0xFFFFFFFF);
+        g.fill(width + 1, 1, width + 3, 3, 0xFFFFFFFF);
     }
 
     static void shieldBadge(craftbound.client.card.CardCanvas g, int x, int y) {
@@ -114,6 +115,8 @@ final class MatchArt {
 
     private static int shieldInset(int row, int width, int height, int point) {
         if (row < 2) return 2 - row;
+        // point 0: a plain rectangle with rounded corners top and bottom.
+        if (point <= 0) return row >= height - 2 ? row - (height - 3) : 0;
         if (row < height - point) return 0;
         return (row - (height - point) + 1) * ((width - 1) / 2) / point;
     }
@@ -133,7 +136,7 @@ final class MatchArt {
                 g.fill(x + inset, y + row, x + width - inset, y + row + 1, color);
             } else {
                 int edge = Math.max(inset, thickness + shieldInset(row - thickness, width - thickness * 2,
-                        height - thickness * 2, Math.max(1, point - thickness)));
+                        height - thickness * 2, point <= 0 ? 0 : Math.max(1, point - thickness)));
                 g.fill(x + inset, y + row, x + edge, y + row + 1, color);
                 g.fill(x + width - edge, y + row, x + width - inset, y + row + 1, color);
             }

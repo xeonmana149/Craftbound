@@ -13,7 +13,7 @@ function defaults(resourceDir) {
   return book;
 }
 const hash = value => crypto.createHash('sha256').update(value).digest('hex');
-function handler({catalogue,resourceDir,token,send}) {
+function handler({catalogue,resourceDir,token,send,onSaved=()=>{}}) {
   const file = path.join(path.dirname(catalogue),'trials.json');
   function read() {
     const base = defaults(resourceDir);
@@ -50,6 +50,7 @@ function handler({catalogue,resourceDir,token,send}) {
         if(fs.existsSync(file))fs.copyFileSync(file,file+'.workshop-backup.json');
         fs.renameSync(temp,file);temp=null;
         send(res,200,{revision:hash(next),path:file});
+        onSaved();
       } catch(e){send(res,500,{error:'Trials save failed. '+e.message});}
       finally{if(temp&&fs.existsSync(temp))fs.unlinkSync(temp);}
     });

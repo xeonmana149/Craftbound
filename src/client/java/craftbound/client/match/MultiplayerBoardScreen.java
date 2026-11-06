@@ -54,6 +54,8 @@ public abstract class MultiplayerBoardScreen extends Screen implements LocalLayo
     private final Deque<BoardAttack> pendingAttacks = new ArrayDeque<>();
     private BoardAttack attack;
     private long attackAt;
+    private record EggThrow(BoardAttack.End from, BoardAttack.End to, long started) {}
+    private final List<EggThrow> eggs = new ArrayList<>();
     private long received=System.currentTimeMillis(),flashAt;
     private boolean clockHeld,menu,confirm,showLog,targetDrag;
     private int rival=-1,action,index,dragHand=-1,hoverHand=-1,handHeight;
@@ -132,6 +134,16 @@ public abstract class MultiplayerBoardScreen extends Screen implements LocalLayo
                 }
             }
             flashAt=AnimationClock.millis();
+            if (next.has("publicCast")) {
+                var cast = next.getAsJsonObject("publicCast");
+                if (CombatVfx.egg(Identifier.tryParse(str(cast, "card")))) {
+                    int from = num(cast, "from"), to = num(cast, "to");
+                    var players = old.getAsJsonArray("players");
+                    eggs.add(new EggThrow(BoardAttack.end(players.get(from).getAsJsonObject(), from, Match.HERO),
+                            BoardAttack.end(players.get(to).getAsJsonObject(), to, num(cast, "target")), flashAt));
+                    EggCastAnimation.launchSound();
+                }
+            }
             if(next.has("publicAttack")){
                 var path=next.getAsJsonObject("publicAttack");
                 queueAttack(BoardAttack.read(old, path), flashAt);
@@ -345,6 +357,7 @@ public abstract class MultiplayerBoardScreen extends Screen implements LocalLayo
         drawSeatResources(g);
         drawFuse(g);
         drawSwing(g);
+        drawEggs(g);
         drawFooter(g);
         drawHand(g,mx,my);
         if(!selection.isEmpty()){
@@ -371,7 +384,7 @@ public abstract class MultiplayerBoardScreen extends Screen implements LocalLayo
         g.nextStratum();
         if (hoverHand >= 0 && hoverHand < hand().size()) {
             JsonObject card = hand().get(hoverHand).getAsJsonObject();
-            cardHover.hand(g, Identifier.parse(str(card, "id")), flag(card, "ench"), MatchState.readTraining(card),
+            cardHover.hand(g, Identifier.parse(str(card, "id")), flag(card, "ench"), MatchState.readTraining(card), MatchState.readBrew(card),
                     (int) Math.round(handPose(hoverHand).cx()), 4, playable(hoverHand), mx, my);
             return;
         }
@@ -466,6 +479,30 @@ public abstract class MultiplayerBoardScreen extends Screen implements LocalLayo
             attack = pendingAttacks.removeFirst();
             attackAt = now;
         } else if (age >= (teams ? 950 : 2350)) attack = null;
+    }
+
+    private long lastEggFrame;
+    private void drawEggs(GuiGraphicsExtractor g) {
+        long now = AnimationClock.millis();
+        for (var it = eggs.iterator(); it.hasNext();) {
+            EggThrow egg = it.next();
+            long age = now - egg.started();
+            if (age >= EggCastAnimation.FLIGHT + EggCastAnimation.SPLAT) {
+                it.remove();
+                continue;
+            }
+            Point to = egg.to().point(rigs, mat, home(), width);
+            if (age < EggCastAnimation.FLIGHT) {
+                Point from = egg.from().point(rigs, mat, home(), width);
+                EggCastAnimation.fly(g, (float)from.x(), (float)from.y(), (float)to.x(), (float)to.y(),
+                        age / (float)EggCastAnimation.FLIGHT);
+            } else {
+                if (lastEggFrame < egg.started() + EggCastAnimation.FLIGHT) EggCastAnimation.impactSound();
+                EggCastAnimation.splat(g, (float)to.x(), (float)to.y(),
+                        (age - EggCastAnimation.FLIGHT) / (float)EggCastAnimation.SPLAT);
+            }
+        }
+        lastEggFrame = now;
     }
 
     private void drawSwing(GuiGraphicsExtractor g){

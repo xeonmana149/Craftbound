@@ -34,6 +34,21 @@ function currencyLabels(value){
  return changed;
 }
 function status(t){$("#saved").textContent=t;}
+// The Workshop host rebuilds the player jar after each save; append its progress to the save message.
+let releaseTimer=null;
+function watchRelease(){
+ clearTimeout(releaseTimer);
+ const base=$("#saved").textContent.replace(/ · Release jar.*$/,"");
+ const poll=async()=>{
+  try{
+   const r=await (await fetch("/api/release",{headers:{"X-Workshop-Token":token}})).json();
+   if(!r.enabled)return;
+   status(base+(r.status==="ready"?" · Release jar ready: "+r.jar:r.status==="failed"?" · "+r.message:" · Release jar building…"));
+   if(r.status==="queued"||r.status==="building")releaseTimer=setTimeout(poll,2000);
+  }catch{}
+ };
+ releaseTimer=setTimeout(poll,500);
+}
 let persistTimer;
 function changed(){dirty=true;saveStamp++;status("Unsaved changes");$("#save").disabled=busy; clearTimeout(persistTimer);persistTimer=setTimeout(remember,300);}
 function remember(){if(state&&dirty)try{sessionStorage.setItem(tmpKey,JSON.stringify({revision,data:state}));}catch{}}
@@ -283,7 +298,7 @@ async function save(){
  if(validation.length){renderIssues();goIssue(validation[0].path);status("Fix the highlighted fields before saving");return;}
  busy=true;const snapshot=copy(state), stamp=saveStamp;$("#save").disabled=true;$("#reload").disabled=true;status("Saving…");
  try{const r=await request("POST",{data:snapshot,revision});revision=r.revision;localPath=r.path||localPath;dirty=saveStamp!==stamp;
- if(dirty)remember();else clearDraft();status(dirty?"Earlier edits saved. Newer changes are still unsaved.":"Saved to "+localPath);
+ if(dirty)remember();else clearDraft();status(dirty?"Earlier edits saved. Newer changes are still unsaved.":"Saved to "+localPath);watchRelease();
  $("#issues").replaceChildren();
  }catch(e){status(e.status===409?"The campaign changed on disk. Export your draft before reloading.":e.message);
  if(Array.isArray(e.details)){validation=e.details.map(x=>typeof x==="string"?{path:"",message:x}:x);renderIssues();}

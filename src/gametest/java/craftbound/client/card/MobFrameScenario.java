@@ -18,7 +18,8 @@ public final class MobFrameScenario {
                 var rarity = Cards.get(id).rarity().name().toLowerCase(java.util.Locale.ROOT);
                 context.runOnClient(mc -> {
                     var frame = CardFrames.forCard(Cards.get(id));
-                    if (frame == null || !frame.texture().getPath().endsWith("base_mob_" + rarity + ".png"))
+                    if (frame == null || !frame.texture().getPath().endsWith("base_mob.png")
+                            || frame.gem() == null || !frame.gem().getPath().endsWith("gem_" + rarity + ".png"))
                         throw new AssertionError("Wrong printed frame for " + id);
                     mc.gui.setScreen(new CardInspectScreen(CardItem.of(id)));
                 });

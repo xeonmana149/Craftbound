@@ -160,7 +160,7 @@ public final class RelayMatch extends Match {
                 String issue=whyCantPlay(seat,index);
                 if(issue!=null) return issue;
                 var card=pilot.hand.get(index);
-                var legal=validTargets(seat,CardEffects.targetKind(card.id()),card.id());
+                var legal=validTargets(seat,CardEffects.targetKind(card),card.id());
                 if(target.isNone()?!legal.isEmpty():!legal.contains(target)) return "Choose a highlighted target.";
                 playCard(seat,index,target);
                 lastMove=pilot.name+" played "+Cards.name(card.id()).getString()+".";

@@ -234,6 +234,9 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
     private int[] excavateMineButton, excavateToolButton, excavateCancelButton;
     private Spot pendingSpot;
     private int hoveredHand = -1;
+    // Right-click pins one card's inspect open (a hand card by uid, or a mob), so its notes can be hovered.
+    private long pinnedHandUid = -1;
+    private int pinnedSide = -1, pinnedMid = -1;
     private EffectPreview.Source previewSource;
     // Inline inspection stays on this screen so incoming match updates keep flowing.
     private MatchCardHover cardHover;
@@ -390,7 +393,7 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
     }
 
     private static boolean sameCard(HandCard a, HandCard b) {
-        return a.id.equals(b.id) && a.enchanted == b.enchanted && a.training == b.training;
+        return a.id.equals(b.id) && a.enchanted == b.enchanted && a.training == b.training && a.brew == b.brew;
     }
 
     // Plays one event: changes what's shown, starts its animation and sound, and says how long until the next.
@@ -473,6 +476,35 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
                     MatchSounds.play("block.note_block.chime", 0.7F, 0.4F);
                 }
                 return mine ? 900 : 600;
+            }
+            case "IMPALE" -> {
+                // A thrown Trident sticks in a mob (amount 1), or comes back out of it (amount 0).
+                Mob stuck = e.targetSide() >= 0 && e.targetSide() < 2 ? this.shown.sides[e.targetSide()].mob(e.targetMid()) : null;
+                if (e.amount() == 1) {
+                    side.heroAttack = Math.max(0, side.heroAttack - (side.tool == null ? 0 : side.tool.attack));
+                    side.tool = null;
+                    if (stuck != null) stuck.impaled = e.card();
+                    MatchSounds.play("item.trident.hit", 1.0F, 0.8F);
+                    return 250;
+                }
+                if (stuck != null) stuck.impaled = null;
+                MatchSounds.play("item.trident.return", 1.0F, 0.8F);
+                return 300;
+            }
+            case "CHANNEL" -> {
+                float[] at = targetCenter(e);
+                ripple(at, 0xFFBFE6FF, 60, 450);
+                effect(0, 300, false, (g, t) -> g.fill(Math.round(at[0] - 2), 0, Math.round(at[0] + 2), Math.round(at[1]), MatchArt.alpha(0xFFE8F6FF, 1 - t)));
+                particles(at[0], at[1], 24, 0xFFBFE6FF, 90, -40, 2);
+                screenShake(3, 300);
+                MatchSounds.play("item.trident.thunder", 1.0F, 0.7F);
+                return 450;
+            }
+            case "BREW" -> {
+                // A Brewing Stand upgraded one of your potions; the hand card now shows its brewed text.
+                if (mine && e.amount() >= 0 && e.amount() < side.hand.size()) side.hand.get(e.amount()).brew = e.extra();
+                MatchSounds.play("block.brewing_stand.brew", 1.0F, 0.8F);
+                return mine ? 500 : 250;
             }
             case "DRAW", "GIVE" -> {
                 boolean draw = e.type().equals("DRAW");
@@ -761,7 +793,7 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
                 tool.attack = e.amount();
                 tool.uses = e.extra();
                 CardDefinition card = Cards.get(e.card());
-                tool.ranged = card != null && card.keywords().contains(Keyword.RANGED);
+                tool.ranged = card != null && (card.keywords().contains(Keyword.RANGED) || card.keywords().contains(Keyword.THROW));
                 side.tool = tool;
                 this.flashes.put("tool:" + s, this.now);
                 if (e.card() != null) {
@@ -823,8 +855,19 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
                 float[] from = actorCenter(s, e.mid());
                 float[] to = targetCenter(e);
                 Mob mob = e.mid() == Match.HERO ? null : side.mob(e.mid());
+                if (e.extra() == MatchEvent.ATTACK_REPAIR) {
+                    this.lunge = new Lunge(s, e.mid(), to[0] - from[0], to[1] - from[1], this.now, 440);
+                    schedule(175, () -> MatchSounds.play("block.anvil.use", 1.3F, 0.45F));
+                    return 175;
+                }
                 boolean ranged = e.mid() == Match.HERO ? side.tool != null && side.tool.ranged
                         : mob != null && mob.ranged;
+                if (ranged && e.mid() == Match.HERO && side.tool != null && Cards.get(side.tool.id) != null
+                        && Cards.get(side.tool.id).keywords().contains(Keyword.THROW)) {
+                    projectile(CardRenderer.placeholderArt(side.tool.id, Cards.get(side.tool.id)), from, to, 230);
+                    MatchSounds.play("item.trident.throw", 1.0F, 0.7F);
+                    return 230;
+                }
                 if (ranged) {
                     boolean shulker = mob != null && mob.id.equals(Cards.SHULKER);
                     boolean snowGolem = mob != null && (mob.id.getPath().equals("snow_golem")
@@ -987,10 +1030,11 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
                 });
                 switch (e.amount()) {
                     case MatchEvent.STATUS_CLEANSED -> {
+                        mob.potions = List.of();
                         mob.frozen = false;
                         mob.withered = mob.totem = mob.invulnerable = mob.appliedBenefit = false;
                         var printed = mob.card().keywords();
-                        mob.shield = printed.contains(Keyword.SHIELD) && !mob.block;
+                        mob.shield = printed.contains(Keyword.SHIELD);
                         mob.sprint = printed.contains(Keyword.SPRINT);
                         mob.ranged = printed.contains(Keyword.RANGED);
                         mob.ignoreShield = printed.contains(Keyword.IGNORE_SHIELD);
@@ -1001,6 +1045,22 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
                     }
                     case MatchEvent.STATUS_WEAKENED -> mob.attackDebuff = e.extra();
                     case MatchEvent.STATUS_SHIELD -> { mob.shield = true; shieldPulse(at); }
+                    case MatchEvent.STATUS_USES -> {
+                        mob.usesLeft = e.extra();
+                        floatText(e.extra() == 0 ? "Used up" : e.extra() + (e.extra() == 1 ? " use left" : " uses left"),
+                                at[0], at[1] - 6, 0xFFFFD27A, 1.0F);
+                    }
+                    case MatchEvent.STATUS_NEGATED -> {
+                        Keyword lost = Keyword.values()[e.extra()];
+                        switch (lost) {
+                            case SHIELD -> mob.shield = false;
+                            case SPRINT -> mob.sprint = false;
+                            case RANGED -> mob.ranged = false;
+                            case IGNORE_SHIELD -> mob.ignoreShield = false;
+                            default -> { }
+                        }
+                        floatText("No " + lost.displayName().getString(), at[0], at[1] - 6, 0xFFB9A58C, 1.0F);
+                    }
                     case MatchEvent.STATUS_SPRINT -> { mob.sprint = true; mob.ready = e.extra() != 0;
                         effect(0,450,false,(g,t)->CombatVfx.streaks(g,at[0],at[1],0xFFFFE39B,t)); }
                     case MatchEvent.STATUS_RANGED -> mob.ranged = true;
@@ -1273,14 +1333,15 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
         if(this.effects.size()>64) return;
         effect(0,duration,false,(g,t)->CombatVfx.ring(g,at[0],at[1],5+radius*MatchArt.easeOut(t),color,t));
     }
-    private void throwEgg(float[] from, float[] to, int duration) {
-        powerArc(new ItemStack(Items.EGG), from, to, duration, 32, 4);
-        MatchSounds.play("entity.egg.throw", 1.1F, .6F);
-        schedule(duration, () -> {
-            particles(to[0], to[1], 12, 0xFFFFEED2, 32, 35, 1);
-            particles(to[0], to[1], 5, 0xFFFFCF57, 22, 25, 1);
-            MatchSounds.play("block.decorated_pot.shatter", 1.7F, .25F);
-        });
+    private void throwEgg(float[] from, float[] to, boolean sound) {
+        effect(0, EggCastAnimation.FLIGHT, true,
+                (g,t) -> EggCastAnimation.fly(g, from[0], from[1], to[0], to[1], t));
+        effect(EggCastAnimation.FLIGHT, EggCastAnimation.SPLAT, true,
+                (g,t) -> EggCastAnimation.splat(g, to[0], to[1], t));
+        if (sound) {
+            EggCastAnimation.launchSound();
+            schedule(EggCastAnimation.FLIGHT, EggCastAnimation::impactSound);
+        }
     }
     // One bounded signature per power. The event queue holds the result until the gesture lands.
     private int animatePower(Event e, Side side) {
@@ -1401,12 +1462,12 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
 
     private void shieldPulse(float[] at) {
         effect(0,420,false,(g,t)->{int w=Math.round(this.mobW+10+18*t),h=Math.round(this.mobH+14+18*t);
-            MatchArt.shieldOutline(g,Math.round(at[0]-w/2F),Math.round(at[1]-h/2F),w,h,9,MatchArt.alpha(0xFFDCEEFF,1-t),2);});
+            MatchArt.shieldOutline(g,Math.round(at[0]-w/2F),Math.round(at[1]-h/2F),w,h,0,MatchArt.alpha(0xFFDCEEFF,1-t),2);});
     }
     /** Chosen visuals run on PLAY, even when the effect creates a choice instead of an EFFECT event. */
     static int castAnimationDuration(Identifier id) {
         if (CombatVfx.enderEye(id)) return EyeOfEnderAnimation.DURATION_MS;
-        if (CombatVfx.egg(id)) return 360;
+        if (CombatVfx.egg(id)) return EggCastAnimation.FLIGHT;
         if (CombatVfx.potion(id)) return 400;
         if (CombatVfx.arrow(id)) return 360;
         // Automatic Fox theft waits for the actual TOOL_BREAK event and carries that tool home.
@@ -1419,7 +1480,7 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
         if (CombatVfx.enderEye(e.card())) {
             throwEnderEye(from, handCenter(1 - e.side()), sound);
         } else if (CombatVfx.egg(e.card())) {
-            throwEgg(from, target, 360);
+            throwEgg(heroCenter(e.side()), target, sound);
         } else if (CombatVfx.potion(e.card())) {
             throwPotion(e.card(), from, target, 400);
         } else if (CombatVfx.arrow(e.card())) {
@@ -2109,6 +2170,7 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
         }
         drawRow(g, 1 - this.shown.you, mouseX, mouseY);
         drawRow(g, this.shown.you, mouseX, mouseY);
+        for (int s = 0; s < 2; s++) if (!isLungingHero(s)) drawHeroHealth(g, s);
         drawLungingMob(g);
         drawLungingHero(g, mouseX, mouseY);
         drawEffects(g, false);
@@ -2231,6 +2293,36 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
             this.historySpots.add(new HistorySpot(x, cursor, size, line));
             cursor += size + 3;
         }
+    }
+
+    // Potion particles drifting up through a mob that is under a potion, in that potion's colour.
+    private void potionSwirl(GuiGraphicsExtractor g, Mob mob, int w, int h) {
+        for (int i = 0; i < mob.potions.size(); i++) {
+            int color = potionColor(mob.potions.get(i).id());
+            boolean brewed = mob.potions.get(i).brew() != 0;
+            int count = brewed ? 7 : 5;
+            for (int k = 0; k < count; k++) {
+                double seed = mob.mid * 0.37 + i * 0.61 + k * 1.73;
+                double phase = (this.now / 1600.0 + k / (double) count + i * 0.13) % 1.0;
+                float px = (float) (w * (0.15 + 0.7 * (0.5 + 0.5 * Math.sin(seed * 12.9898))) + Math.sin(phase * 6.28 + seed) * 2);
+                float py = (float) (h * (0.95 - 0.85 * phase));
+                int size = brewed && k % 3 == 0 ? 3 : 2;
+                g.fill(Math.round(px), Math.round(py), Math.round(px) + size, Math.round(py) + size, MatchArt.alpha(color, (float) (0.9 * (1 - phase))));
+            }
+        }
+    }
+
+    static int potionColor(Identifier id) {
+        String path = id.getPath();
+        if (path.contains("strength")) return 0xFFFFC23A;
+        if (path.contains("swift") || path.contains("speed")) return 0xFF7CCFF0;
+        if (path.contains("heal") || path.contains("regen")) return 0xFFFF6FA8;
+        if (path.contains("fire")) return 0xFFFF9A3A;
+        if (path.contains("weak") || path.contains("slow")) return 0xFF9AA0A6;
+        if (path.contains("poison")) return 0xFF6FCB3A;
+        if (path.contains("harm")) return 0xFF9B3A5A;
+        if (path.contains("invis")) return 0xFFE6ECF2;
+        return 0xFFC08CFF;
     }
 
     private void drawItem(GuiGraphicsExtractor g, ItemStack stack, float centerX, float centerY, float scale) {
@@ -2498,6 +2590,21 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
         g.pose().popMatrix();
     }
 
+    // The hero's health heart, drawn again above the board: a Shield frame on the block row reaches over it.
+    private void drawHeroHealth(GuiGraphicsExtractor g, int s) {
+        if (this.shatteredHero == s && this.now >= this.shatterAt) return;
+        Side side = this.shown.sides[s];
+        int size = this.heroSize, x = this.centerX - size / 2, y = heroY(s);
+        int badge = Math.max(13, Math.round(size * 0.40F));
+        float[] shake = shake("h:" + s);
+        float[] lunge = lungeOffset(s, Match.HERO);
+        g.pose().pushMatrix();
+        g.pose().translate(shake[0] + lunge[0], shake[1] + lunge[1]);
+        MatchArt.heart(g, this.font, x + (size - badge) / 2, y - badge / 2, badge, side.health,
+                side.health < side.maxHealth ? 0xFFFF5A5A : 0xFFFFFFFF);
+        g.pose().popMatrix();
+    }
+
     // Sockets stay on the table while the portrait and its stat badges attack above the board.
     private void drawHeroSockets(GuiGraphicsExtractor g, int side, int mouseX, int mouseY) {
         int x = this.centerX - this.heroSize / 2;
@@ -2715,7 +2822,7 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
         if (mob.shield) {
             MatchArt.shieldFrame(g, w, h);
             if (mine && mob.ready && canAct() && this.attacker == null && this.dragging == null && mob.mid > 0) {
-                MatchArt.shieldOutline(g, -6, -7, w + 12, h + 18, 9, MatchArt.GLOW, 1);
+                MatchArt.shieldOutline(g, -6, -6, w + 12, h + 12, 0, MatchArt.GLOW, 1);
             }
         }
         boolean legendary = card.rarity() == craftbound.card.CardRarity.LEGENDARY;
@@ -2745,6 +2852,7 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
         }
         if (mob.frozen) MatchArt.frozenCoating(g, w, h, this.now, mob.mid);
         if (mob.withered) MatchArt.witherDecay(g, w, h, this.now, mob.mid);
+        if (!mob.potions.isEmpty()) potionSwirl(g, mob, w, h);
         if (flash > 0) {
             g.fill(0, 0, w, h, MatchArt.alpha(0xFFFFFFFF, flash * 0.8F));
         }
@@ -2764,6 +2872,13 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
             drawItem(g, new ItemStack(Items.WITHER_ROSE), iconX + icon / 2.0F, iconY + icon / 2.0F, icon / 16.0F);
         }
         if (mob.invulnerable) MatchArt.invulnerableLock(g, w - 10, 2);
+        // One small bottle per potion on the mob, down the left edge.
+        for (int i = 0; i < mob.potions.size() && i < 3; i++) {
+            var potion = mob.potions.get(i);
+            float py = inset + (icon + 1) * (i + 1) + icon / 2.0F + 1;
+            drawItem(g, CardRenderer.placeholderArt(potion.id(), Cards.get(potion.id())), inset + 1 + icon / 2.0F, py, icon / 16.0F);
+            if (potion.brew() != 0) g.fill(inset + icon - 1, Math.round(py - icon / 2.0F), inset + icon + 1, Math.round(py - icon / 2.0F) + 2, 0xFF7DFF5A);
+        }
         int badge = Math.min(Math.max(12, Math.round(h * 0.34F)), Math.max(8, w * 2 / 3));
         int badgeY = h - badge * 3 / 4;
         int baseAttack = card.attack();
@@ -2773,13 +2888,29 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
         int healthColor = mob.health < mob.maxHealth ? 0xFFFF5A5A : mob.maxHealth > card.health() ? 0xFF7DFF5A : 0xFFFFFFFF;
         MatchArt.heart(g, this.font, w - badge * 3 / 4, badgeY, badge, mob.health, healthColor);
         if (mob.shield) MatchArt.shieldBadge(g, w / 2 - 5, -8);
+        // Limited uses: a small counter where the Attack badge would be (blocks) or at the top-left (mobs).
+        if (mob.usesLeft >= 0) {
+            int ux = mob.block ? -badge / 4 : -4, uy = mob.block ? badgeY + badge / 4 : -4, us = Math.max(9, badge * 2 / 3);
+            g.fill(ux, uy, ux + us, uy + us, 0xFF3A2A1A);
+            g.outline(ux, uy, us, us, 0xFFFFD27A);
+            MatchArt.outlined(g, this.font, String.valueOf(mob.usesLeft), ux + us / 2.0F, uy + (us - 8) / 2.0F + 1, 0xFFFFE9B0, 1.0F, true);
+        }
+        // A thrown Trident sticks out of the mob's top-right corner.
+        if (mob.impaled != null) {
+            g.pose().pushMatrix();
+            g.pose().translate(w - 4, 2);
+            g.pose().rotate((float) (Math.PI * 0.75));
+            g.pose().scale(1.2F, 1.2F);
+            g.item(CardRenderer.placeholderArt(mob.impaled, Cards.get(mob.impaled)), -8, -8);
+            g.pose().popMatrix();
+        }
         // Last, outside the whole frame: the Shield plate used to paint over the targeting outline.
         Spot probe = new Spot(Math.round(x), Math.round(y), w, h, side, mob.mid, -1);
         if (mob.mid > 0 && this.attacker != null && isValidTarget(probe)) {
             if (mob.shield) {
-                MatchArt.shieldOutline(g, -7, -10, w + 14, h + 22, 10,
+                MatchArt.shieldOutline(g, -7, -7, w + 14, h + 14, 0,
                         hovered ? 0xFFFF7063 : MatchArt.RED, 2);
-                if (hovered) MatchArt.shieldOutline(g, -5, -8, w + 10, h + 18, 8, 0xFFFFFFFF, 1);
+                if (hovered) MatchArt.shieldOutline(g, -5, -5, w + 10, h + 10, 0, 0xFFFFFFFF, 1);
             } else {
                 drawTargetHighlight(g, -4, -4, w + 8, h + 8, hovered);
             }
@@ -2795,7 +2926,7 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
                 boolean selected = hovered && isValidTarget(probe);
                 drawPlayPreview(g, w, h, mob.shield, selected ? new EffectPreview.Highlight(preview.harmful(), false) : preview);
                 if (selected) {
-                    if (mob.shield) MatchArt.shieldOutline(g, -5, -8, w + 10, h + 18, 8, 0xFFFFFFFF, 1);
+                    if (mob.shield) MatchArt.shieldOutline(g, -5, -5, w + 10, h + 10, 0, 0xFFFFFFFF, 1);
                     else g.outline(-2, -2, w + 4, h + 4, 0xFFFFFFFF);
                 }
             }
@@ -2824,8 +2955,8 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
 
     private void drawPlayPreview(GuiGraphicsExtractor g, int width, int height, boolean shield, EffectPreview.Highlight preview) {
         int edge = shield ? 7 : 4;
-        int top = shield ? -10 : -edge;
-        int w = width + edge * 2, h = height + (shield ? 22 : edge * 2);
+        int top = -edge;
+        int w = width + edge * 2, h = height + edge * 2;
         int color = previewColor(preview);
         if (preview.possible()) {
             // Broken gold corners mean eligible, not a promise that a random/selected effect hits all of them.
@@ -2839,7 +2970,7 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
                 g.fill(x, top + h - length, x + 2, top + h, color);
             }
         } else if (shield) {
-            MatchArt.shieldOutline(g, -edge, top, w, h, 10, color, 2);
+            MatchArt.shieldOutline(g, -edge, top, w, h, 0, color, 2);
         } else {
             g.outline(-edge, top, w, h, color);
             g.outline(-edge + 1, top + 1, w - 2, h - 2, color);
@@ -3022,7 +3153,7 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
                 g.fill(-3, -3, Math.round(width) + 3, Math.round(height) + 3, 0x807DFF5A);
                 g.outline(-2, -2, Math.round(width) + 4, Math.round(height) + 4, MatchArt.GLOW);
             }
-            CardRenderer.drawTrial(g, this.font, card.id, card.enchanted, card.training, 0, 0, scale);
+            CardRenderer.drawTrial(g, this.font, card.id, card.enchanted, card.training, card.brew, 0, 0, scale);
             if (!playable && this.shown.myTurn) {
                 g.fill(0, 0, Math.round(width), Math.round(height), 0x50000000);
             }
@@ -3086,9 +3217,11 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
             return;
         }
         hover.prepare(font, width, height, shown);
+        if (drawPinned(hover, g, mouseX, mouseY)) return;
+        hover.pinned(false);
         if (hoveredHand >= 0 && hoveredHand < shown.me().hand.size() && hoveredHand < handSpots.size()) {
             HandCard card = shown.me().hand.get(hoveredHand);
-            hover.hand(g, card.id, card.enchanted, card.training, handSpots.get(hoveredHand).x() + handW / 2,
+            hover.hand(g, card.id, card.enchanted, card.training, card.brew, handSpots.get(hoveredHand).x() + handW / 2,
                     boardLeft, card.playable && canAct(), mouseX, mouseY);
             return;
         }
@@ -3128,6 +3261,58 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
             hover.history(g, spot.line().card(), x, y, boxWidth, scale, lines, mouseX, mouseY);
             return;
         }
+    }
+
+    private boolean pinActive() { return this.pinnedHandUid >= 0 || this.pinnedSide >= 0; }
+
+    private void unpin() { this.pinnedHandUid = -1; this.pinnedSide = this.pinnedMid = -1; }
+
+    // The pinned card stays open, wherever the pointer goes, until it is unpinned or leaves.
+    private boolean drawPinned(MatchCardHover hover, GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        if (!pinActive()) return false;
+        if (this.pinnedHandUid >= 0) {
+            var hand = shown.me().hand;
+            for (int i = 0; i < hand.size() && i < handSpots.size(); i++) {
+                HandCard card = hand.get(i);
+                if (card.uid != this.pinnedHandUid) continue;
+                hover.pinned(true);
+                hover.hand(g, card.id, card.enchanted, card.training, card.brew, handSpots.get(i).x() + handW / 2,
+                        boardLeft, card.playable && canAct(), mouseX, mouseY);
+                return true;
+            }
+        } else {
+            for (Spot spot : mobSpots) {
+                if (spot.side() != this.pinnedSide || spot.mid() != this.pinnedMid) continue;
+                Mob mob = shown.sides[spot.side()].mob(spot.mid());
+                if (mob == null) break;
+                hover.pinned(true);
+                hover.unit(g, mob, spot.side() == shown.you && shown.myTurn,
+                        new int[]{spot.x(), spot.y(), spot.width(), spot.height()}, mouseX, mouseY);
+                return true;
+            }
+        }
+        unpin();
+        return false;
+    }
+
+    // Right-click a hand card or a mob to pin its inspect; again (or anywhere else) to let it go.
+    private boolean togglePin(double mouseX, double mouseY) {
+        if (hoveredHand >= 0 && hoveredHand < shown.me().hand.size()) {
+            long uid = shown.me().hand.get(hoveredHand).uid;
+            boolean same = this.pinnedHandUid == uid;
+            unpin();
+            if (!same) this.pinnedHandUid = uid;
+            return true;
+        }
+        for (Spot spot : mobSpots) {
+            if (!spot.contains(mouseX, mouseY) || shown.sides[spot.side()].mob(spot.mid()) == null) continue;
+            boolean same = this.pinnedSide == spot.side() && this.pinnedMid == spot.mid();
+            unpin();
+            if (!same) { this.pinnedSide = spot.side(); this.pinnedMid = spot.mid(); }
+            return true;
+        }
+        if (pinActive()) { unpin(); return true; }
+        return false;
     }
 
     private boolean overHandSlot(double x, double y) {
@@ -3306,7 +3491,7 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
             if (back) {
                 CardRenderer.drawBack(g, Sleeves.get(me.sleeve), 0, 0, slot[2]);
             } else {
-                CardRenderer.drawTrial(g, this.font, card.id, card.enchanted, card.training, 0, 0, slot[2]);
+                CardRenderer.drawTrial(g, this.font, card.id, card.enchanted, card.training, card.brew, 0, 0, slot[2]);
             }
             g.pose().popMatrix();
             if (choosing && this.swapPicks[i]) {
@@ -3484,8 +3669,15 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
                 && !this.awaitingReply && !this.menuOpen;
     }
 
-    private boolean enemyHasShield() {
-        return this.shown.them().board.stream().anyMatch(mob -> mob.shield);
+    // Mirrors Match.shieldStops: Shield mobs guard everything, Shield blocks guard the hero and other blocks.
+    private boolean shieldStops(Mob target) {
+        boolean shieldMob = false, shieldBlock = false;
+        for (Mob m : this.shown.them().board) {
+            if (!m.shield) continue;
+            if (m.block) shieldBlock = true; else shieldMob = true;
+        }
+        if (shieldMob && !(target != null && target.shield && !target.block)) return true;
+        return shieldBlock && (target == null || target.block && !target.shield);
     }
 
     private boolean heroTargetable(int side) {
@@ -3508,19 +3700,36 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
         return mob != null && mob.ignoreShield;
     }
 
+    // A Throw tool (Trident) must stick in a mob, so it can't be thrown at a hero.
+    private boolean heroThrows() {
+        var tool = this.shown.me().tool;
+        var definition = tool == null ? null : Cards.get(tool.id);
+        return definition != null && definition.keywords().contains(Keyword.THROW);
+    }
+
     private boolean isAttackTargetFor(Spot source, Spot spot) {
-        if (spot == null || spot.side() == this.shown.you) {
+        if (spot != null && spot.side() == this.shown.you) {
+            // A Repair tool can be used on your own damaged blocks.
+            if (source == null || source.mid() != Match.HERO || spot.mid() == Match.HERO) return false;
+            var tool = this.shown.me().tool;
+            var definition = tool == null ? null : Cards.get(tool.id);
+            Mob mob = this.shown.me().mob(spot.mid());
+            return definition != null && definition.keywords().contains(Keyword.REPAIR)
+                    && mob != null && mob.block && mob.health > 0 && mob.health < mob.maxHealth;
+        }
+        if (spot == null) {
             return false;
         }
         if (spot.mid() == Match.HERO) {
+            if (source != null && source.mid() == Match.HERO && heroThrows()) return false;
             if (source != null && source.mid() != Match.HERO) {
                 Mob attacking = this.shown.me().mob(source.mid());
                 if (attacking == null || !attacking.faceReady) return false;
             }
-            return attackerIgnoresShield(source) || !enemyHasShield();
+            return attackerIgnoresShield(source) || !shieldStops(null);
         }
         Mob mob = this.shown.sides[spot.side()].mob(spot.mid());
-        if (mob == null || enemyHasShield() && !attackerIgnoresShield(source) && !mob.shield) return false;
+        if (mob == null || !attackerIgnoresShield(source) && shieldStops(mob)) return false;
         if (!mob.block || this.shown.them().board.stream().noneMatch(m -> !m.block && m.health > 0)) return true;
         if (source == null) return false;
         var me = this.shown.me();
@@ -3567,7 +3776,13 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
         if (spot.mid() == Match.HERO) return card.target.equals("ANY_CHARACTER")
                 && craftbound.game.CardEffects.canTargetHero(card.id);
         Mob target = this.shown.sides[spot.side()].mob(spot.mid());
-        if (target == null || !craftbound.game.CardEffects.canTarget(card.id, target.id)) return false;
+        if (target == null || !craftbound.game.CardEffects.canTarget(card.id, target.id, k -> switch (k) {
+            case SHIELD -> target.shield;
+            case SPRINT -> target.sprint;
+            case RANGED -> target.ranged;
+            case IGNORE_SHIELD -> target.ignoreShield;
+            default -> target.card() != null && target.card().keywords().contains(k);
+        })) return false;
         return switch (card.target) {
             case "ANY_MOB", "ANY_CHARACTER" -> true;
             case "FRIENDLY_MOB" -> spot.side() == this.shown.you;
@@ -3589,6 +3804,11 @@ public class MatchScreen extends Screen implements LocalLayoutPreview {
         if (associatedPreviewValid() && !overHandSlot(event.x(),event.y()) && cardHover().click(event.x(), event.y(),
                 event.button() == InputConstants.MOUSE_BUTTON_LEFT)) return true;
         cardHover().clear();
+        if (event.button() == InputConstants.MOUSE_BUTTON_RIGHT && !this.readOnly && !this.menuOpen && this.shown.playing && !this.shown.over
+                && this.dragging == null && this.attacker == null && this.awaitingTarget == null && !this.aimingPower
+                && !this.aimingExcavate && !this.choosingExcavate && !this.handPicks().picking(this.shown)
+                && togglePin(event.x(), event.y())) return true;
+        if (event.button() == InputConstants.MOUSE_BUTTON_LEFT) unpin();
         if(this.readOnly) return true;
         if(HandConsentOverlay.click(event,width))return true;
         double mouseX = event.x();
